@@ -2,7 +2,6 @@ package com.horizen
 
 import java.lang.{Byte => JByte}
 import java.util.{HashMap => JHashMap, List => JList}
-
 import com.google.inject.name.Named
 import com.google.inject.Provides
 import com.horizen.api.http.ApplicationApiGroup
@@ -13,6 +12,7 @@ import com.horizen.state.ApplicationState
 import com.horizen.storage.Storage
 import com.horizen.transaction.TransactionSerializer
 import com.horizen.utils.Pair
+import com.horizen.validation.CustomBlockValidator
 import com.horizen.wallet.ApplicationWallet
 
 abstract class SidechainAppModule extends com.google.inject.AbstractModule {
@@ -52,7 +52,8 @@ abstract class SidechainAppModule extends com.google.inject.AbstractModule {
           @Named("WalletForgingBoxesInfoStorage")  walletForgingBoxesInfoStorage: Storage,
           @Named("ConsensusStorage")  consensusStorage: Storage,
           @Named("CustomApiGroups")  customApiGroups: JList[ApplicationApiGroup],
-          @Named("RejectedApiPaths")  rejectedApiPaths : JList[Pair[String, String]]
+          @Named("RejectedApiPaths")  rejectedApiPaths : JList[Pair[String, String]],
+          @Named("HistoryCustomBlockValidators") customBlockValidators: JList[CustomBlockValidator]
          ): SidechainApp = {
     synchronized {
       if (app == null) {
@@ -72,7 +73,8 @@ abstract class SidechainAppModule extends com.google.inject.AbstractModule {
           walletForgingBoxesInfoStorage,
           consensusStorage,
           customApiGroups,
-          rejectedApiPaths
+          rejectedApiPaths,
+          customBlockValidators
         )
       }
     }

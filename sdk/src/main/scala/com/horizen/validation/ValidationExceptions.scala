@@ -1,8 +1,8 @@
 package com.horizen.validation
 
 /*
-  The list of Exceptions, that could be thrown by any SemanticBlockValidator
-  or HistoryBlockValidator during applying to the Node.
+  The list of Exceptions, that could be thrown by any SemanticBlockValidator, HistoryBlockValidator
+  or CustomBlockValidator during applying to the Node.
 
   These exceptions require specific processing logic in NodeViewSynchronizer:
   1) banning modifier ID and sender;

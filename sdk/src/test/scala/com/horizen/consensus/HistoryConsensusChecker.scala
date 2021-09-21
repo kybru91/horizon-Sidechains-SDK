@@ -29,6 +29,7 @@ trait HistoryConsensusChecker extends CompanionsFixture {
         genesisBlock,
         Seq(),
         Seq(new ConsensusValidator()),
+        Seq(),
         finishedEpochInfo.stakeConsensusEpochInfo)
       .get
   }

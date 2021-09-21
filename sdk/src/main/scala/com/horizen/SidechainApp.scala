@@ -3,7 +3,6 @@ package com.horizen
 import java.lang.{Byte => JByte}
 import java.nio.file.{Files, Paths}
 import java.util.{HashMap => JHashMap, List => JList}
-
 import akka.actor.ActorRef
 import akka.http.scaladsl.server.{ExceptionHandler, RejectionHandler}
 import com.google.inject.name.Named
@@ -41,6 +40,7 @@ import scala.collection.immutable.Map
 import scala.collection.mutable
 import scala.io.Source
 import com.horizen.network.SidechainNodeViewSynchronizer
+import com.horizen.validation.CustomBlockValidator
 
 import scala.util.Try
 
@@ -62,6 +62,7 @@ class SidechainApp @Inject()
    @Named("ConsensusStorage") val consensusStorage: Storage,
    @Named("CustomApiGroups") val customApiGroups: JList[ApplicationApiGroup],
    @Named("RejectedApiPaths") val rejectedApiPaths : JList[Pair[String, String]],
+   @Named("HistoryCustomBlockValidators") val historyCustomBlockValidators: JList[CustomBlockValidator]
   )
   extends Application  with ScorexLogging
 {
@@ -218,10 +219,11 @@ class SidechainApp @Inject()
     sidechainSecretStorage,
     sidechainWalletTransactionStorage,
     forgingBoxesMerklePathStorage,
-    params, timeProvider,
+    params,
     applicationWallet,
     applicationState,
-    genesisBlock) // TO DO: why not to put genesisBlock as a part of params? REVIEW Params structure
+    genesisBlock, // TO DO: why not to put genesisBlock as a part of params? REVIEW Params structure
+    historyCustomBlockValidators.asScala)
 
   def modifierSerializers: Map[ModifierTypeId, ScorexSerializer[_ <: NodeViewModifier]] =
     Map(SidechainBlock.ModifierTypeId -> new SidechainBlockSerializer(sidechainTransactionsCompanion),

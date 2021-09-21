@@ -130,10 +130,10 @@ trait SidechainNodeViewHolderFixture
     sidechainWalletTransactionStorage,
     forgingBoxesMerklePathStorage,
     params,
-    timeProvider,
     defaultApplicationWallet,
     defaultApplicationState,
-    genesisBlock)
+    genesisBlock,
+    Seq())
 
   val sidechainTransactionActorRef : ActorRef = SidechainTransactionActorRef(nodeViewHolderRef)
 

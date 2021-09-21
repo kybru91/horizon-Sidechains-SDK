@@ -22,6 +22,7 @@ import com.horizen.state.*;
 import com.horizen.storage.leveldb.VersionedLevelDbStorageAdapter;
 import com.horizen.transaction.BoxTransaction;
 import com.horizen.transaction.TransactionSerializer;
+import com.horizen.validation.CustomBlockValidator;
 import com.horizen.wallet.*;
 import com.horizen.utils.Pair;
 
@@ -65,7 +66,10 @@ public class SimpleAppModule extends SidechainAppModule
         // For example new Pair("wallet, "allBoxes");
         List<Pair<String, String>> rejectedApiPaths = new ArrayList<>();
 
-
+        // Here I can define custom block validators to check the block when it is arrived to the Node.
+        // Can be useful if we want to reject or postpone block appending
+        // or if we want to ban the sender who breaks custom consensus rules.
+        List<CustomBlockValidator> customBlockValidators = new ArrayList<>();
 
         bind(SidechainSettings.class)
                 .annotatedWith(Names.named("SidechainSettings"))
@@ -122,5 +126,9 @@ public class SimpleAppModule extends SidechainAppModule
         bind(new TypeLiteral<List<Pair<String, String>>> () {})
                 .annotatedWith(Names.named("RejectedApiPaths"))
                 .toInstance(rejectedApiPaths);
+
+        bind(new TypeLiteral<List<CustomBlockValidator>> () {})
+                .annotatedWith(Names.named("HistoryCustomBlockValidators"))
+                .toInstance(customBlockValidators);
     }
 }

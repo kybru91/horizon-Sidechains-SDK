@@ -2,21 +2,21 @@ package com.horizen.integration
 
 import java.lang.{Byte => JByte}
 import java.util.{HashMap => JHashMap}
-
 import com.horizen.block.{SidechainBlock, SidechainBlockHeader}
 import com.horizen.chain.SidechainBlockInfo
 import com.horizen.companion.SidechainTransactionsCompanion
 import com.horizen.consensus.{ConsensusDataStorage, NonceConsensusEpochInfo, StakeConsensusEpochInfo}
 import com.horizen.customtypes.SemanticallyInvalidTransactionSerializer
 import com.horizen.fixtures._
+import com.horizen.node.NodeHistory
 import com.horizen.params.{MainNetParams, NetworkParams}
 import com.horizen.storage.{IODBStoreAdapter, InMemoryStorageAdapter, SidechainHistoryStorage, Storage}
 import com.horizen.transaction.TransactionSerializer
 import com.horizen.utils._
-import com.horizen.validation.{InvalidSidechainBlockDataException, SidechainBlockSemanticValidator}
+import com.horizen.validation.{BlockInFutureCustomValidatorException, CustomBlockValidator, InvalidBlockCustomValidatorException, InvalidSidechainBlockDataException, SidechainBlockSemanticValidator}
 import com.horizen.{SidechainHistory, SidechainSettings, SidechainSyncInfo, SidechainTypes}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{Before, Test}
+import org.junit.{Assert, Before, Test}
 import org.mockito.{ArgumentMatchers, Mockito}
 import org.scalatest.junit.JUnitSuite
 import org.scalatest.mockito.MockitoSugar
@@ -74,7 +74,7 @@ class SidechainHistoryTest extends JUnitSuite
     val consensusDataStorage = new ConsensusDataStorage(getStorage())
     genesisBlock.semanticValidity(params)
     val historyTry =
-      SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+      SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
     assertTrue("Genesis history creation expected to be successful. ", historyTry.isSuccess)
 
     val history = historyTry.get
@@ -92,7 +92,7 @@ class SidechainHistoryTest extends JUnitSuite
     val sidechainHistoryStorage = new SidechainHistoryStorage(getStorage(),
       sidechainTransactionsCompanion, params)
     val consensusDataStorage = new ConsensusDataStorage(getStorage())
-    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
     assertTrue("Genesis history creation expected to be successful. ", historyTry.isSuccess)
 
     var history: SidechainHistory = historyTry.get
@@ -324,7 +324,7 @@ class SidechainHistoryTest extends JUnitSuite
       sidechainTransactionsCompanion, params)
     // Init chain with 10 blocks
     val consensusDataStorage = new ConsensusDataStorage(getStorage())
-    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
     assertTrue("Genesis history creation expected to be successful. ", historyTry.isSuccess)
 
     var history = historyTry.get
@@ -410,7 +410,7 @@ class SidechainHistoryTest extends JUnitSuite
     val sidechainHistoryStorage = new SidechainHistoryStorage(getStorage(),
       sidechainTransactionsCompanion, params)
     val consensusDataStorage = new ConsensusDataStorage(getStorage())
-    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
     assertTrue("Genesis history creation expected to be successful. ", historyTry.isSuccess)
 
     var history: SidechainHistory = historyTry.get
@@ -437,7 +437,7 @@ class SidechainHistoryTest extends JUnitSuite
       sidechainTransactionsCompanion, params)
     // Create first history object
     val consensusDataStorage1 = new ConsensusDataStorage(getStorage())
-    val history1Try = SidechainHistory.createGenesisHistory(sidechainHistoryStorage1, consensusDataStorage1, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+    val history1Try = SidechainHistory.createGenesisHistory(sidechainHistoryStorage1, consensusDataStorage1, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
 
     assertTrue("Genesis history1 creation expected to be successful. ", history1Try.isSuccess)
     var history1: SidechainHistory = history1Try.get
@@ -464,7 +464,7 @@ class SidechainHistoryTest extends JUnitSuite
     val consensusDataStorage2 = new ConsensusDataStorage(getStorage())
 
     // Create second history object
-    val history2Try = SidechainHistory.createGenesisHistory(sidechainHistoryStorage2, consensusDataStorage2, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+    val history2Try = SidechainHistory.createGenesisHistory(sidechainHistoryStorage2, consensusDataStorage2, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
     assertTrue("Genesis history2 creation expected to be successful. ", history2Try.isSuccess)
     var history2: SidechainHistory = history2Try.get
     // Init history2 with 18 more blocks
@@ -571,7 +571,7 @@ class SidechainHistoryTest extends JUnitSuite
     val sidechainHistoryStorage = new SidechainHistoryStorage(new InMemoryStorageAdapter(), sidechainTransactionsCompanion, testParams)
     // Create first history object
     val consensusDataStorage1 = new ConsensusDataStorage(new InMemoryStorageAdapter())
-    var history = Mockito.spy(SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage1, testParams, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L)).get)
+    var history = Mockito.spy(SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage1, testParams, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(), Seq(), StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L)).get)
     Mockito.doAnswer(_ => firstBlockVrfOutputOpt).when(history).getVrfOutput(ArgumentMatchers.any[SidechainBlockHeader], ArgumentMatchers.any[NonceConsensusEpochInfo])
 
     val block1 = generateNextSidechainBlock(genesisBlock, sidechainTransactionsCompanion, testParams)
@@ -597,5 +597,59 @@ class SidechainHistoryTest extends JUnitSuite
     history = history.reportModifierIsValid(block3)
     val block3Info = history.bestBlockInfo
     assertEquals(block2.id, block3Info.lastBlockInPreviousConsensusEpoch)
+  }
+
+  @Test
+  def customValidatorsTest(): Unit = {
+    val sidechainHistoryStorage = new SidechainHistoryStorage(getStorage(),
+      sidechainTransactionsCompanion, params)
+    val consensusDataStorage = new ConsensusDataStorage(getStorage())
+
+    val expectedException = new InvalidBlockCustomValidatorException("expected exception")
+
+    val customValidator1 = new CustomBlockValidator {
+      override def validate(block: SidechainBlock, nodeHistory: NodeHistory): Unit = {
+        // no exceptions
+      }
+    }
+
+    val customValidator2 = new CustomBlockValidator {
+      override def validate(block: SidechainBlock, nodeHistory: NodeHistory): Unit = {
+        if(block.id != genesisBlock.id)
+          throw expectedException
+      }
+    }
+
+    val customValidator3 = new CustomBlockValidator {
+      override def validate(block: SidechainBlock, nodeHistory: NodeHistory): Unit = {
+        if(block.id != genesisBlock.id)
+          Assert.fail("Should not reach this point. Exception expected on the second validator checks.")
+      }
+    }
+
+    val customValidators: Seq[CustomBlockValidator] = Seq(customValidator1, customValidator2, customValidator3)
+
+    // Initialize History with 3 custom validators.
+    val historyTry = SidechainHistory.createGenesisHistory(sidechainHistoryStorage, consensusDataStorage, params, genesisBlock, Seq(new SidechainBlockSemanticValidator(params)), Seq(),
+      customValidators, StakeConsensusEpochInfo(idToBytes(genesisBlock.id), 0L))
+
+    assertTrue("Genesis history creation expected to be successful. ", historyTry.isSuccess)
+    val history: SidechainHistory = historyTry.get
+
+
+    // Test: try to append block after genesis - should fail because of the custom validator exception.
+    val blockB2: SidechainBlock = generateNextSidechainBlock(genesisBlock, sidechainTransactionsCompanion, params, basicSeed = 111L)
+    history.append(blockB2) match {
+      case Success((_, _)) =>
+        Assert.fail("Block validation expected to raise an exception.")
+      case Failure(e) =>
+        // We expect the second validator exception to be thrown,
+        assertEquals("Different exception expected during block apply.", expectedException, e)
+    }
+
+    // check
+    assertEquals("Expected to have NOT updated height, best block was NOT changed.", 1, history.height)
+    assertEquals("Expected to have a genesis block, best block was NOT changed.", genesisBlock.id, history.bestBlockId)
+    assertFalse("Block expected to be present.", history.contains(blockB2.id))
   }
 }

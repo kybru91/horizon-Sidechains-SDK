@@ -15,7 +15,6 @@ import scorex.core.consensus.History.ProgressInfo
 import scorex.core.idToVersion
 import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
 import scorex.core.settings.ScorexSettings
-import scorex.core.utils.NetworkTimeProvider
 import scorex.util.{ModifierId, ScorexLogging}
 
 import scala.annotation.tailrec
@@ -30,10 +29,10 @@ class SidechainNodeViewHolder(sidechainSettings: SidechainSettings,
                               walletTransactionStorage: SidechainWalletTransactionStorage,
                               forgingBoxesInfoStorage: ForgingBoxesInfoStorage,
                               params: NetworkParams,
-                              timeProvider: NetworkTimeProvider,
                               applicationWallet: ApplicationWallet,
                               applicationState: ApplicationState,
-                              genesisBlock: SidechainBlock)
+                              genesisBlock: SidechainBlock,
+                              historyCustomBlockValidators: Seq[CustomBlockValidator])
   extends scorex.core.NodeViewHolder[SidechainTypes#SCBT, SidechainBlock]
   with ScorexLogging
   with SidechainTypes
@@ -62,7 +61,7 @@ class SidechainNodeViewHolder(sidechainSettings: SidechainSettings,
   )
 
   override def restoreState(): Option[(HIS, MS, VL, MP)] = for {
-    history <- SidechainHistory.restoreHistory(historyStorage, consensusDataStorage, params, semanticBlockValidators(params), historyBlockValidators(params))
+    history <- SidechainHistory.restoreHistory(historyStorage, consensusDataStorage, params, semanticBlockValidators(params), historyBlockValidators(params), historyCustomBlockValidators)
     state <- SidechainState.restoreState(stateStorage, forgerBoxStorage, params, applicationState)
     wallet <- SidechainWallet.restoreWallet(sidechainSettings.wallet.seed.getBytes,
       walletBoxStorage, secretStorage, walletTransactionStorage, forgingBoxesInfoStorage, applicationWallet)
@@ -75,8 +74,9 @@ class SidechainNodeViewHolder(sidechainSettings: SidechainSettings,
 
       (modId: ModifierId, consensusEpochInfo: ConsensusEpochInfo) <- Success(state.getCurrentConsensusEpochInfo)
 
-      history <- SidechainHistory.createGenesisHistory(historyStorage, consensusDataStorage, params, genesisBlock, semanticBlockValidators(params),
-        historyBlockValidators(params), StakeConsensusEpochInfo(consensusEpochInfo.forgingStakeInfoTree.rootHash(), consensusEpochInfo.forgersStake))
+      history <- SidechainHistory.createGenesisHistory(historyStorage, consensusDataStorage, params, genesisBlock,
+        semanticBlockValidators(params), historyBlockValidators(params), historyCustomBlockValidators,
+        StakeConsensusEpochInfo(consensusEpochInfo.forgingStakeInfoTree.rootHash(), consensusEpochInfo.forgersStake))
 
       wallet <- SidechainWallet.createGenesisWallet(sidechainSettings.wallet.seed.getBytes, walletBoxStorage, secretStorage,
         walletTransactionStorage, forgingBoxesInfoStorage, applicationWallet, genesisBlock, consensusEpochInfo)
@@ -301,12 +301,12 @@ object SidechainNodeViewHolderRef {
             walletTransactionStorage: SidechainWalletTransactionStorage,
             forgingBoxesInfoStorage: ForgingBoxesInfoStorage,
             params: NetworkParams,
-            timeProvider: NetworkTimeProvider,
             applicationWallet: ApplicationWallet,
             applicationState: ApplicationState,
-            genesisBlock: SidechainBlock): Props =
+            genesisBlock: SidechainBlock,
+            historyCustomBlockValidators: Seq[CustomBlockValidator]): Props =
     Props(new SidechainNodeViewHolder(sidechainSettings, historyStorage, consensusDataStorage, stateStorage, forgerBoxStorage, walletBoxStorage, secretStorage,
-      walletTransactionStorage, forgingBoxesInfoStorage, params, timeProvider, applicationWallet, applicationState, genesisBlock))
+      walletTransactionStorage, forgingBoxesInfoStorage, params, applicationWallet, applicationState, genesisBlock, historyCustomBlockValidators))
 
   def apply(sidechainSettings: SidechainSettings,
             historyStorage: SidechainHistoryStorage,
@@ -318,13 +318,13 @@ object SidechainNodeViewHolderRef {
             walletTransactionStorage: SidechainWalletTransactionStorage,
             forgingBoxesInfoStorage: ForgingBoxesInfoStorage,
             params: NetworkParams,
-            timeProvider: NetworkTimeProvider,
             applicationWallet: ApplicationWallet,
             applicationState: ApplicationState,
-            genesisBlock: SidechainBlock)
+            genesisBlock: SidechainBlock,
+            historyCustomBlockValidators: Seq[CustomBlockValidator])
            (implicit system: ActorSystem): ActorRef =
     system.actorOf(props(sidechainSettings, historyStorage, consensusDataStorage, stateStorage, forgerBoxStorage, walletBoxStorage, secretStorage,
-      walletTransactionStorage, forgingBoxesInfoStorage, params, timeProvider, applicationWallet, applicationState, genesisBlock))
+      walletTransactionStorage, forgingBoxesInfoStorage, params, applicationWallet, applicationState, genesisBlock, historyCustomBlockValidators))
 
   def apply(name: String,
             sidechainSettings: SidechainSettings,
@@ -337,11 +337,11 @@ object SidechainNodeViewHolderRef {
             walletTransactionStorage: SidechainWalletTransactionStorage,
             forgingBoxesInfoStorage: ForgingBoxesInfoStorage,
             params: NetworkParams,
-            timeProvider: NetworkTimeProvider,
             applicationWallet: ApplicationWallet,
             applicationState: ApplicationState,
-            genesisBlock: SidechainBlock)
+            genesisBlock: SidechainBlock,
+            historyCustomBlockValidators: Seq[CustomBlockValidator])
            (implicit system: ActorSystem): ActorRef =
     system.actorOf(props(sidechainSettings, historyStorage, consensusDataStorage, stateStorage, forgerBoxStorage, walletBoxStorage, secretStorage,
-      walletTransactionStorage, forgingBoxesInfoStorage, params, timeProvider, applicationWallet, applicationState, genesisBlock), name)
+      walletTransactionStorage, forgingBoxesInfoStorage, params, applicationWallet, applicationState, genesisBlock, historyCustomBlockValidators), name)
 }

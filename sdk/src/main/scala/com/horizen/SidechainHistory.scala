@@ -1,7 +1,6 @@
 package com.horizen
 
 import java.util.{ArrayList => JArrayList, List => JList, Optional => JOptional}
-
 import com.horizen.block.{MainchainBlockReference, MainchainHeader, SidechainBlock}
 import com.horizen.chain.{MainchainBlockReferenceDataInfo, MainchainHeaderBaseInfo, MainchainHeaderHash, MainchainHeaderInfo, SidechainBlockInfo, byteArrayToMainchainHeaderHash}
 import com.horizen.consensus._
@@ -10,7 +9,7 @@ import com.horizen.node.util.MainchainBlockReferenceInfo
 import com.horizen.params.{NetworkParams, NetworkParamsUtils}
 import com.horizen.storage.SidechainHistoryStorage
 import com.horizen.utils.{BytesUtils, WithdrawalEpochInfo, WithdrawalEpochUtils}
-import com.horizen.validation.{HistoryBlockValidator, SemanticBlockValidator}
+import com.horizen.validation.{CustomBlockValidator, HistoryBlockValidator, SemanticBlockValidator}
 import scorex.core.NodeViewModifier
 import scorex.core.consensus.History._
 import scorex.core.consensus.{History, ModifierSemanticValidity}
@@ -26,7 +25,8 @@ class SidechainHistory private (val storage: SidechainHistoryStorage,
                                 val consensusDataStorage: ConsensusDataStorage,
                                 val params: NetworkParams,
                                 semanticBlockValidators: Seq[SemanticBlockValidator],
-                                historyBlockValidators: Seq[HistoryBlockValidator])
+                                historyBlockValidators: Seq[HistoryBlockValidator],
+                                customBlockValidators: Seq[CustomBlockValidator])
   extends scorex.core.consensus.History[
       SidechainBlock,
       SidechainSyncInfo,
@@ -59,6 +59,10 @@ class SidechainHistory private (val storage: SidechainHistoryStorage,
 
     for(validator <- historyBlockValidators)
       validator.validate(block, this).get
+
+    // Verify the block against the custom validators to let applications reject/postpone/ban blocks in general.
+    for(validator <- customBlockValidators)
+      validator.validate(block, this)
 
     val (newStorage: Try[SidechainHistoryStorage], progressInfo: ProgressInfo[SidechainBlock]) = {
       if(isGenesisBlock(block.id)) {
@@ -104,7 +108,7 @@ class SidechainHistory private (val storage: SidechainHistoryStorage,
         }
       }
     }
-    new SidechainHistory(newStorage.get, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators) -> progressInfo
+    new SidechainHistory(newStorage.get, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators) -> progressInfo
   }
 
   def isBestBlock(block: SidechainBlock, parentBlockInfo: SidechainBlockInfo): Boolean = {
@@ -219,18 +223,18 @@ class SidechainHistory private (val storage: SidechainHistoryStorage,
   override def reportModifierIsValid(block: SidechainBlock): SidechainHistory = {
       var newStorage = storage.updateSemanticValidity(block, ModifierSemanticValidity.Valid).get
       newStorage = newStorage.setAsBestBlock(block, storage.blockInfoById(block.id)).get
-      new SidechainHistory(newStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators)
+      new SidechainHistory(newStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators)
   }
 
   override def reportModifierIsInvalid(modifier: SidechainBlock, progressInfo: History.ProgressInfo[SidechainBlock]): (SidechainHistory, History.ProgressInfo[SidechainBlock]) = { // to do
     val newHistory: SidechainHistory = Try {
       val newStorage = storage.updateSemanticValidity(modifier, ModifierSemanticValidity.Invalid).get
-      new SidechainHistory(newStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators)
+      new SidechainHistory(newStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators)
     } match {
       case Success(history) => history
       case Failure(e) =>
         //log.error(s"Failed to update validity for block ${encoder.encode(block.id)} with error ${e.getMessage}.")
-        new SidechainHistory(storage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators)
+        new SidechainHistory(storage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators)
     }
 
     // In case when we try to apply some fork, which contains at least one invalid block, we should return to the State and History to the "state" before fork.
@@ -540,7 +544,7 @@ class SidechainHistory private (val storage: SidechainHistoryStorage,
     consensusDataStorage.addStakeConsensusEpochInfo(blockIdToEpochId(lastBlockInEpoch), fullConsensusEpochInfo.stakeConsensusEpochInfo)
     consensusDataStorage.addNonceConsensusEpochInfo(blockIdToEpochId(lastBlockInEpoch), fullConsensusEpochInfo.nonceConsensusEpochInfo)
 
-    new SidechainHistory(storage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators)
+    new SidechainHistory(storage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators)
   }
 }
 
@@ -550,10 +554,11 @@ object SidechainHistory
                                       consensusDataStorage: ConsensusDataStorage,
                                       params: NetworkParams,
                                       semanticBlockValidators: Seq[SemanticBlockValidator],
-                                      historyBlockValidators: Seq[HistoryBlockValidator]): Option[SidechainHistory] = {
+                                      historyBlockValidators: Seq[HistoryBlockValidator],
+                                      customBlockValidators: Seq[CustomBlockValidator]): Option[SidechainHistory] = {
 
     if (!historyStorage.isEmpty)
-      Some(new SidechainHistory(historyStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators))
+      Some(new SidechainHistory(historyStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators))
     else
       None
   }
@@ -577,16 +582,17 @@ object SidechainHistory
   }
 
   private[horizen] def createGenesisHistory(historyStorage: SidechainHistoryStorage,
-                                      consensusDataStorage: ConsensusDataStorage,
-                                      params: NetworkParams,
-                                      genesisBlock: SidechainBlock,
-                                      semanticBlockValidators: Seq[SemanticBlockValidator],
-                                      historyBlockValidators: Seq[HistoryBlockValidator],
-                                      stakeEpochInfo: StakeConsensusEpochInfo) : Try[SidechainHistory] = Try {
+                                            consensusDataStorage: ConsensusDataStorage,
+                                            params: NetworkParams,
+                                            genesisBlock: SidechainBlock,
+                                            semanticBlockValidators: Seq[SemanticBlockValidator],
+                                            historyBlockValidators: Seq[HistoryBlockValidator],
+                                            customBlockValidators: Seq[CustomBlockValidator],
+                                            stakeEpochInfo: StakeConsensusEpochInfo) : Try[SidechainHistory] = Try {
 
     if (historyStorage.isEmpty) {
       val nonceEpochInfo = ConsensusDataProvider.calculateNonceForGenesisBlock(params)
-      new SidechainHistory(historyStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators)
+      new SidechainHistory(historyStorage, consensusDataStorage, params, semanticBlockValidators, historyBlockValidators, customBlockValidators)
         .append(genesisBlock).map(_._1).get.reportModifierIsValid(genesisBlock).applyFullConsensusInfo(genesisBlock.id, FullConsensusEpochInfo(stakeEpochInfo, nonceEpochInfo))
     }
     else
