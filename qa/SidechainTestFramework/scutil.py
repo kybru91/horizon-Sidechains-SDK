@@ -820,7 +820,7 @@ def create_sidechain(sc_creation_info, block_timestamp_rewind, cert_keys_paths, 
         sc_creation_info.mc_node,
         sc_creation_info.withdrawal_epoch_length,
         genesis_account.publicKey,
-        sc_creation_info.forward_amount,
+        sc_creation_info.creation_amount,
         vrf_key.publicKey,
         certificate_proof_info.genSysConstant,
         certificate_proof_info.verificationKey,
@@ -832,7 +832,7 @@ def create_sidechain(sc_creation_info, block_timestamp_rewind, cert_keys_paths, 
                                          block_timestamp_rewind)
     sidechain_id = genesis_info[2]
 
-    return SCBootstrapInfo(sidechain_id, genesis_account, sc_creation_info.forward_amount, genesis_info[1],
+    return SCBootstrapInfo(sidechain_id, genesis_account, sc_creation_info.creation_amount, genesis_info[1],
                            genesis_data["scGenesisBlockHex"], genesis_data["powData"], genesis_data["mcNetwork"],
                            sc_creation_info.withdrawal_epoch_length, vrf_key, certificate_proof_info,
                            genesis_data["initialCumulativeCommTreeHash"], cert_keys_paths, csw_keys_paths)

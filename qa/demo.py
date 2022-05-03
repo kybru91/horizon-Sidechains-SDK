@@ -99,7 +99,7 @@ class Demo(SidechainTestFramework):
             "version": 0,
             "withdrawalEpochLength": withdrawal_epoch_length,
             "toaddress": genesis_account.publicKey,
-            "amount": sc_creation_info.forward_amount,
+            "amount": sc_creation_info.creation_amount,
             "wCertVk": certificate_proof_info.verificationKey,
             "customData": custom_data,
             "constant": certificate_proof_info.genSysConstant,
@@ -110,7 +110,7 @@ class Demo(SidechainTestFramework):
               'sc_create {} '.format(json.dumps(cmdInput, indent=4, sort_keys=True)))
         print(
             "where arguments are:\nwithdrawal epoch length - {}\nfirst Forward Transfer receiver address in the Sidechain - {}\nfirst Forward Transfer amount - {} ({} Zen)\nwithdrawal certificate verification key - {}\nfirst ForgerBox VRF publick key - {}\nwithdrawal certificate Snark proof public input - {}\n".format(
-                withdrawal_epoch_length, genesis_account.publicKey, sc_creation_info.forward_amount * COIN,  sc_creation_info.forward_amount,
+                withdrawal_epoch_length, genesis_account.publicKey, sc_creation_info.creation_amount * COIN,  sc_creation_info.creation_amount,
                 certificate_proof_info.verificationKey, custom_data, certificate_proof_info.genSysConstant))
 
         self.pause()
@@ -158,10 +158,10 @@ class Demo(SidechainTestFramework):
 
         sidechain_id = genesis_info[2]
 
-        sc_bootstrap_info = SCBootstrapInfo(sidechain_id, genesis_account, sc_creation_info.forward_amount, genesis_info[1],
-                               genesis_data["scGenesisBlockHex"], genesis_data["powData"], genesis_data["mcNetwork"],
-                               sc_creation_info.withdrawal_epoch_length, vrf_key, certificate_proof_info,
-                               genesis_data["initialCumulativeCommTreeHash"], cert_keys_paths, csw_keys_paths)
+        sc_bootstrap_info = SCBootstrapInfo(sidechain_id, genesis_account, sc_creation_info.creation_amount, genesis_info[1],
+                                            genesis_data["scGenesisBlockHex"], genesis_data["powData"], genesis_data["mcNetwork"],
+                                            sc_creation_info.withdrawal_epoch_length, vrf_key, certificate_proof_info,
+                                            genesis_data["initialCumulativeCommTreeHash"], cert_keys_paths, csw_keys_paths)
 
 
         bootstrap_sidechain_node(self.options.tmpdir, 0, sc_bootstrap_info, sc_node_configuration)
