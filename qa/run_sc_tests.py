@@ -35,6 +35,7 @@ from websocket_server_fee_payments import SCWsServerFeePayments
 from sc_closed_forger import SidechainClosedForgerTest
 from sc_blockid_for_backup import SidechainBlockIdForBackupTest
 from sc_forger_feerate import SCForgerFeerate
+from sc_mempool_max_fee import SCMempoolMaxFee
 
 
 def run_test(test):
@@ -146,6 +147,9 @@ def run_tests(log_file):
 
     result = run_test(SCForgerFeerate())
     assert_equal(0, result, "sc_forger_feerate test failed!")
+
+    result = run_test(SCMempoolMaxFee())
+    assert_equal(0, result, "sc_mempool_max_fee test failed!")
 
 if __name__ == "__main__":
     log_file = open("sc_test.log", "w")
