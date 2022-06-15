@@ -1,5 +1,7 @@
 package com.horizen.evm;
 
+import com.horizen.evm.interop.EvmLog;
+
 import java.math.BigInteger;
 
 public class StateDB extends ResouceHandle {
@@ -212,6 +214,16 @@ public class StateDB extends ResouceHandle {
      */
     public void revertToSnapshot(int revisionId) {
         LibEvm.stateRevertToSnapshot(handle, revisionId);
+    }
+
+    /**
+     * Get log entries created during the execution of given transaction.
+     *
+     * @param txHash transaction hash
+     * @return log entries related to given transaction hash
+     */
+    public EvmLog[] getLogs(byte[] txHash) {
+        return LibEvm.stateGetLogs(handle, txHash);
     }
 
     @Override
