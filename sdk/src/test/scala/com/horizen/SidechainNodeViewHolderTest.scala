@@ -1,6 +1,7 @@
 package com.horizen
 
 import java.util
+
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.TestProbe
 import com.horizen.block.SidechainBlock
@@ -19,9 +20,11 @@ import scorex.core.NodeViewHolder.DownloadRequest
 import scorex.core.NodeViewHolder.ReceivableMessages.LocallyGeneratedModifier
 import scorex.core.consensus.History.ProgressInfo
 import scorex.core.network.NodeViewSynchronizer.ReceivableMessages.SemanticallySuccessfulModifier
+import scorex.core.settings.NetworkSettings
 import scorex.core.{VersionTag, idToVersion}
 import scorex.util.ModifierId
 
+import scala.concurrent.duration.FiniteDuration
 import scala.util.Success
 
 class SidechainNodeViewHolderTest extends JUnitSuite
@@ -43,13 +46,21 @@ class SidechainNodeViewHolderTest extends JUnitSuite
   val genesisBlock: SidechainBlock = SidechainBlockFixture.generateSidechainBlock(sidechainTransactionsCompanion)
   val params: NetworkParams = RegTestParams(initialCumulativeCommTreeHash = FieldElementFixture.generateFieldElement())
 
+
   @Before
   def setUp(): Unit = {
     history = mock[SidechainHistory]
     state = mock[SidechainState]
     wallet = mock[SidechainWallet]
-    mempool = SidechainMemoryPool.emptyPool
+    mempool = SidechainMemoryPool.createEmptyMempool(getMockedMempoolSettings(300))
     mockedNodeViewHolderRef = getMockedSidechainNodeViewHolderRef(history, state, wallet, mempool)
+  }
+
+  private def getMockedMempoolSettings(maxSize: Int): MempoolSettings = {
+    val mockedSettings: MempoolSettings = mock[MempoolSettings]
+    Mockito.when(mockedSettings.maxSize).thenReturn(maxSize)
+    Mockito.when(mockedSettings.minFeeRate).thenReturn(0)
+    mockedSettings
   }
 
   @Test

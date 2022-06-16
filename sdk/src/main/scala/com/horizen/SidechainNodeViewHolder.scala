@@ -18,6 +18,7 @@ import scorex.core.consensus.History.ProgressInfo
 import scorex.core.network.NodeViewSynchronizer.ReceivableMessages._
 import scorex.core.settings.ScorexSettings
 import scorex.core.transaction.Transaction
+import scorex.core.transaction.state.TransactionValidation
 import scorex.core.utils.NetworkTimeProvider
 import scorex.core.{idToVersion, versionToId}
 import scorex.util.{ModifierId, ScorexLogging}
@@ -195,7 +196,7 @@ class SidechainNodeViewHolder(sidechainSettings: SidechainSettings,
       state <- SidechainState.restoreState(stateStorage, forgerBoxStorage, utxoMerkleTreeStorage, params, applicationState)
       wallet <- SidechainWallet.restoreWallet(sidechainSettings.wallet.seed.getBytes, walletBoxStorage, secretStorage,
         walletTransactionStorage, forgingBoxesInfoStorage, cswDataStorage, params, applicationWallet)
-      pool <- Some(SidechainMemoryPool.emptyPool)
+      pool <- Some(SidechainMemoryPool.createEmptyMempool(sidechainSettings.mempool))
     } yield (history, state, wallet, pool)
 
     val result = checkAndRecoverStorages(restoredData)
@@ -238,7 +239,7 @@ class SidechainNodeViewHolder(sidechainSettings: SidechainSettings,
       history <- SidechainHistory.createGenesisHistory(historyStorage, consensusDataStorage, params, genesisBlock, semanticBlockValidators(params),
         historyBlockValidators(params), StakeConsensusEpochInfo(consensusEpochInfo.forgingStakeInfoTree.rootHash(), consensusEpochInfo.forgersStake))
 
-      pool <- Success(SidechainMemoryPool.emptyPool)
+      pool <- Success(SidechainMemoryPool.createEmptyMempool(sidechainSettings.mempool))
     } yield (history, state, wallet, pool)
 
     result.get
@@ -329,7 +330,7 @@ class SidechainNodeViewHolder(sidechainSettings: SidechainSettings,
                 log.info(s"Persistent modifier ${pmod.encodedId} applied successfully, now updating node view")
                 updateNodeView(Some(newHistory), Some(newState), Some(newWallet), Some(newMemPool))
 
-
+                log.debug(s"Current mempool size: ${newMemPool.getSize} transactions - ${newMemPool.getUsedSizeKb}kb (${newMemPool.getUsedPercentage}%)")
               case Failure(e) =>
                 log.warn(s"Can`t apply persistent modifier (id: ${pmod.encodedId}, contents: $pmod) to minimal state", e)
                 updateNodeView(updatedHistory = Some(newHistory))
