@@ -46,8 +46,8 @@ public class EvmAppModule extends AccountAppModule
         List<Pair<String, String>> rejectedApiPaths = new ArrayList<>();
 
         // Here I can add my custom logic to manage EthereumTransaction content.
-        // TODO: EvmProcessor instance expected.
         List<MessageProcessor> customMessageProcessors = new ArrayList<>();
+        customMessageProcessors.add(new EvmMessageProcessor());
 
         bind(SidechainSettings.class)
                 .annotatedWith(Names.named("SidechainSettings"))
