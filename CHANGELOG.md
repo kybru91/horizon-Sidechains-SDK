@@ -1,4 +1,5 @@
 **0.12.0**
+1. Sparkz dependency updated to 2.4.0
 
 **0.11.0**
 1. Sparkz dependency updated to 2.3.0
