@@ -2,9 +2,10 @@ package io.horizen.account.state
 
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
-import io.horizen.account.state.events.ActivateStakeV2
 import io.horizen.account.state.nativescdata.forgerstakev2._
+import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake}
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
+import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
 import io.horizen.evm.Address
 import io.horizen.utils.BytesUtils
 import sparkz.crypto.hash.Keccak256
@@ -25,9 +26,9 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
     val gasView = view.getGasTrackedView(invocation.gasPool)
     getFunctionSignature(invocation.input) match {
       case DelegateCmd =>
-        doDelegateCmd(invocation, gasView, context.msg)
+        doDelegateCmd(invocation, gasView, context)
       case WithdrawCmd =>
-        doWithdrawCmd(invocation, gasView, context.msg)
+        doWithdrawCmd(invocation, gasView, context)
       case StakeTotalCmd  =>
         doStakeTotalCmd(invocation, gasView, context.msg)
       case GetPagedForgersStakesByForgerCmd  =>
@@ -40,18 +41,59 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
     }
   }
 
-  def doDelegateCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doDelegateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+
+    if (!StakeStorage.isActive(view)) {
+      throw new ExecutionRevertedException("Forger stake V2 has not been activated yet")
+    }
+
     val inputParams = getArgumentsFromData(invocation.input)
-    val cmdInput = DelegateCmdInputDecoder.decode(inputParams)
-    log.info(s"delegate called - ${cmdInput.forgerPublicKeys}")
-    //TODO: add logic
+    val DelegateCmdInput(forgerPublicKeys) = DelegateCmdInputDecoder.decode(inputParams)
+
+    log.info(s"delegate called - $forgerPublicKeys")
+    val stakedAmount = invocation.value
+
+    if (stakedAmount.signum() <= 0) {
+      throw new ExecutionRevertedException("Value must not be zero")
+    }
+
+    if (!isValidZenAmount(stakedAmount)) {
+      throw new ExecutionRevertedException(s"Value is not a legal wei amount: $stakedAmount")
+    }
+
+    if (view.getBalance(invocation.caller).compareTo(stakedAmount) < 0){
+      throw new ExecutionRevertedException(s"Insufficient funds. Required: $stakedAmount, available: ${view.getBalance(invocation.caller)}")
+    }
+
+    val epochNumber = context.blockContext.consensusEpochNumber
+
+    StakeStorage.addStake(view, forgerPublicKeys.blockSignPublicKey, forgerPublicKeys.vrfPublicKey,
+      epochNumber, invocation.caller, stakedAmount)
+
+    val delegateStakeEvt = DelegateForgerStake(invocation.caller, forgerPublicKeys.blockSignPublicKey, forgerPublicKeys.vrfPublicKey, stakedAmount)
+    val evmLog = getEthereumConsensusDataLog(delegateStakeEvt)
+    view.addLog(evmLog)
+
+    view.subBalance(invocation.caller, stakedAmount)
+    // increase the balance of the "forger stake smart contract” account
+    view.addBalance(contractAddress, stakedAmount)
+
+
     Array.emptyByteArray
   }
 
-  def doWithdrawCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doWithdrawCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
-    val cmdInput = WithdrawCmdInputDecoder.decode(inputParams)
-    log.info(s"withdraw called - ${cmdInput.forgerPublicKeys} ${cmdInput.value}")
+    val WithdrawCmdInput(forgerPublicKeys, value) = WithdrawCmdInputDecoder.decode(inputParams)
+
+    if (!StakeStorage.isActive(view)) {
+      throw new ExecutionRevertedException("Forger stake V2 has not been activated yet")
+    }
+    log.info(s"withdraw called - ${forgerPublicKeys} ${value}")
+
+    if (value.signum() <= 0) {
+      throw new ExecutionRevertedException("Value must not be zero")
+    }
 
     //TODO: add logic
     Array.emptyByteArray
