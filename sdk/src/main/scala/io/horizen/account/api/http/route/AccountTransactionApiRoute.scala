@@ -24,6 +24,8 @@ import io.horizen.account.state.nativescdata.forgerstakev2.StakeDataDelegator
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.{AccountPayment, EthereumTransactionUtils, ZenWeiConverter}
+import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
+import io.horizen.account.utils.{EthereumTransactionUtils, ZenWeiConverter}
 import io.horizen.api.http.JacksonSupport._
 import io.horizen.api.http.route.TransactionBaseErrorResponse.{ErrorBadCircuit, ErrorByteTransactionParsing}
 import io.horizen.api.http.route.{ErrorNotEnabledOnSeederNode, TransactionBaseApiRoute}
@@ -648,8 +650,8 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
               Try {
                 accountState.getPagedForgersStakesByForger(body.forger, body.startPos, body.size)
               } match {
-                case Success((nextPos, listOfForgerStakes)) =>
-                  ApiResponseUtil.toResponse(RespPagedForgerStakesByForger(nextPos, listOfForgerStakes.toList))
+                case Success(result) =>
+                  ApiResponseUtil.toResponse(RespPagedForgerStakesByForger(result.nextStartPos, result.stakesData.toList))
                 case Failure(exception) =>
                   ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
               }
@@ -1240,7 +1242,8 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
 
     val registerForgerInput = RegisterForgerCmdInput(ForgerPublicKeys(blockSignPubKey, vrfPubKey), rewardShare, smartcontract_address.address(), signature25519 = ???, signatureVrf = ???)
 
-    Bytes.concat(BytesUtils.fromHexString(ForgerStakeV2MsgProcessor.RegisterForgerCmd), registerForgerInput.encode())
+    //Bytes.concat(BytesUtils.fromHexString(ForgerStakeV2MsgProcessor.RegisterForgerCmd), registerForgerInput.encode())
+    null
   }
 
 

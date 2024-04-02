@@ -157,68 +157,74 @@ object StakeStorage {
     }
   }
 
-  def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): (Int, Seq[StakeDataDelegator]) = {
+  def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
 
     if (startPos < 0)
-      throw new IllegalArgumentException(s"Invalid startPos input: $startPos can not be negative")
+      throw new IllegalArgumentException(s"Negative start position: $startPos can not be negative")
     if (pageSize <= 0)
       throw new IllegalArgumentException(s"Invalid page size $pageSize, must be positive")
 
     val forgerKey = ForgerKey(forger.blockSignPublicKey, forger.vrfPublicKey)
     val listOfDelegators = DelegatorList(forgerKey)
     val numOfDelegators = listOfDelegators.getSize(view)
+    if (numOfDelegators == 0)
+      return PagedStakesByForgerResponse(-1, Seq())
+
     if (startPos > numOfDelegators - 1)
-      throw new IllegalArgumentException(s"Invalid position where to start reading list of delegators: $startPos, delegators array size: $numOfDelegators")
+      throw new IllegalArgumentException(s"Invalid start position reading list of delegators: $startPos, delegators array size: $numOfDelegators")
 
     var endPos = startPos + pageSize
     if (endPos > numOfDelegators)
       endPos = numOfDelegators
 
-    val resultList = (startPos until endPos).map(index => {
+    val resultList = (startPos until endPos).view.map(index => {
       val delegatorKey = listOfDelegators.getDelegatorAt(view, index)
       val stakeHistory = StakeHistory(forgerKey, delegatorKey)
       val amount = stakeHistory.getLatestAmount(view)
       StakeDataDelegator(new AddressProposition(delegatorKey), amount)
-    })
+    }).filter(_.stakedAmount.signum() > 0).toList
 
     if (endPos == numOfDelegators) {
       // tell the caller we are done with the array
       endPos = -1
     }
 
-    (endPos, resultList)
+    PagedStakesByForgerResponse(endPos, resultList)
   }
 
-  def getPagedForgersStakesByDelegator(view: BaseAccountStateView,  delegator: Address, startPos: Int, pageSize: Int): (Int, Seq[StakeDataForger]) = {
+  def getPagedForgersStakesByDelegator(view: BaseAccountStateView,  delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
 
     if (startPos < 0)
-      throw new IllegalArgumentException(s"Invalid startPos input: $startPos can not be negative")
+      throw new IllegalArgumentException(s"Negative start position: $startPos")
     if (pageSize <= 0)
       throw new IllegalArgumentException(s"Invalid page size $pageSize, must be positive")
 
     val delegatorKey = DelegatorKey(delegator)
     val listOfForgers = DelegatorListOfForgerKeys(delegatorKey)
     val numOfForgers = listOfForgers.getSize(view)
+    if (numOfForgers == 0)
+      return PagedStakesByDelegatorResponse(-1, Seq())
+
     if (startPos > numOfForgers - 1)
-      throw new IllegalArgumentException(s"Invalid position where to start reading list of forgers: $startPos, forgers array size: $numOfForgers")
+      throw new IllegalArgumentException(s"Invalid start position reading list of forgers: $startPos, forgers array size: $numOfForgers")
 
     var endPos = startPos + pageSize
     if (endPos > numOfForgers)
       endPos = numOfForgers
 
-    val resultList = (startPos until endPos).map(index => {
+    val resultList = (startPos until endPos).view.map(index => {
       val forgerKey = listOfForgers.getForgerKey(view, index)
       val stakeHistory = StakeHistory(forgerKey, delegatorKey)
       val amount = stakeHistory.getLatestAmount(view)
       val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
       StakeDataForger(forger.forgerPublicKeys, amount)
-    })
+    }).filter(_.stakedAmount.signum() > 0).toList
 
     if (endPos == numOfForgers) {
       // tell the caller we are done with the array
       endPos = -1
     }
-    (endPos, resultList)
+    PagedStakesByDelegatorResponse(endPos, resultList)
   }
 
 
@@ -512,3 +518,6 @@ object ForgerMap {
 
 case class PagedForgersListResponse(nextStartPos: Int, forgers: Seq[ForgerDetails])
 
+case class PagedStakesByForgerResponse(nextStartPos: Int, stakesData: Seq[StakeDataDelegator])
+
+case class PagedStakesByDelegatorResponse(nextStartPos: Int, stakesData: Seq[StakeDataForger])
