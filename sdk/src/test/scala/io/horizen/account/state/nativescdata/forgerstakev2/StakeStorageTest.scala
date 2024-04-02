@@ -13,6 +13,7 @@ import org.junit.Test
 import org.scalatestplus.junit.JUnitSuite
 
 import java.math.BigInteger
+import scala.collection.mutable.ListBuffer
 import scala.language.implicitConversions
 
 class StakeStorageTest
@@ -29,6 +30,7 @@ class StakeStorageTest
 
   val delegator1 = new Address("0xaaa00001230000000000deadbeefaaaa2222de01")
   val delegator2 = new Address("0xaaa00001230000000000aaaaaaabbbbb2222de02")
+  val delegator3 = new Address("0xaaabbbb1230000000000aaaaaaabbbbb2222de03")
 
   implicit def addressToChecksumAddress(t: Address): DelegatorKey = DelegatorKey(t)
 
@@ -723,7 +725,6 @@ class StakeStorageTest
       epochNumber += 10
       StakeStorage.addStake(view, blockSignerProposition2, vrfPublicKey2, epochNumber, delegator2, stakeAmount1)
       listOfExpectedData = listOfExpectedData :+ ForgerStakeData(ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2), new AddressProposition(delegator2), stakeAmount1)
-      val delegator3 = new Address("0xaaabbbb1230000000000aaaaaaabbbbb2222de03")
       StakeStorage.addStake(view, blockSignerProposition2, vrfPublicKey2, epochNumber, delegator3, stakeAmount2)
       listOfExpectedData = listOfExpectedData :+ ForgerStakeData(ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2), new AddressProposition(delegator3), stakeAmount2)
 
@@ -754,18 +755,18 @@ class StakeStorageTest
 
       createSenderAccount(view, BigInteger.TEN, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
 
-      // check we have empty lists
-      var listOfStakesForger1 = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 0, 100)
-      assertTrue(listOfStakesForger1.stakesData.isEmpty)
-      assertTrue(listOfStakesForger1.nextStartPos == -1)
+      // check that at the very beginning we have empty lists
+      val listOfStakesForgerEmpty = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 0, 100)
+      assertTrue(listOfStakesForgerEmpty.stakesData.isEmpty)
+      assertTrue(listOfStakesForgerEmpty.nextStartPos == -1)
 
-      var listOfStakesDelegator1 = StakeStorage.getPagedForgersStakesByDelegator(view, delegator1, 0, 100)
-      assertTrue(listOfStakesDelegator1.stakesData.isEmpty)
-      assertTrue(listOfStakesDelegator1.nextStartPos == -1)
+      val listOfStakesDelegatorEmpty = StakeStorage.getPagedForgersStakesByDelegator(view, delegator1, 0, 100)
+      assertTrue(listOfStakesDelegatorEmpty.stakesData.isEmpty)
+      assertTrue(listOfStakesDelegatorEmpty.nextStartPos == -1)
 
       val rewardAddress = new Address(s"0xaaa0000123000000000011112222aaaa22222111")
-      val rewardShare = 90
-      val epochNumber = 135869
+      val rewardShare = 100
+      val epochNumber = 1000
 
       val stakeAmount1 = BigInteger.valueOf(10000000000L)
       StakeStorage.addForger(view, blockSignerProposition1, vrfPublicKey1, rewardShare, rewardAddress, epochNumber, delegator1, stakeAmount1)
@@ -780,27 +781,33 @@ class StakeStorageTest
       StakeStorage.addStake(view, blockSignerProposition2, vrfPublicKey2, epochNumber, delegator2, stakeAmount4)
 
       val stakeAmount5 = BigInteger.valueOf(160000000000L)
-      val delegator3 = new Address("0xaaabbbb1230000000000aaaaaaabbbbb2222de03")
       StakeStorage.addStake(view, blockSignerProposition2, vrfPublicKey2, epochNumber, delegator3, stakeAmount5)
 
-      listOfStakesForger1 = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 0, 100)
+      val listOfStakesForger1 = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 0, 100)
       // check forger1 has 1! delegator with staked amount as the sum of two contributions
       assertTrue(listOfStakesForger1.stakesData.size == 1)
       assertEquals(listOfStakesForger1.stakesData.head.delegator.address(), delegator1)
       assertTrue(listOfStakesForger1.stakesData.head.stakedAmount.equals(stakeAmount1.add(stakeAmount3)))
 
       val listOfStakesForger2 = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2), 0, 100)
-      // check forger2 has 3 delegators
+      // check forger2 has 3 delegators with expected stake amount
       assertTrue(listOfStakesForger2.stakesData.size == 3)
+      var count = 0
       listOfStakesForger2.stakesData.foreach(entry => {
         if (entry.delegator.address().equals(delegator1)) {
           assertTrue(entry.stakedAmount.equals(stakeAmount2))
+          count += 1
         } else if (entry.delegator.address().equals(delegator2)) {
           assertTrue(entry.stakedAmount.equals(stakeAmount4))
+          count += 1
         } else if (entry.delegator.address().equals(delegator3)) {
           assertTrue(entry.stakedAmount.equals(stakeAmount5))
+          count += 1
+        } else {
+          fail("Unexpected entry")
         }
       })
+      assertEquals(3, count)
 
       // get the result on two pages
       val listOfStakesForger2_page1 = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2), 0, 2)
@@ -817,14 +824,20 @@ class StakeStorageTest
       // get stakes by delegator
       val listOfStakesByDelegator1 = getPagedForgersStakesByDelegator(view, delegator1, 0, 5)
       // check we have 2 records, one for each forger
+      count = 0
       assertTrue(listOfStakesByDelegator1.stakesData.size == 2)
       listOfStakesByDelegator1.stakesData.foreach(entry => {
         if (entry.forgerPublicKeys.toString.equals(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1).toString)) {
           assertTrue(entry.stakedAmount.equals(stakeAmount1.add(stakeAmount3)))
-        } else if (entry.forgerPublicKeys.toString.equals(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1).toString)) {
+          count += 1
+        } else if (entry.forgerPublicKeys.toString.equals(ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2).toString)) {
           assertTrue(entry.stakedAmount.equals(stakeAmount2))
+          count += 1
+        } else {
+          fail("Unexpected entry")
         }
       })
+      assertEquals(2, count)
 
       // get the result on two pages
       val listOfStakesDelegator1_page1 = getPagedForgersStakesByDelegator(view, delegator1, 0, 1)
@@ -837,6 +850,23 @@ class StakeStorageTest
 
       // check the two pages joint together are the same as before
       assertEquals(listOfStakesDelegator1_page1.stakesData ++ listOfStakesDelegator1_page2.stakesData, listOfStakesByDelegator1.stakesData)
+
+      // remove all the stakes of delegator 1 for forger 1, check we do not have it anymore in the list
+      StakeStorage.removeStake(view, blockSignerProposition1, vrfPublicKey1, epochNumber, delegator1, stakeAmount1.add(stakeAmount3))
+      // get stakes by delegator
+      val listOfStakesByDelegator1_rem = getPagedForgersStakesByDelegator(view, delegator1, 0, 5)
+      // check we have 1 record, only forger2
+      assertTrue(listOfStakesByDelegator1_rem.stakesData.size == 1)
+      count = 0
+      listOfStakesByDelegator1_rem.stakesData.foreach(entry => {
+        if (entry.forgerPublicKeys.toString.equals(ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2).toString)) {
+          assertTrue(entry.stakedAmount.equals(stakeAmount2))
+          count += 1
+        } else {
+          fail("Unexpected entry")
+        }
+      })
+      assertEquals(1, count)
 
       // negative tests for 'by forger'
       // - invalid start pos
@@ -865,6 +895,11 @@ class StakeStorageTest
       assertThrows[NullPointerException] {
         getPagedForgersStakesByForger(view, null, 0, 2)
       }
+      // we throw an exception on an empty list if we specify bad start pos
+      ex = intercept[IllegalArgumentException] {
+        getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition2, vrfPublicKey1), 1, 100)
+      }
+      assertTrue(ex.getMessage.contains("Invalid start position"))
 
       // negative tests for 'by delegator'
       // - invalid start pos
@@ -893,6 +928,111 @@ class StakeStorageTest
       assertThrows[NullPointerException] {
         getPagedForgersStakesByDelegator(view, null, 0, 2)
       }
+
+      // we throw an exception on an empty list if we specify bad start pos
+      ex = intercept[IllegalArgumentException] {
+        getPagedForgersStakesByDelegator(view, new Address("0x0000000000000000000000000000000000000000"), 1, 100)
+      }
+      assertTrue(ex.getMessage.contains("Invalid start position"))
+    }
+  }
+
+  @Test
+  def testGetPagedForgerStakesLoad(): Unit = {
+    usingView { view =>
+
+      createSenderAccount(view, BigInteger.TEN, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
+
+      val rewardAddress = new Address(s"0xaabbaabbaabbaabbaabbaabbaabbaabbaabbaabb")
+      val rewardShare = 0
+      val epochNumber = 1000
+
+      val numOfForgers = 43
+      val numOfDelegators = 71
+      val stakeAmountBigInteger = BigInteger.valueOf(1234)
+      var delegator : Address = null
+      var forger: ForgerPublicKeys = null
+      val delegatorList : ListBuffer[Address] = ListBuffer()
+      val forgerList : ListBuffer[ForgerPublicKeys] = ListBuffer()
+
+      (0 until numOfDelegators).foreach(
+        idx => {
+          val postfix = f"$idx%03d"
+          delegator = new Address(s"0xaaa00001230000000000deadbeefaaaa22222$postfix")
+          delegatorList.append(delegator)
+        }
+      )
+
+      (0 until numOfForgers).foreach(
+        idx_forg => {
+          val postfix = f"$idx_forg%03d"
+
+          val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString(s"1122334455667788112233445566778811223344556677881122334455667$postfix")) // 32 bytes
+          val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString(s"d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1$postfix")) // 33 bytes
+          forger = ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
+          forgerList.append(forger)
+
+          StakeStorage.addForger(
+            view, forger.blockSignPublicKey, forger.vrfPublicKey, rewardShare,
+            rewardAddress, epochNumber, delegator, stakeAmountBigInteger)
+
+
+          (0 until numOfDelegators).foreach(
+            idx_del => {
+              StakeStorage.addStake(view, forger.blockSignPublicKey, forger.vrfPublicKey, epochNumber,
+                delegatorList(idx_del), stakeAmountBigInteger)
+            })
+            println(s"Added $numOfDelegators delegators to forger $idx_forg")
+        })
+
+
+
+      (0 until numOfForgers).foreach(
+
+          idx => {
+          println(s"Getting stakes for forger $idx")
+          val pageSize = 7
+          var continue = true
+          var listOfResultsByForger = Seq.empty[StakeDataDelegator]
+          var startPos = 0
+
+          while (continue) {
+            val result = StakeStorage.getPagedForgersStakesByForger(view, forgerList(idx), startPos, pageSize)
+            listOfResultsByForger = listOfResultsByForger ++ result.stakesData
+            continue = if (result.nextStartPos != -1) {
+              assertEquals(pageSize, result.stakesData.size)
+              true
+            }
+            else
+              false
+            startPos = result.nextStartPos
+          }
+          assertEquals(numOfDelegators, listOfResultsByForger.size)
+        })
+
+      (0 until numOfDelegators).foreach(
+        idx => {
+          println(s"Getting stakes by delegator $idx")
+
+          val pageSize = 13
+          var continue = true
+          var listOfResultsByDelegator = Seq.empty[StakeDataForger]
+          var startPos = 0
+
+          while (continue) {
+            val result = StakeStorage.getPagedForgersStakesByDelegator(view, delegatorList(idx), startPos, pageSize)
+            listOfResultsByDelegator = listOfResultsByDelegator ++ result.stakesData
+            continue = if (result.nextStartPos != -1) {
+              assertEquals(pageSize, result.stakesData.size)
+              true
+            }
+            else
+              false
+            startPos = result.nextStartPos
+          }
+          assertEquals(numOfForgers, listOfResultsByDelegator.size)
+        })
+
     }
   }
 

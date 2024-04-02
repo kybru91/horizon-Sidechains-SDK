@@ -167,7 +167,7 @@ object StakeStorage {
     val forgerKey = ForgerKey(forger.blockSignPublicKey, forger.vrfPublicKey)
     val listOfDelegators = DelegatorList(forgerKey)
     val numOfDelegators = listOfDelegators.getSize(view)
-    if (numOfDelegators == 0)
+    if (startPos == 0 && numOfDelegators == 0)
       return PagedStakesByForgerResponse(-1, Seq())
 
     if (startPos > numOfDelegators - 1)
@@ -202,7 +202,7 @@ object StakeStorage {
     val delegatorKey = DelegatorKey(delegator)
     val listOfForgers = DelegatorListOfForgerKeys(delegatorKey)
     val numOfForgers = listOfForgers.getSize(view)
-    if (numOfForgers == 0)
+    if (startPos == 0 && numOfForgers == 0)
       return PagedStakesByDelegatorResponse(-1, Seq())
 
     if (startPos > numOfForgers - 1)
@@ -485,11 +485,12 @@ object ForgerMap {
 
   def getPagedListOfForgers(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
 
-    val listSize = getSize(view)
     if (startPos < 0)
       throw new IllegalArgumentException(s"Invalid startPos input: $startPos can not be negative")
     if (pageSize <= 0)
       throw new IllegalArgumentException(s"Invalid page size $pageSize, must be positive")
+
+    val listSize = getSize(view)
 
     if (startPos == 0 && listSize == 0)
       return PagedForgersListResponse(-1, Seq.empty[ForgerDetails])
