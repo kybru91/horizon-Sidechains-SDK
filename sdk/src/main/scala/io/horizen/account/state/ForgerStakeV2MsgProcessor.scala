@@ -3,15 +3,15 @@ package io.horizen.account.state
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
 import io.horizen.account.state.ForgerStakeV2MsgProcessor.{DelegateCmd, GetPagedForgersStakesByDelegatorCmd, GetPagedForgersStakesByForgerCmd, StakeTotalCmd, WithdrawCmd}
-import io.horizen.account.state.nativescdata.forgerstakev2.{DelegateCmdInputDecoder, PagedForgersStakesByDelegatorCmdInputDecoder, PagedForgersStakesByDelegatorOutput, PagedForgersStakesByForgerCmdInputDecoder, PagedForgersStakesByForgerOutput, StakeDataDelegator, StakeDataForger, StakeStorage, StakeTotalCmdInputDecoder, WithdrawCmdInputDecoder}
+import io.horizen.account.state.nativescdata.forgerstakev2.{DelegateCmdInputDecoder, PagedForgersStakesByDelegatorCmdInputDecoder, PagedForgersStakesByDelegatorOutput, PagedForgersStakesByForgerCmdInputDecoder, PagedForgersStakesByForgerOutput, PagedStakesByDelegatorResponse, PagedStakesByForgerResponse, StakeDataDelegator, StakeDataForger, StakeStorage, StakeTotalCmdInputDecoder, WithdrawCmdInputDecoder}
 import io.horizen.account.utils.WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
 import io.horizen.evm.Address
 import io.horizen.params.NetworkParams
 import sparkz.crypto.hash.Keccak256
 
 trait ForgerStakesV2Provider {
-  private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): (Int, Seq[StakeDataDelegator])
-  private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): (Int, Seq[StakeDataForger])
+  private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
+  private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
 }
 case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends NativeSmartContractWithFork with ForgerStakesV2Provider {
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
@@ -70,8 +70,8 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
     log.info(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    val (nextPos, stakeList) = getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
-    PagedForgersStakesByDelegatorOutput(nextPos, stakeList).encode()
+    val result = getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
+    PagedForgersStakesByDelegatorOutput(result.nextStartPos, result.stakesData).encode()
   }
 
   def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
@@ -79,15 +79,15 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
     log.info(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    val (nextPos, stakeList) = getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
-    PagedForgersStakesByForgerOutput(nextPos, stakeList).encode()
+    val response = getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
+    PagedForgersStakesByForgerOutput(response.nextStartPos, response.stakesData).encode()
   }
 
-  override def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): (Int, Seq[StakeDataDelegator]) = {
+  override def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
     StakeStorage.getPagedForgersStakesByForger(view, forger, startPos, pageSize)
   }
 
-  override def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): (Int, Seq[StakeDataForger]) = {
+  override def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
     StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
   }
 

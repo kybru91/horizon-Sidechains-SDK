@@ -3,7 +3,7 @@ package io.horizen.account.state
 import io.horizen.SidechainTypes
 import io.horizen.account.fork.Version1_3_0Fork
 import io.horizen.account.proposition.AddressProposition
-import io.horizen.account.state.nativescdata.forgerstakev2.{StakeDataDelegator, StakeDataForger}
+import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse, StakeDataDelegator, StakeDataForger}
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt.ReceiptStatus
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumConsensusDataReceipt}
 import io.horizen.account.transaction.EthereumTransaction
@@ -74,10 +74,10 @@ class StateDbAccountStateView(
   override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) =
     forgerStakesProvider.getPagedListOfForgersStakes(this, startPos, pageSize)
 
-  override def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): (Int, Seq[StakeDataDelegator]) =
+  override def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse =
     forgerStakesV2Provider.getPagedForgersStakesByForger(this, forger, startPos, pageSize)
 
-  override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): (Int, Seq[StakeDataForger]) =
+  override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse =
     forgerStakesV2Provider.getPagedForgersStakesByDelegator(this, delegator, startPos, pageSize)
 
   override def getAllowedForgerList: Seq[Int] =
