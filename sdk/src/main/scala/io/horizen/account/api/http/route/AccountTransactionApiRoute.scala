@@ -11,7 +11,7 @@ import io.horizen.account.api.http.route.AccountTransactionRestScheme._
 import io.horizen.account.block.{AccountBlock, AccountBlockHeader}
 import io.horizen.account.chain.AccountFeePaymentsInfo
 import io.horizen.account.companion.SidechainAccountTransactionsCompanion
-import io.horizen.account.fork.Version1_3_0Fork
+import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
 import io.horizen.account.node.{AccountNodeView, NodeAccountHistory, NodeAccountMemoryPool, NodeAccountState}
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.AddressProposition
@@ -541,7 +541,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     withNodeView { sidechainNodeView =>
       val accountState = sidechainNodeView.getNodeState
       val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-      val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active)
+      val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active, Version1_4_0Fork.get(epochNumber).active)
       ApiResponseUtil.toResponse(RespForgerStakes(listOfForgerStakes.toList))
     }
   }
@@ -575,7 +575,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         withNodeView { sidechainNodeView =>
           val accountState = sidechainNodeView.getNodeState
           val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-          val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active)
+          val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active, Version1_4_0Fork.get(epochNumber).active)
           if (listOfForgerStakes.nonEmpty) {
             val wallet = sidechainNodeView.getNodeWallet
             val walletPubKeys = wallet.allSecrets().map(_.publicImage).toSeq

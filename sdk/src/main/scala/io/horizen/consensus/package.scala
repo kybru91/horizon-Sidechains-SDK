@@ -20,6 +20,7 @@ package object consensus {
   val consensusPreForkLength: Int = 4 + 8 + consensusHardcodedSaltString.length
   val forgerStakePercentPrecision: BigDecimal = BigDecimal.valueOf(1000000) // where 1 / forgerStakePercentPrecision -- minimal possible forger stake percentage to be able to forge
   val stakeConsensusDivideMathContext: MathContext = MathContext.DECIMAL128 //shall be used during dividing, otherwise ArithmeticException is thrown in case of irrational number as division result
+  val minForgerStake: Long = 10 * 100000000 // after fork v 1.4.0 - min amount of zennies required to be a forger
 
   val minSecondsInSlot: Int = 10
   val maxSecondsInSlot:Int = 300

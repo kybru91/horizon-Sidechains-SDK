@@ -6,7 +6,7 @@ import io.horizen.account.block.AccountBlock.calculateReceiptRoot
 import io.horizen.account.block.{AccountBlock, AccountBlockHeader}
 import io.horizen.account.chain.AccountFeePaymentsInfo
 import io.horizen.account.companion.SidechainAccountTransactionsCompanion
-import io.horizen.account.fork.{Version1_2_0Fork, GasFeeFork}
+import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork, Version1_4_0Fork}
 import io.horizen.account.history.AccountHistory
 import io.horizen.account.mempool.{AccountMemoryPool, MempoolMap, TransactionsByPriceAndNonceIter}
 import io.horizen.account.proposition.AddressProposition
@@ -417,9 +417,16 @@ class AccountForgeMessageBuilder(
 
     val walletPubKeys = secrets.map(e => e.publicImage())
 
+    val minStakeFilter: Long => Boolean = if (Version1_4_0Fork.get(nextConsensusEpochNumber).active) {
+      amount => amount > minForgerStake
+    } else {
+      _ => true
+    }
+
     val filteredForgingStakeInfoSeq = forgingStakeInfoSeq.filter(p => {
       walletPubKeys.contains(p.blockSignPublicKey) &&
-      walletPubKeys.contains(p.vrfPublicKey)
+      walletPubKeys.contains(p.vrfPublicKey) &&
+      minStakeFilter(p.stakeAmount)
     })
 
     // return an empty seq if we do not have forging stake, that is a legal (negative) result.

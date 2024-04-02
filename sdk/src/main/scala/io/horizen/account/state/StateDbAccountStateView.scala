@@ -1,7 +1,7 @@
 package io.horizen.account.state
 
 import io.horizen.SidechainTypes
-import io.horizen.account.fork.Version1_3_0Fork
+import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt.ReceiptStatus
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumConsensusDataReceipt}
@@ -31,8 +31,8 @@ class StateDbAccountStateView(
       with SparkzLogging {
   lazy val withdrawalReqProvider: WithdrawalRequestProvider =
     messageProcessors.find(_.isInstanceOf[WithdrawalRequestProvider]).get.asInstanceOf[WithdrawalRequestProvider]
-  lazy val forgerStakesProvider: ForgerStakesProvider =
-    messageProcessors.find(_.isInstanceOf[ForgerStakesProvider]).get.asInstanceOf[ForgerStakesProvider]
+  lazy val forgerStakesProviderV1: ForgerStakesProvider = messageProcessors.find(_.isInstanceOf[ForgerStakesProvider]).get.asInstanceOf[ForgerStakesProvider]
+  lazy val forgerStakesProviderV2: ForgerStakesProviderV2 = messageProcessors.find(_.isInstanceOf[ForgerStakesProviderV2]).get.asInstanceOf[ForgerStakesProviderV2]
   // certificateKeysProvider is present only for NaiveThresholdSignatureCircuitWithKeyRotation
   lazy val certificateKeysProvider: CertificateKeysProvider =
     messageProcessors.find(_.isInstanceOf[CertificateKeysProvider]).get.asInstanceOf[CertificateKeysProvider]
@@ -55,23 +55,29 @@ class StateDbAccountStateView(
     withdrawalReqProvider.getListOfWithdrawalReqRecords(withdrawalEpoch, this)
 
   override def getForgerStakeData(stakeId: String, isForkV1_3Active: Boolean): Option[ForgerStakeData] =
-    forgerStakesProvider.findStakeData(this, BytesUtils.fromHexString(stakeId), isForkV1_3Active)
+    forgerStakesProviderV1.findStakeData(this, BytesUtils.fromHexString(stakeId), isForkV1_3Active)
 
   override def isForgingOpen: Boolean =
-    forgerStakesProvider.isForgerListOpen(this)
+    forgerStakesProviderV1.isForgerListOpen(this)
 
-  override def isForgerStakeAvailable(isForkV1_3Active: Boolean): Boolean =
-    forgerStakesProvider.isForgerStakeAvailable(this, isForkV1_3Active)
-    
-  override def getListOfForgersStakes(isForkV1_3Active: Boolean): Seq[AccountForgingStakeInfo] =
-    forgerStakesProvider.getListOfForgersStakes(this, isForkV1_3Active)
+  override def isForgerStakeAvailable(isForkV1_3Active: Boolean): Boolean = {
+    forgerStakesProviderV1.isForgerStakeAvailable(this, isForkV1_3Active)
+  }
 
-  override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) =
-    forgerStakesProvider.getPagedListOfForgersStakes(this, startPos, pageSize)
+  override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = {
+    if (isForkV1_4Active && forgerStakesProviderV2.isActive(this)) {
+      forgerStakesProviderV2.getListOfForgersStakes(this)
+    } else {
+      forgerStakesProviderV1.getListOfForgersStakes(this, isForkV1_3Active)
+    }
+  }
+
+  override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) = {
+    forgerStakesProviderV1.getPagedListOfForgersStakes(this, startPos, pageSize)
+  }
 
   override def getAllowedForgerList: Seq[Int] =
-    forgerStakesProvider.getAllowedForgerListIndexes(this)
-
+    forgerStakesProviderV1.getAllowedForgerListIndexes(this)
 
   override def getListOfMcAddrOwnerships(scAddressOpt: Option[String]): Seq[McAddrOwnershipData] =
     mcAddrOwnershipProvider.getListOfMcAddrOwnerships(this, scAddressOpt)
@@ -101,7 +107,7 @@ class StateDbAccountStateView(
           )
 
           val cmdInput = AddNewStakeCmdInput(ForgerPublicKeys(blockSignerProposition, vrfPublicKey), ownerAddress)
-          val returnData = forgerStakesProvider.addScCreationForgerStake(this, ownerAddress, stakedAmount, cmdInput)
+          val returnData = forgerStakesProviderV1.addScCreationForgerStake(this, ownerAddress, stakedAmount, cmdInput)
           log.debug(s"sc creation forging stake added with stakeid: ${BytesUtils.toHexString(returnData)}")
 
         case ft: ForwardTransfer =>
@@ -137,30 +143,35 @@ class StateDbAccountStateView(
   }
 
   def getOrderedForgingStakesInfoSeq(epochNumber: Int): Seq[ForgingStakeInfo] = {
-    // get forger stakes list view (scala lazy collection)
-    getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active).view
+    val isForkV1_3Active = Version1_3_0Fork.get(epochNumber).active
+    val isForkV1_4Active = Version1_4_0Fork.get(epochNumber).active
 
-      // group delegation stakes by blockSignPublicKey/vrfPublicKey pairs
-      .groupBy(stake =>
-        (stake.forgerStakeData.forgerPublicKeys.blockSignPublicKey, stake.forgerStakeData.forgerPublicKeys.vrfPublicKey)
-      )
-
-      // create a seq of forging stake info for every group entry summing all the delegation amounts.
-      // Note: ForgingStakeInfo amount is a long and contains a Zennies amount converted from a BigInteger wei amount
-      //       That is safe since the stakedAmount is checked in creation phase to be an exact zennies amount
-      .map { case ((blockSignKey, vrfKey), stakes) =>
-        ForgingStakeInfo(
-          blockSignKey,
-          vrfKey,
-          stakes.map(stake =>
-            ZenWeiConverter.convertWeiToZennies(stake.forgerStakeData.stakedAmount)
-          ).sum
+    if (isForkV1_4Active && forgerStakesProviderV2.isActive(this)) {
+      // V2 Stake storage provides stakes per forger
+      forgerStakesProviderV2.getForgingStakes(this).sorted(Ordering[ForgingStakeInfo].reverse)
+    } else {
+      // get forger stakes list view (scala lazy collection)
+      forgerStakesProviderV1.getListOfForgersStakes(this, isForkV1_3Active).view
+        // group delegation stakes by blockSignPublicKey/vrfPublicKey pairs
+        .groupBy(stake =>
+          (stake.forgerStakeData.forgerPublicKeys.blockSignPublicKey, stake.forgerStakeData.forgerPublicKeys.vrfPublicKey)
         )
-      }
-      .toSeq
-
-      // sort the resulting sequence by decreasing stake amount
-      .sorted(Ordering[ForgingStakeInfo].reverse)
+        // create a seq of forging stake info for every group entry summing all the delegation amounts.
+        // Note: ForgingStakeInfo amount is a long and contains a Zennies amount converted from a BigInteger wei amount
+        //       That is safe since the stakedAmount is checked in creation phase to be an exact zennies amount
+        .map { case ((blockSignKey, vrfKey), stakes) =>
+          ForgingStakeInfo(
+            blockSignKey,
+            vrfKey,
+            stakes.map(stake =>
+              ZenWeiConverter.convertWeiToZennies(stake.forgerStakeData.stakedAmount)
+            ).sum
+          )
+        }
+        .toSeq
+        // sort the resulting sequence by decreasing stake amount
+        .sorted(Ordering[ForgingStakeInfo].reverse)
+    }
   }
 
   @throws(classOf[InvalidMessageException])

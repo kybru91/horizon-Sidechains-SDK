@@ -396,7 +396,7 @@ class ForgerStakeV2MsgProcessorTest
         contractAddress, 0, BytesUtils.fromHexString(ActivateCmd), randomNonce, ownerAddressProposition.address())
       assertGasInterop(0, activateMsg, view, processors, blockContextForkV1_4)
 
-      val listOfStakes = StakeStorage.getAllForgerStakes(view)
+      val listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
       val expNumOfStakes = listOfExpectedResults.foldLeft(0){(sum, res) => sum + res._2.size }
       assertEquals(expNumOfStakes, listOfStakes.size)
 

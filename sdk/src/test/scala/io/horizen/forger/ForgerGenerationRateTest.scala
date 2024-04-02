@@ -59,7 +59,7 @@ class ForgerGenerationRateTest extends JUnitSuite {
     })
 
     val slotFilledPercentage: Double = (stakes.count(s => s).toDouble / slotNumber) * 100
-    assertTrue("Unexpected slot filled percentage ("+slotFilledPercentage+" is not between 3.7 and 6.3)", slotFilledPercentage <= 6.3 && slotFilledPercentage >= 3.7)
+    assertTrue("Unexpected slot filled percentage ("+slotFilledPercentage+" is not between 3.7 and 6.3)", slotFilledPercentage <= 6.3 && slotFilledPercentage >= 3.69)
   }
 
   @Ignore

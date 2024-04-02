@@ -430,7 +430,7 @@ class AccountState(
 
   override def getNonce(address: Address): BigInteger = using(getView)(_.getNonce(address))
 
-  override def getListOfForgersStakes(isForkV1_3Active: Boolean): Seq[AccountForgingStakeInfo] = using(getView)(_.getListOfForgersStakes(isForkV1_3Active))
+  override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = using(getView)(_.getListOfForgersStakes(isForkV1_3Active, isForkV1_4Active))
 
   override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) =  using(getView)(_.getPagedListOfForgersStakes(startPos, pageSize))
 

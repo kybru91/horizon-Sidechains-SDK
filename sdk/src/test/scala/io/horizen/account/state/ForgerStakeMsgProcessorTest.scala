@@ -1006,7 +1006,7 @@ class ForgerStakeMsgProcessorTest
       }
 
       //Check getListOfForgers
-      val forgerList = forgerStakeMessageProcessor.getListOfForgersStakes(view, false)
+      val forgerList = forgerStakeMessageProcessor.getListOfForgersStakes(view, isForkV1_3Active = false)
       assertEquals(listOfExpectedForgerStakes, forgerList.asJava)
 
       view.commit(bytesToVersion(getVersion.data()))

@@ -2,12 +2,12 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 
 import com.google.common.primitives.Bytes
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
-import io.horizen.account.state.ForgerStakeStorage.DisabledKey
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
 import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{ACCOUNT, ForgerKey}
-import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
-import io.horizen.account.utils.{BigIntegerUInt256, BigIntegerUtil}
+import io.horizen.account.utils.WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
+import io.horizen.account.utils.{BigIntegerUInt256, BigIntegerUtil, ZenWeiConverter}
+import io.horizen.consensus.ForgingStakeInfo
 import io.horizen.evm.Address
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
@@ -16,7 +16,7 @@ import sparkz.crypto.hash.Blake2b256
 import sparkz.util.serialization.{Reader, Writer}
 
 import java.math.BigInteger
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 
 object StakeStorage {
@@ -30,7 +30,7 @@ object StakeStorage {
     new BigInteger(1, activated) == BigInteger.ONE
   }
 
-  def setActive(view: BaseAccountStateView): Unit  = {
+  def setActive(view: BaseAccountStateView): Unit = {
     val activated = BigIntegerUtil.toUint256Bytes(BigInteger.ONE)
     view.updateAccountStorage(ACCOUNT, ActivationKey, activated)
   }
@@ -96,7 +96,7 @@ object StakeStorage {
 
     val forgerKey = ForgerKey(signKey, vrfPublicKey)
     val forgerHistory = ForgerStakeHistory(forgerKey)
-    val forgerHistorySize =  forgerHistory.getSize(view)
+    val forgerHistorySize = forgerHistory.getSize(view)
     if (forgerHistorySize == 0)
       throw new ExecutionRevertedException(s"Forger doesn't exist.")
 
@@ -140,22 +140,103 @@ object StakeStorage {
     forgerHistory.updateOrAddCheckpoint(view, forgerHistorySize, epochNumber, subtractStake)
   }
 
-  def getAllForgerStakes(view: BaseAccountStateView): Seq[ForgerStakeData] = {
+  def getForgingStakes(view: BaseAccountStateView): Seq[ForgingStakeInfo] = {
+    val listOfForgerKeys = ForgerMap.getForgerKeys(view)
+    listOfForgerKeys.map { forgerKey =>
+      val forger = ForgerMap.getForger(view, forgerKey)
+      val amount = ForgerStakeHistory(forgerKey).getLatestAmount(view)
+      ForgingStakeInfo(forger.forgerPublicKeys.blockSignPublicKey, forger.forgerPublicKeys.vrfPublicKey, ZenWeiConverter.convertWeiToZennies(amount))
+    }
+  }
+
+  def getAllForgerStakes(view: BaseAccountStateView): Seq[AccountForgingStakeInfo] = {
     val listOfForgerKeys = ForgerMap.getForgerKeys(view)
     listOfForgerKeys.flatMap { forgerKey =>
       val forger = ForgerMap.getForger(view, forgerKey)
       val delegatorList = DelegatorList(forgerKey)
       val delegatorSize = delegatorList.getSize(view)
-      val listOfStakes: ListBuffer[ForgerStakeData] = ListBuffer()
+      val listOfStakes: ListBuffer[AccountForgingStakeInfo] = ListBuffer()
       for (idx <- 0 until delegatorSize) {
         val delegator = delegatorList.getDelegatorAt(view, idx)
         val stakeHistory = StakeHistory(forgerKey, delegator)
         val amount = stakeHistory.getLatestAmount(view)
-        if (amount.signum() == 1)
-          listOfStakes.append(ForgerStakeData(forger.forgerPublicKeys, new AddressProposition(delegator), amount))
+        if (amount.signum() == 1) {
+          val stakeId = Blake2b256.hash(Bytes.concat(forgerKey.bytes, delegator.toBytes))
+          listOfStakes.append(AccountForgingStakeInfo(stakeId, ForgerStakeData(forger.forgerPublicKeys, new AddressProposition(delegator), amount)))
+        }
       }
       listOfStakes
     }
+  }
+
+  def getStakeTotal(view: BaseAccountStateView,
+                    forgerKeys: ForgerPublicKeys,
+                    delegator: Address,
+                    consensusEpochStart: Int,
+                    consensusEpochEnd: Int): StakeTotalCmdOutput = {
+    if (forgerKeys == null) {
+      // sum all forging stakes per epochs
+      val totalStakesPerEpoch = ForgerMap.getForgerKeys(view).map(ForgerStakeHistory)
+        .map(history => getForgerStakesPerEpoch(view, history, consensusEpochStart, consensusEpochEnd))
+        .transpose
+        .map(stakes => stakes.foldLeft(BigInteger.ZERO)((a, b) => a.add(b)))
+
+      StakeTotalCmdOutput(totalStakesPerEpoch)
+    } else {
+      val forgerKey = ForgerKey(forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey)
+      val history: BaseStakeHistory = if (delegator == null) {
+        ForgerStakeHistory(forgerKey)
+      } else {
+        StakeHistory(forgerKey, DelegatorKey(delegator))
+      }
+      StakeTotalCmdOutput(getForgerStakesPerEpoch(view, history, consensusEpochStart, consensusEpochEnd))
+    }
+  }
+
+  private[forgerstakev2] def getForgerStakesPerEpoch(view: BaseAccountStateView, history: BaseStakeHistory, consensusEpochStart: Int, consensusEpochEnd: Int): Seq[BigInteger] = {
+    // if requested slice completely before the first checkpoint
+    if (history.getCheckpoint(view, 0).fromEpochNumber > consensusEpochEnd)
+      return Array.fill[BigInteger](consensusEpochEnd - consensusEpochStart + 1)(BigInteger.ZERO)
+
+    var currIndex = checkpointBSearch(view, history, consensusEpochEnd)
+    var currCheckpoint = history.getCheckpoint(view, currIndex)
+    val result = ArrayBuffer[BigInteger]()
+    for (currEpoch <- consensusEpochEnd to consensusEpochStart by -1) {
+      result.prepend(currCheckpoint.stakedAmount)
+      if (currCheckpoint.fromEpochNumber == currEpoch) {
+        currIndex = currIndex - 1
+        if (currIndex == -1) return Array.fill[BigInteger](currEpoch - consensusEpochStart)(BigInteger.ZERO) ++ result
+        currCheckpoint = history.getCheckpoint(view, currIndex)
+      }
+    }
+    result
+  }
+
+  /**
+   * Binary search with optimization for most recent elements - prioritizes top 2√n elements.
+   */
+  private[forgerstakev2] def checkpointBSearch(view: BaseAccountStateView, history: BaseStakeHistory, epoch: Int): Int = {
+    val length = history.getSize(view)
+    var low = 0
+    var high = length
+    var mid = 0
+
+    if (length > 5) {
+      mid = high - Math.sqrt(high).round.toInt
+      val checkpointEpochNumber = history.getCheckpoint(view, mid).fromEpochNumber
+      if (checkpointEpochNumber == epoch) return mid
+      else if (checkpointEpochNumber > epoch) high = mid
+      else low = mid + 1
+    }
+
+    while (low < high) {
+      mid = (high + low) / 2
+      val checkpointEpochNumber = history.getCheckpoint(view, mid).fromEpochNumber
+      if (checkpointEpochNumber == epoch) return mid
+      else if (checkpointEpochNumber > epoch) high = mid
+      else low = mid + 1
+    }
+    if (high == 0) 0 else high - 1
   }
 
   class BaseStakeHistory(uid: Array[Byte])
@@ -175,7 +256,7 @@ object StakeStorage {
           // Let's check if the newAmount is the same og the previous checkpoint. In that case, this last checkpoint
           // is removed.
           val secondLastCheckpointIdx = lastElemIndex - 1
-          if (secondLastCheckpointIdx > -1 && getCheckpoint(view, secondLastCheckpointIdx).stakedAmount == newAmount){
+          if (secondLastCheckpointIdx > -1 && getCheckpoint(view, secondLastCheckpointIdx).stakedAmount == newAmount) {
             // Rollback to second last checkpoint
             updateSize(view, historySize - 1)
             // TODO It is not necessary to remove the last element in the history, because it will be overwritten sooner or later.
@@ -227,7 +308,7 @@ object StakeStorage {
   case class ForgerStakeHistory(forgerKey: ForgerKey) extends BaseStakeHistory(forgerKey.bytes)
 
   case class DelegatorList(forgerKey: ForgerKey)
-    extends StateDbArray(ACCOUNT, Blake2b256.hash(Bytes.concat(forgerKey.bytes, "Delegators".getBytes("UTF-8"))))  {
+    extends StateDbArray(ACCOUNT, Blake2b256.hash(Bytes.concat(forgerKey.bytes, "Delegators".getBytes("UTF-8")))) {
 
     def addDelegator(view: BaseAccountStateView, delegator: DelegatorKey): Unit = {
       append(view, BytesUtils.padRightWithZeroBytes(AddressPropositionSerializer.getSerializer.toBytes(new AddressProposition(delegator)), 32))
@@ -240,7 +321,7 @@ object StakeStorage {
   }
 
   case class DelegatorListOfForgerKeys(delegator: DelegatorKey)
-    extends StateDbArray(ACCOUNT, Blake2b256.hash(Bytes.concat(delegator.toBytes, "Forgers".getBytes("UTF-8"))))  {
+    extends StateDbArray(ACCOUNT, Blake2b256.hash(Bytes.concat(delegator.toBytes, "Forgers".getBytes("UTF-8")))) {
 
     def addForgerKey(view: BaseAccountStateView, forgerKey: ForgerKey): Unit = {
       append(view, forgerKey.bytes)
@@ -255,7 +336,7 @@ object StakeStorage {
   case class DelegatorKey(address: Address)
     extends Address(new AddressProposition(address).checksumAddress())
 
-  case class ForgerKey(forgerKey: Array[Byte]){
+  case class ForgerKey(forgerKey: Array[Byte]) {
     val bytes: Array[Byte] = forgerKey
 
     override def hashCode(): Int = java.util.Arrays.hashCode(bytes)
@@ -276,9 +357,9 @@ object StakeStorage {
 }
 
 case class ForgerDetails(
-                         forgerPublicKeys: ForgerPublicKeys,
-                         rewardShare: Int,
-                         rewardAddress: AddressProposition)
+                          forgerPublicKeys: ForgerPublicKeys,
+                          rewardShare: Int,
+                          rewardAddress: AddressProposition)
   extends BytesSerializable {
 
   override type M = ForgerDetails
@@ -306,8 +387,8 @@ object ForgerDetailsSerializer extends SparkzSerializer[ForgerDetails] {
 }
 
 case class StakeCheckpoint(
-                         fromEpochNumber: Int,
-                         stakedAmount: BigInteger)
+                            fromEpochNumber: Int,
+                            stakedAmount: BigInteger)
   extends BytesSerializable {
 
   require(fromEpochNumber >= 0, s"Epoch cannot be a negative number. Passed value: $fromEpochNumber")
@@ -376,12 +457,12 @@ object ForgerMap {
   }
 
   def updateForger(view: BaseAccountStateView,
-                forgerKey: ForgerKey,
-                blockSignProposition: PublicKey25519Proposition,
-                vrfPublicKey: VrfPublicKey,
-                rewardShare: Int,
-                rewardAddress: Address,
-               ): Unit = {
+                   forgerKey: ForgerKey,
+                   blockSignProposition: PublicKey25519Proposition,
+                   vrfPublicKey: VrfPublicKey,
+                   rewardShare: Int,
+                   rewardAddress: Address,
+                  ): Unit = {
 
     val forgerStakeData = ForgerDetails(
       ForgerPublicKeys(blockSignProposition, vrfPublicKey), rewardShare, new AddressProposition(rewardAddress))
@@ -397,7 +478,7 @@ object ForgerMap {
   def getForgerKeys(view: BaseAccountStateView): Seq[ForgerKey] = {
     val listSize = getSize(view)
     (0 until listSize).map(index => {
-     ListOfForgers.getForgerKey(view, index)
+      ListOfForgers.getForgerKey(view, index)
     })
   }
 
@@ -424,7 +505,7 @@ object ForgerMap {
     if (startPos == 0 && listSize == 0)
       return PagedForgersListResponse(-1, Seq.empty[ForgerDetails])
 
-    if (startPos > listSize-1)
+    if (startPos > listSize - 1)
       throw new IllegalArgumentException(s"Invalid start position: $startPos, array size: $listSize")
 
     var endPos = startPos + pageSize
@@ -445,6 +526,3 @@ object ForgerMap {
   }
 
 }
-
-case class PagedForgersListResponse(nextStartPos: Int, forgers: Seq[ForgerDetails])
-

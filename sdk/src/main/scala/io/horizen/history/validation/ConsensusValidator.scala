@@ -1,6 +1,7 @@
 package io.horizen.history.validation
 
 import io.horizen.account.block.AccountBlock
+import io.horizen.account.fork.Version1_4_0Fork
 import io.horizen.block.{OmmersContainer, SidechainBlockBase, SidechainBlockHeaderBase}
 import io.horizen.chain.{AbstractFeePaymentsInfo, SidechainBlockInfo}
 import io.horizen.consensus._
@@ -72,8 +73,9 @@ class ConsensusValidator[
     
     val consensusEpoch = TimeToEpochUtils.timeStampToEpochNumber(history.params.sidechainGenesisBlockTimestamp, verifiedBlock.timestamp)
     val stakePercentageForkApplied = ForkManager.getSidechainFork(consensusEpoch).stakePercentageForkApplied
+    val forkV1_4Active = Version1_4_0Fork.get(consensusEpoch).active
     val activeSlotCoefficient = ActiveSlotCoefficientFork.get(consensusEpoch).activeSlotCoefficient
-    verifyForgingStakeInfo(verifiedBlock.header, currentConsensusEpochInfo.stakeConsensusEpochInfo, vrfOutput, stakePercentageForkApplied, activeSlotCoefficient)
+    verifyForgingStakeInfo(verifiedBlock.header, currentConsensusEpochInfo.stakeConsensusEpochInfo, vrfOutput, stakePercentageForkApplied, forkV1_4Active, activeSlotCoefficient)
 
     val lastBlockInPreviousConsensusEpochInfo: SidechainBlockInfo = history.blockInfoById(history.getLastBlockInPreviousConsensusEpoch(verifiedBlock.timestamp, verifiedBlock.parentId))
     val previousFullConsensusEpochInfo: FullConsensusEpochInfo = history.getFullConsensusEpochInfoForBlock(lastBlockInPreviousConsensusEpochInfo.timestamp, lastBlockInPreviousConsensusEpochInfo.parentId)
@@ -163,7 +165,8 @@ class ConsensusValidator[
 
       val stakePercentageForkApplied = ForkManager.getSidechainFork(ommersContainerEpochNumber).stakePercentageForkApplied
       val activeSlotCoefficient = ActiveSlotCoefficientFork.get(ommersContainerEpochNumber).activeSlotCoefficient
-      verifyForgingStakeInfo(ommer.header, ommerCurrentFullConsensusEpochInfo.stakeConsensusEpochInfo, ommerVrfOutput, stakePercentageForkApplied, activeSlotCoefficient)
+      val forkV1_4Active = Version1_4_0Fork.get(ommersContainerEpochNumber).active
+      verifyForgingStakeInfo(ommer.header, ommerCurrentFullConsensusEpochInfo.stakeConsensusEpochInfo, ommerVrfOutput, stakePercentageForkApplied, forkV1_4Active, activeSlotCoefficient)
 
       verifyOmmers(ommer, ommerCurrentFullConsensusEpochInfo, ommerPreviousFullConsensusEpochInfoOpt,
         bestKnownParentId, bestKnownParentInfo, history, accumulator)
@@ -178,7 +181,14 @@ class ConsensusValidator[
   }
 
   //Verify that forging stake info in block is correct (including stake), exist in history and had enough stake to be forger
-  private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
+  private[horizen] def verifyForgingStakeInfo(
+                                               header: SidechainBlockHeaderBase,
+                                               stakeConsensusEpochInfo: StakeConsensusEpochInfo,
+                                               vrfOutput: VrfOutput,
+                                               percentageForkApplied: Boolean,
+                                               forkV1_4Active: Boolean,
+                                               activeSlotCoefficient: Double
+                                             ): Unit = {
     log.whenDebugEnabled {
       s"Verify Forging stake info against root hash: ${BytesUtils.toHexString(stakeConsensusEpochInfo.rootHash)} by merkle path ${header.forgingStakeMerklePath.bytes().deep.mkString}"
     }
@@ -192,11 +202,12 @@ class ConsensusValidator[
     }
 
     val value = header.forgingStakeInfo.stakeAmount
+    val minStakeFilter = if (forkV1_4Active) value < minForgerStake else false
 
     val stakeIsEnough = vrfProofCheckAgainstStake(vrfOutput, value, stakeConsensusEpochInfo.totalStake, percentageForkApplied, activeSlotCoefficient)
-    if (!stakeIsEnough) {
+    if (!stakeIsEnough || minStakeFilter) {
       throw new IllegalArgumentException(
-        s"Stake value in forger box in block ${header.id} is not enough for to be forger.")
+        s"Forging stake value in block ${header.id} is not enough for to be forger.")
     }
   }
 }

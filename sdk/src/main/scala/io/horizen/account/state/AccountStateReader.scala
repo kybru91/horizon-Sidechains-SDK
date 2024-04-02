@@ -22,7 +22,7 @@ trait AccountStateReader {
 
   def getWithdrawalRequests(withdrawalEpoch: Int): Seq[WithdrawalRequest]
 
-  def getListOfForgersStakes(isForkV1_3Active: Boolean): Seq[AccountForgingStakeInfo]
+  def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo]
   def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo])
   def getForgerStakeData(stakeId: String, isForkV1_3Active: Boolean): Option[ForgerStakeData]
   def isForgingOpen: Boolean
