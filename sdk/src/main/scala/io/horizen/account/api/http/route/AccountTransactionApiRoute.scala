@@ -18,7 +18,7 @@ import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.PrivateKeySecp256k1
 import io.horizen.account.state.McAddrOwnershipMsgProcessor._
 import io.horizen.account.state._
-import io.horizen.account.state.nativescdata.forgerstakev2.StakeDataDelegator
+import io.horizen.account.state.nativescdata.forgerstakev2.{StakeDataDelegator, StakeDataForger}
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.{EthereumTransactionUtils, ZenWeiConverter}
@@ -74,7 +74,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
       signTransaction ~ makeForgerStake ~ withdrawCoins ~ spendForgingStake ~ createSmartContract ~ allWithdrawalRequests ~
       allForgingStakes ~ myForgingStakes ~ decodeTransactionBytes ~ openForgerList ~ allowedForgerList ~ createKeyRotationTransaction ~
       invokeProxyCall ~ invokeProxyStaticCall  ~ sendKeysOwnership ~ getKeysOwnership ~ removeKeysOwnership ~
-      getKeysOwnerScAddresses ~ sendMultisigKeysOwnership ~ pagedForgingStakes ~ pagedForgersStakesByForger
+      getKeysOwnerScAddresses ~ sendMultisigKeysOwnership ~ pagedForgingStakes ~ pagedForgersStakesByForger ~ pagedForgersStakesByDelegator
   }
 
   private def getFittingSecret(nodeView: AccountNodeView, fromAddress: Option[String], txValueInWei: BigInteger)
@@ -551,6 +551,32 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
               } match {
                 case Success(result) =>
                   ApiResponseUtil.toResponse(RespPagedForgerStakesByForger(result.nextStartPos, result.stakesData.toList))
+                case Failure(exception) =>
+                  ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
+              }
+            } else {
+              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
+                JOptional.empty()))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def pagedForgersStakesByDelegator: Route = (post & path("pagedForgersStakesByDelegator")) {
+    withBasicAuth {
+      _ => {
+        entity(as[ReqPagedForgerStakesByDelegator]) { body =>
+          withNodeView { sidechainNodeView =>
+            val accountState = sidechainNodeView.getNodeState
+            val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
+            if (Version1_4_0Fork.get(epochNumber).active) {
+              Try {
+                accountState.getPagedForgersStakesByDelegator(body.delegator, body.startPos, body.size)
+              } match {
+                case Success(result) =>
+                  ApiResponseUtil.toResponse(RespPagedForgerStakesByDelegator(result.nextStartPos, result.stakesData.toList))
                 case Failure(exception) =>
                   ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
               }
@@ -1295,6 +1321,9 @@ object AccountTransactionRestScheme {
   private[horizen] case class RespPagedForgerStakesByForger(nextPos: Int, stakes: List[StakeDataDelegator]) extends SuccessResponse
 
   @JsonView(Array(classOf[Views.Default]))
+  private[horizen] case class RespPagedForgerStakesByDelegator(nextPos: Int, stakes: List[StakeDataForger]) extends SuccessResponse
+
+  @JsonView(Array(classOf[Views.Default]))
   private[horizen] case class RespMcAddrOwnership(keysOwnership: Map[String, Seq[String]]) extends SuccessResponse
 
   @JsonView(Array(classOf[Views.Default]))
@@ -1481,11 +1510,21 @@ object AccountTransactionRestScheme {
 
   @JsonView(Array(classOf[Views.Default]))
   private[horizen] case class ReqPagedForgerStakesByForger(
-                                                     nonce: Option[BigInteger],
-                                                     forger: ForgerPublicKeys,
-                                                     startPos: Int = 0,
-                                                     size: Int = 10,
-                                                     gasInfo: Option[EIP1559GasInfo]) {
+                                                            nonce: Option[BigInteger],
+                                                            forger: ForgerPublicKeys,
+                                                            startPos: Int = 0,
+                                                            size: Int = 10,
+                                                            gasInfo: Option[EIP1559GasInfo]) {
+    require(size > 0 , "Size must be positive")
+  }
+
+  @JsonView(Array(classOf[Views.Default]))
+  private[horizen] case class ReqPagedForgerStakesByDelegator(
+                                                            nonce: Option[BigInteger],
+                                                            delegator: Address,
+                                                            startPos: Int = 0,
+                                                            size: Int = 10,
+                                                            gasInfo: Option[EIP1559GasInfo]) {
     require(size > 0 , "Size must be positive")
   }
 
