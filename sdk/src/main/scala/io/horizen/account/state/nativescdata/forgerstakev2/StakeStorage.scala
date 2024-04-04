@@ -158,7 +158,7 @@ object StakeStorage {
   }
 
   def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
-
+    // TODO check we have activated the new storage, otherwise throw an error
     if (startPos < 0)
       throw new IllegalArgumentException(s"Negative start position: $startPos can not be negative")
     if (pageSize <= 0)
@@ -193,6 +193,7 @@ object StakeStorage {
   }
 
   def getPagedForgersStakesByDelegator(view: BaseAccountStateView,  delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
+    // TODO check we have activated the new storage, otherwise throw an error
 
     if (startPos < 0)
       throw new IllegalArgumentException(s"Negative start position: $startPos")

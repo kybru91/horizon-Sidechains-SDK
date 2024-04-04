@@ -186,7 +186,7 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
   def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
-    log.info(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
+    log.debug(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
     val result = getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
     PagedForgersStakesByDelegatorOutput(result.nextStartPos, result.stakesData).encode()
@@ -195,7 +195,7 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
   def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
-    log.info(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
+    log.debug(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
     val response = getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
     PagedForgersStakesByForgerOutput(response.nextStartPos, response.stakesData).encode()
