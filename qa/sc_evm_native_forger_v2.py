@@ -8,7 +8,7 @@ from eth_utils import encode_hex, event_signature_to_log_topic, remove_0x_prefix
 from SidechainTestFramework.account.ac_chain_setup import AccountChainSetup
 from SidechainTestFramework.account.ac_use_smart_contract import SmartContract
 from SidechainTestFramework.account.ac_utils import ac_makeForgerStake, \
-    generate_block_and_get_tx_receipt, contract_function_static_call, contract_function_call, format_eoa
+    generate_block_and_get_tx_receipt, contract_function_static_call, contract_function_call, format_eoa, format_evm
 from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STAKE_SMART_CONTRACT_ADDRESS, \
     VERSION_1_3_FORK_EPOCH, \
     VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
@@ -164,12 +164,14 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
         self.sc_sync_all()
 
+        forger_stake_balance = int(sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16)
+
         # Check that disable on old smart contract cannot be called before fork 1.4
-        method = 'disable()'
+        method = 'disableAndMigrate()'
         try:
             contract_function_static_call(sc_node_1, old_forger_native_contract, FORGER_STAKE_SMART_CONTRACT_ADDRESS,
                                           evm_address_sc_node_1, method)
-            fail("disable call should fail before fork point")
+            fail("disableAndMigrate call should fail before fork point")
         except RuntimeError as err:
             print("Expected exception thrown: {}".format(err))
             assert_true("op code not supported" in str(err))
@@ -194,16 +196,18 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             self.sc_sync_all()
 
         # Check that disable on old smart contract cannot be called from an account that is not FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
-        method = 'disable()'
+        method = 'disableAndMigrate()'
         try:
             contract_function_static_call(sc_node_1, old_forger_native_contract, FORGER_STAKE_SMART_CONTRACT_ADDRESS,
                                           evm_address_sc_node_1, method)
-            fail("disable call should fail")
+            fail("disableAndMigrate call should fail")
         except RuntimeError as err:
             print("Expected exception thrown: {}".format(err))
             assert_true("Authorization failed" in str(err))
 
         # Execute activate.
+        forger_stake_v2_balance =  int(
+            sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16)
         method = 'activate()'
         tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
                                          evm_address_sc_node_1, method)
@@ -234,6 +238,10 @@ class SCEvmNativeForgerV2(AccountChainSetup):
 
         # TODO here we should check if the stakes are correct. At the moment no method is implemented that allows to
         # retrieve the stakes from the Forger Stake V2
+
+        # Check the balance of the 2 smart contracts
+        assert_equal(0, int(sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16))
+        assert_equal(forger_stake_balance + forger_stake_v2_balance, int(sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16))
 
         # Check that activate cannot be called twice
 

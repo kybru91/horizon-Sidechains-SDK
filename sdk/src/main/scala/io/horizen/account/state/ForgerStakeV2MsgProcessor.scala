@@ -102,14 +102,16 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
 
     val intrinsicGas = invocation.gasPool.getUsedGas
 
-    //Get all existing stakes from old native contract
+    //Call "disableAndMigrate" on old forger stake msg processor, so it won't be used anymore.
+    //It returns all existing stakes that will be recreated in the ForgerStakes V2
     val result = context.execute(invocation.call(FORGER_STAKE_SMART_CONTRACT_ADDRESS, BigInteger.ZERO,
-      BytesUtils.fromHexString(ForgerStakeMsgProcessor.GetListOfForgersCmd), invocation.gasPool.getGas))
+      BytesUtils.fromHexString(ForgerStakeMsgProcessor.DisableAndMigrateCmd), invocation.gasPool.getGas))
     val listOfExistingStakes = AccountForgingStakeInfoListDecoder.decode(result).listOfStakes
     val stakesByForger = listOfExistingStakes.groupBy(_.forgerStakeData.forgerPublicKeys)
 
     val epochNumber = context.blockContext.consensusEpochNumber
 
+    var totalMigratedStakeAmount = BigInteger.ZERO
     stakesByForger.foreach { case (forgerKeys, stakesByForger) =>
       // Sum the stakes by delegator
       val stakesByDelegator = stakesByForger.groupBy(_.forgerStakeData.ownerPublicKey)
@@ -117,17 +119,20 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
         (sum, stake) => sum.add(stake.forgerStakeData.stakedAmount)})
       //Take first delegator for registering the forger
       val (firstDelegator, firstDelegatorStakeAmount) = listOfTotalStakesByDelegator.head
+      //in this case we don't have to check the 10 ZEN minimum threshold for adding a new forger
       StakeStorage.addForger(view, forgerKeys.blockSignPublicKey,
         forgerKeys.vrfPublicKey, 0, Address.ZERO, epochNumber, firstDelegator.address(), firstDelegatorStakeAmount)
+      totalMigratedStakeAmount = totalMigratedStakeAmount.add(firstDelegatorStakeAmount)
       listOfTotalStakesByDelegator.tail.foreach { case (delegator, delegatorStakeAmount) =>
         StakeStorage.addStake(view, forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey,
           epochNumber, delegator.address(), delegatorStakeAmount)
+        totalMigratedStakeAmount = totalMigratedStakeAmount.add(delegatorStakeAmount)
       }
     }
 
-    //Call "disable" on old forger stake msg processor, so it won't be used anymore
-    context.execute(invocation.call(FORGER_STAKE_SMART_CONTRACT_ADDRESS, BigInteger.ZERO,
-      BytesUtils.fromHexString(ForgerStakeMsgProcessor.DisableCmd), invocation.gasPool.getGas))
+    //Update the balance of both forger stake msg processors
+    view.subBalance(FORGER_STAKE_SMART_CONTRACT_ADDRESS, totalMigratedStakeAmount)
+    view.addBalance(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, totalMigratedStakeAmount)
 
     // Refund the used gas, because activate should be free, except for the intrinsic gas
     invocation.gasPool.addGas(invocation.gasPool.getUsedGas.subtract(intrinsicGas))
@@ -138,7 +143,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
 
     StakeStorage.setActive(view)
 
-    log.info(s"Forger stakes V2 activated successfully - ${listOfExistingStakes.size} items migrated")
+    log.info(s"Forger stakes V2 activated successfully - ${listOfExistingStakes.size} items migrated, " +
+      s"total stake amount $totalMigratedStakeAmount")
     Array.emptyByteArray
   }
 
