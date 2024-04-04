@@ -545,18 +545,13 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
           withNodeView { sidechainNodeView =>
             val accountState = sidechainNodeView.getNodeState
             val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-            if (Version1_4_0Fork.get(epochNumber).active) {
-              Try {
-                accountState.getPagedForgersStakesByForger(body.forger, body.startPos, body.size)
-              } match {
-                case Success(result) =>
-                  ApiResponseUtil.toResponse(RespPagedForgerStakesByForger(result.nextStartPos, result.stakesData.toList))
-                case Failure(exception) =>
-                  ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
-              }
-            } else {
-              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
-                JOptional.empty()))
+            Try {
+              accountState.getPagedForgersStakesByForger(body.forger, body.startPos, body.size)
+            } match {
+              case Success(result) =>
+                ApiResponseUtil.toResponse(RespPagedForgerStakesByForger(result.nextStartPos, result.stakesData.toList))
+              case Failure(exception) =>
+                ApiResponseUtil.toResponse(GenericTransactionError(s"Command failed: ", JOptional.of(exception)))
             }
           }
         }
