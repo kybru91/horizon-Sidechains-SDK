@@ -137,11 +137,11 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
     // Refund the used gas, because activate should be free, except for the intrinsic gas
     invocation.gasPool.addGas(invocation.gasPool.getUsedGas.subtract(intrinsicGas))
 
+    StakeStorage.setActive(view)
+
     val activateEvent = ActivateStakeV2()
     val evmLog = getEthereumConsensusDataLog(activateEvent)
     view.addLog(evmLog)
-
-    StakeStorage.setActive(view)
 
     log.info(s"Forger stakes V2 activated successfully - ${listOfExistingStakes.size} items migrated, " +
       s"total stake amount $totalMigratedStakeAmount")
