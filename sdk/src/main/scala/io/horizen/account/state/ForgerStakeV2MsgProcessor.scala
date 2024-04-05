@@ -131,6 +131,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
   }
 
   def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
+    requireIsNotPayable(invocation)
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
     log.debug(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
@@ -140,6 +141,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
   }
 
   def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
+    requireIsNotPayable(invocation)
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
     log.debug(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
