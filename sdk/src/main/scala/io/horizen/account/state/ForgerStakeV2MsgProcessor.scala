@@ -3,7 +3,7 @@ package io.horizen.account.state
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
 import io.horizen.account.state.nativescdata.forgerstakev2._
-import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake}
+import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, WithdrawForgerStake}
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
 import io.horizen.evm.Address
@@ -43,9 +43,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
 
   def doDelegateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
-    if (!StakeStorage.isActive(view)) {
-      throw new ExecutionRevertedException("Forger stake V2 has not been activated yet")
-    }
+    checkForgerStakesV2IsActive(view)
 
     val inputParams = getArgumentsFromData(invocation.input)
     val DelegateCmdInput(forgerPublicKeys) = DelegateCmdInputDecoder.decode(inputParams)
@@ -83,20 +81,39 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
   }
 
   def doWithdrawCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
-    val inputParams = getArgumentsFromData(invocation.input)
-    val WithdrawCmdInput(forgerPublicKeys, value) = WithdrawCmdInputDecoder.decode(inputParams)
+    requireIsNotPayable(invocation)
+    checkForgerStakesV2IsActive(view)
 
+    val inputParams = getArgumentsFromData(invocation.input)
+    val WithdrawCmdInput(forgerPublicKeys, stakedAmount) = WithdrawCmdInputDecoder.decode(inputParams)
+
+    if (stakedAmount.signum() != 1) throw new ExecutionRevertedException(s"Withdrawal amount must be greater than zero: $stakedAmount")
+
+    if (!isValidZenAmount(stakedAmount)) {
+      throw new ExecutionRevertedException(s"Value is not a legal wei amount: $stakedAmount")
+    }
+
+    log.debug(s"withdraw called - $forgerPublicKeys $stakedAmount")
+
+    val epochNumber = context.blockContext.consensusEpochNumber
+
+    StakeStorage.removeStake(view, forgerPublicKeys.blockSignPublicKey, forgerPublicKeys.vrfPublicKey,
+      epochNumber, invocation.caller, stakedAmount)
+
+    val withdrawStakeEvt = WithdrawForgerStake(invocation.caller, forgerPublicKeys.blockSignPublicKey, forgerPublicKeys.vrfPublicKey, stakedAmount)
+    val evmLog = getEthereumConsensusDataLog(withdrawStakeEvt)
+    view.addLog(evmLog)
+
+    view.subBalance(contractAddress, stakedAmount)
+    view.addBalance(invocation.caller, stakedAmount)
+
+    Array.emptyByteArray
+  }
+
+  private def checkForgerStakesV2IsActive(view: BaseAccountStateView): Unit = {
     if (!StakeStorage.isActive(view)) {
       throw new ExecutionRevertedException("Forger stake V2 has not been activated yet")
     }
-    log.info(s"withdraw called - ${forgerPublicKeys} ${value}")
-
-    if (value.signum() <= 0) {
-      throw new ExecutionRevertedException("Value must not be zero")
-    }
-
-    //TODO: add logic
-    Array.emptyByteArray
   }
 
   def doStakeTotalCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
