@@ -15,7 +15,7 @@ from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STA
 from SidechainTestFramework.scutil import generate_next_block, EVM_APP_SLOT_TIME
 from sc_evm_forger import print_current_epoch_and_slot, decode_list_of_forger_stakes
 from test_framework.util import (
-    assert_equal, assert_true, fail, forward_transfer_to_sidechain, bytes_to_hex_str, )
+    assert_equal, assert_true, fail, forward_transfer_to_sidechain, bytes_to_hex_str, hex_str_to_bytes, )
 
 """
 If it is run with --allforks, all the existing forks are enabled at epoch 2, so it will use Shanghai EVM.
@@ -203,6 +203,33 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             print("Expected exception thrown: {}".format(err))
             assert_true("Authorization failed" in str(err))
 
+        # Check that delegate cannot be called before activate
+        method = 'delegate(bytes32,bytes32,bytes1)'
+        vrf_pub_key = hex_str_to_bytes(vrf_pub_key_1)
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, hex_str_to_bytes(block_sign_pub_key_1),
+                                                                  vrf_pub_key[0:32], vrf_pub_key[32:])
+            fail("delegate call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
+        # Check that withdraw cannot be called before activate
+        method = 'withdraw(bytes32,bytes32,bytes1,uint256)'
+        vrf_pub_key = hex_str_to_bytes(vrf_pub_key_1)
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, hex_str_to_bytes(block_sign_pub_key_1),
+                                                                  vrf_pub_key[0:32], vrf_pub_key[32:], convertZenToZennies(1))
+            fail("withdraw call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
+
         # Execute activate.
         method = 'activate()'
         tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
@@ -254,6 +281,8 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             print("Expected exception thrown: {}".format(err))
             # error is raised from API since the address has no balance
             assert_true("Method is disabled" in str(err))
+
+
 
 
 
