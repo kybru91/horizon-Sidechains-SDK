@@ -32,6 +32,7 @@ import io.horizen.utils.{ByteArrayWrapper, ClosableResourceHandler, DynamicTyped
 import io.horizen.vrf.VrfOutput
 import sparkz.core.NodeViewModifier
 import sparkz.core.block.Block.{BlockId, Timestamp}
+import sparkz.core.utils.NetworkTimeProvider
 import sparkz.util.{ModifierId, bytesToId}
 
 import java.math.BigInteger
@@ -44,11 +45,13 @@ import scala.util.{Failure, Success, Try}
 class AccountForgeMessageBuilder(
     mainchainSynchronizer: MainchainSynchronizer,
     companion: SidechainAccountTransactionsCompanion,
+    timeProvider: NetworkTimeProvider,
     params: NetworkParams,
     allowNoWebsocketConnectionInRegtest: Boolean
 ) extends AbstractForgeMessageBuilder[SidechainTypes#SCAT, AccountBlockHeader, AccountBlock](
       mainchainSynchronizer,
       companion,
+      timeProvider,
       params,
       allowNoWebsocketConnectionInRegtest
     )
@@ -413,7 +416,7 @@ class AccountForgeMessageBuilder(
     // 2. get from stateDb using root above the collection of all forger stakes (ordered)
     val forgingStakeInfoSeq: Seq[ForgingStakeInfo] = using(state.getStateDbViewFromRoot(stateRoot)) {
       stateViewFromRoot =>
-        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber)
+        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber-2)
     }
 
     // 3. using wallet secrets, filter out the not-mine forging stakes

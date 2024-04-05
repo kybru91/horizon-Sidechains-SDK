@@ -20,6 +20,7 @@ import sparkz.core.NodeViewHolder.ReceivableMessages.GetDataFromCurrentView
 import sparkz.core.block.Block
 import sparkz.core.transaction.MemoryPool
 import sparkz.core.transaction.state.MinimalState
+import sparkz.core.utils.TimeProvider
 import sparkz.util.{ModifierId, SparkzLogging}
 
 import scala.collection.JavaConverters._
@@ -33,6 +34,7 @@ abstract class AbstractForgeMessageBuilder[
   ] (
     mainchainSynchronizer: MainchainSynchronizer,
     companion: DynamicTypedSerializer[TX, TransactionSerializer[TX]],
+    timeProvider: TimeProvider,
     val params: NetworkParams,
     allowNoWebsocketConnectionInRegtest: Boolean) extends SparkzLogging
 {
@@ -77,7 +79,7 @@ abstract class AbstractForgeMessageBuilder[
       case _ => // checks passed
     }
 
-    val lotteryStart = System.currentTimeMillis();
+    val lotteryStart = timeProvider.time() / 1000;
 
     val nextBlockTimestamp = TimeToEpochUtils.getTimeStampForEpochAndSlot(params.sidechainGenesisBlockTimestamp, nextConsensusEpochNumber, nextConsensusSlotNumber)
     val consensusInfo: FullConsensusEpochInfo = nodeView.history.getFullConsensusEpochInfoForBlock(nextBlockTimestamp, parentBlockId)
@@ -105,7 +107,7 @@ abstract class AbstractForgeMessageBuilder[
 
       val eligibleForgerOpt = eligibleForgingDataView.headOption //force all forging related calculations
 
-      metricsManager.lotteryDone(System.currentTimeMillis() - lotteryStart)
+      metricsManager.lotteryDone(timeProvider.time()/1000 - lotteryStart)
 
       val forgingResult = eligibleForgerOpt
         .map { case (forgingStakeMerklePathInfo, privateKey25519, vrfProof, vrfOutput) =>

@@ -9,6 +9,7 @@ import io.horizen.chain.AbstractFeePaymentsInfo
 import io.horizen.consensus.{ConsensusEpochAndSlot, ConsensusEpochNumber, ConsensusParamsUtil, ConsensusSlotNumber}
 import io.horizen.forge.AbstractForger.ReceivableMessages.{GetForgingInfo, StartForging, StopForging, TryForgeNextBlockForEpochAndSlot}
 import io.horizen.history.AbstractHistory
+import io.horizen.metrics.MetricsManager
 import io.horizen.params.NetworkParams
 import io.horizen.storage.AbstractHistoryStorage
 import io.horizen.transaction.Transaction
@@ -169,6 +170,7 @@ abstract class AbstractForger[
     forgedBlockAsFuture.onComplete{
       case Success(ForgeSuccess(block)) => {
         log.info(s"Got successfully forged block with id ${block.id}")
+        MetricsManager.getInstance().forgedBlock(timeProvider.time() / 1000 - block.timestamp);
         viewHolderRef ! LocallyGeneratedModifier(block)
         respondsToOpt.map(respondsTo => respondsTo ! Success(block.id))
       }

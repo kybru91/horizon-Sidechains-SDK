@@ -15,16 +15,15 @@ public class MetricsManager {
 
     protected static final Logger logger = LogManager.getLogger();
     private static MetricsManager me;
-
-    private NetworkTimeProvider timeProvider;
-
     private Counter blocksAppliedSuccesfully;
     private Counter blocksNotApplied;
     private Gauge blockApplyTime;
     private Gauge blockApplyTimeAbsolute;
     private Gauge mempoolSize;
 
-    private Gauge lotteryTime;
+    private Gauge forgeLotteryTime;
+
+    private Gauge forgeBlockCreationTime;
 
     public static MetricsManager getInstance(){
         if (me == null){
@@ -33,46 +32,60 @@ public class MetricsManager {
         return me;
     }
 
-    public static void init(NetworkTimeProvider timeProvider) throws IOException {
-        me = new MetricsManager(timeProvider);
+    public static void init() throws IOException {
+        me = new MetricsManager();
     }
 
-    private MetricsManager(NetworkTimeProvider timeProvider) throws IOException {
+    private MetricsManager() throws IOException {
         logger.debug("Initializing metrics engine");
-        this.timeProvider = timeProvider;
 
         //JvmMetrics.builder().register(); // initialize the out-of-the-box JVM metrics
 
+        //Time to apply blocks (milliseconds)
         blockApplyTime  = Gauge.builder()
-                .name("block_applyTime")
-                .help("Time to apply blocks (milliseconds)")
+                .name("block_apply_time")
                 .register();
+
+        //Delta between block timestamp and timestamp when block has been applied succesfully (milliseconds)
         blockApplyTimeAbsolute = Gauge.builder()
-                .name("block_applyTime_absolute")
-                .help("Delta between block timestamp and timestamp when block has been applied succesfully (milliseconds)")
+                .name("block_apply_time_absolute")
                 .register();
+
+        //Number of received blocks applied succesfully (absolute value since start of the node)
         blocksAppliedSuccesfully = Counter.builder()
                 .name("block_applied_ok")
-                .help("Number of blocks applied succesfully")
                 .register();
+
+        //Number of received blocks not applied (absolute value since start of the node)
         blocksNotApplied = Counter.builder()
                 .name("block_applied_ko")
-                .help("Number of blocks not applied")
                 .register();
+
+        //Mempool size (number of transactions)
         mempoolSize = Gauge.builder()
                 .name("mempool_size")
-                .help("Mempool size (number of transactions)")
                 .register();
-        lotteryTime  = Gauge.builder()
-                .name("lottery_time")
-                .help("Time to execute lottery (milliseconds)")
+
+        //Time to execute lottery (milliseconds)
+        forgeLotteryTime  = Gauge.builder()
+                .name("forge_lottery_time")
                 .register();
+
+        //Time to create a new forged block
+        forgeBlockCreationTime  = Gauge.builder()
+                .name("forge_blockcreation_time")
+                .register();
+
     }
 
-    public void appliedBlockOk(long blockTimestamp, long time){
+    public void appliedBlockOk(long time, long timeFromBlockStamp){
         blockApplyTime.set(time);
-        blockApplyTimeAbsolute.set(timeProvider.time() - blockTimestamp);
+        blockApplyTimeAbsolute.set(timeFromBlockStamp);
         blocksAppliedSuccesfully.inc();
+    }
+
+    public void forgedBlock(long time){
+        forgeBlockCreationTime.set(time);
     }
     public void appliedBlockKo(){
         blocksNotApplied.inc();
@@ -82,7 +95,7 @@ public class MetricsManager {
     }
 
     public void lotteryDone(long duration){
-        lotteryTime.set(duration);
+        forgeLotteryTime.set(duration);
     }
 
 
