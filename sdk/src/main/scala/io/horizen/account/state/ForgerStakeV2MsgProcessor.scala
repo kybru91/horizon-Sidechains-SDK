@@ -8,10 +8,14 @@ import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_
 import io.horizen.evm.Address
 import io.horizen.utils.BytesUtils
 import sparkz.crypto.hash.Keccak256
-
 import java.math.BigInteger
 
-object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
+trait ForgerStakesV2Provider {
+  private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
+  private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
+}
+
+object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with ForgerStakesV2Provider {
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
 
@@ -67,25 +71,32 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
     Array.emptyByteArray
   }
 
-  def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
-    log.info(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
+    log.debug(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    //TODO: add logic and return data
-
-    Array.emptyByteArray
+    val result = getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
+    PagedForgersStakesByDelegatorOutput(result.nextStartPos, result.stakesData).encode()
   }
 
-  def doPagedForgersStakesByForgerCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
-    log.info(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
+    log.debug(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    //TODO: add logic and return data
-
-    Array.emptyByteArray
+    val response = getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
+    PagedForgersStakesByForgerOutput(response.nextStartPos, response.stakesData).encode()
   }
+
+  override def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
+    StakeStorage.getPagedForgersStakesByForger(view, forger, startPos, pageSize)
+  }
+
+  override def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
+    StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
+  }
+
 
   def doActivateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
