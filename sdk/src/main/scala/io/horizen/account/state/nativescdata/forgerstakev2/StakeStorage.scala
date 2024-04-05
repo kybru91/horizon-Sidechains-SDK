@@ -5,8 +5,8 @@ import io.horizen.account.proposition.{AddressProposition, AddressPropositionSer
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
 import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{ACCOUNT, ForgerKey}
-import io.horizen.account.utils.BigIntegerUInt256
 import io.horizen.account.utils.WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
+import io.horizen.account.utils.{BigIntegerUInt256, BigIntegerUtil}
 import io.horizen.evm.Address
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
@@ -21,6 +21,19 @@ import scala.collection.mutable.ListBuffer
 object StakeStorage {
 
   val ACCOUNT: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
+
+  val ActivationKey: Array[Byte] = Blake2b256.hash("Activate")
+
+  def isActive(view: BaseAccountStateView): Boolean = {
+    val activated = view.getAccountStorage(ACCOUNT, ActivationKey)
+    new BigInteger(1, activated) == BigInteger.ONE
+  }
+
+  def setActive(view: BaseAccountStateView): Unit  = {
+    val activated = BigIntegerUtil.toUint256Bytes(BigInteger.ONE)
+    view.updateAccountStorage(ACCOUNT, ActivationKey, activated)
+  }
+
 
   def addForger(view: BaseAccountStateView,
                 blockSignProposition: PublicKey25519Proposition,
@@ -86,12 +99,13 @@ object StakeStorage {
     if (forgerHistorySize == 0)
       throw new ExecutionRevertedException(s"Forger doesn't exist.")
 
-    forgerHistory.updateOrAddCheckpoint(view, forgerHistorySize, epochNumber, latestStake => latestStake.add(stakedAmount))
+    val addToStake = (latestStake: BigInteger) => latestStake.add(stakedAmount)
+    forgerHistory.updateOrAddCheckpoint(view, forgerHistorySize, epochNumber, addToStake)
 
     val delegatorChkSumAddress = DelegatorKey(delegatorPublicKey)
     val stakeHistory = StakeHistory(forgerKey, delegatorChkSumAddress)
     val stakeHistorySize = stakeHistory.getSize(view)
-    stakeHistory.updateOrAddCheckpoint(view, stakeHistorySize, epochNumber, latestStake => latestStake.add(stakedAmount))
+    stakeHistory.updateOrAddCheckpoint(view, stakeHistorySize, epochNumber, addToStake)
     if (stakeHistorySize == 0)
       addNewDelegator(view, forgerKey, delegatorChkSumAddress)
   }
