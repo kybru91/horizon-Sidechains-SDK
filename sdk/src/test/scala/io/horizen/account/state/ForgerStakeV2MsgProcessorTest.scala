@@ -201,7 +201,7 @@ class ForgerStakeV2MsgProcessorTest
 
       val data3: Array[Byte] = stakeTotalInput.encode()
       val msg3 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(StakeTotalCmd) ++ data3, randomNonce)
-      val returnData3= assertGas(0, msg2, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val returnData3 = assertGas(0, msg3, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData3)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
@@ -211,13 +211,13 @@ class ForgerStakeV2MsgProcessorTest
 
       val pagedForgersStakesByForgerCmd = PagedForgersStakesByForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey),
-        5,
+        0,
         5
       )
 
       val data4: Array[Byte] = pagedForgersStakesByForgerCmd.encode()
-      val msg4 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByForgerCmd) ++ data3, randomNonce)
-      val returnData4 = assertGas(0, msg2, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val msg4 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByForgerCmd) ++ data4, randomNonce)
+      val returnData4 = assertGas(2100, msg4, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData4)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
@@ -227,13 +227,13 @@ class ForgerStakeV2MsgProcessorTest
 
       val pagedForgersStakesByDelegatorCmd = PagedForgersStakesByDelegatorCmdInput(
         scAddressObj1,
-        5,
+        0,
         5
       )
 
       val data5: Array[Byte] = pagedForgersStakesByDelegatorCmd.encode()
       val msg5 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByDelegatorCmd) ++ data5, randomNonce)
-      val returnData5 = assertGas(0, msg5, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val returnData5 = assertGas(2100, msg5, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData5)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
