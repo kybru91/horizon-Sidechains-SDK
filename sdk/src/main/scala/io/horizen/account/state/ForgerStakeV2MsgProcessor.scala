@@ -29,13 +29,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
         doDelegateCmd(invocation, gasView, context.msg)
       case WithdrawCmd =>
         doWithdrawCmd(invocation, gasView, context.msg)
-      case StakeTotalCmd  =>
+      case StakeTotalCmd =>
         doStakeTotalCmd(invocation, gasView, context.blockContext.consensusEpochNumber)
-      case GetPagedForgersStakesByForgerCmd  =>
+      case GetPagedForgersStakesByForgerCmd =>
         doPagedForgersStakesByForgerCmd(invocation, gasView, context.msg)
-      case GetPagedForgersStakesByDelegatorCmd  =>
+      case GetPagedForgersStakesByDelegatorCmd =>
         doPagedForgersStakesByDelegatorCmd(invocation, gasView, context.msg)
-      case ActivateCmd  =>
+      case ActivateCmd =>
         doActivateCmd(invocation, view, context) // That shouldn't consume gas, so it doesn't use gasView
       case opCodeHex => throw new ExecutionRevertedException(s"op code not supported: $opCodeHex")
     }
@@ -60,25 +60,28 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
 
   def doStakeTotalCmd(invocation: Invocation, view: BaseAccountStateView, currentEpoch: Int): Array[Byte] = {
     requireIsNotPayable(invocation)
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new ExecutionRevertedException(msgStr)
+    }
+
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = StakeTotalCmdInputDecoder.decode(inputParams)
 
     val forgerKeys = cmdInput.forgerPublicKeys
     val delegator = cmdInput.delegator
-    val consensusEpochStart = cmdInput.consensusEpochStart
+    val consensusEpochStart = if (cmdInput.consensusEpochStart.isEmpty) currentEpoch else cmdInput.consensusEpochStart.get
     val maxNumOfEpoch = cmdInput.maxNumOfEpoch
     log.info(s"stakeTotal called - $forgerKeys $delegator epochStart: $consensusEpochStart - maxNumOfEpoch: $maxNumOfEpoch")
 
-    if (forgerKeys == null && delegator != null) {
+    if (forgerKeys.isEmpty && delegator.isDefined) {
       val msgStr = s"Illegal argument - delegator is defined while forger keys are not"
-      log.debug(msgStr)
       throw new ExecutionRevertedException(msgStr)
     }
-
-    val consensusEpochEnd = if (consensusEpochStart + maxNumOfEpoch > currentEpoch)
-      currentEpoch
-    else
-      consensusEpochStart + maxNumOfEpoch - 1
+    val consensusEpochEnd =
+      if (maxNumOfEpoch.isEmpty) consensusEpochStart
+      else if (consensusEpochStart + maxNumOfEpoch.get > currentEpoch) currentEpoch
+      else consensusEpochStart + maxNumOfEpoch.get - 1
 
     val response: StakeTotalCmdOutput = StakeStorage.getStakeTotal(view, forgerKeys, delegator, consensusEpochStart, consensusEpochEnd)
 

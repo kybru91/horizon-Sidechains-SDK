@@ -417,16 +417,9 @@ class AccountForgeMessageBuilder(
 
     val walletPubKeys = secrets.map(e => e.publicImage())
 
-    val minStakeFilter: Long => Boolean = if (Version1_4_0Fork.get(nextConsensusEpochNumber).active) {
-      amount => amount > minForgerStake
-    } else {
-      _ => true
-    }
-
     val filteredForgingStakeInfoSeq = forgingStakeInfoSeq.filter(p => {
       walletPubKeys.contains(p.blockSignPublicKey) &&
-      walletPubKeys.contains(p.vrfPublicKey) &&
-      minStakeFilter(p.stakeAmount)
+      walletPubKeys.contains(p.vrfPublicKey)
     })
 
     // return an empty seq if we do not have forging stake, that is a legal (negative) result.

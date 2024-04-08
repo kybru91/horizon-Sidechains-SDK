@@ -696,7 +696,7 @@ class StakeStorageTest
 
       createSenderAccount(view, BigInteger.TEN, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
 
-      var listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      var listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertTrue(listOfStakes.isEmpty)
 
       val rewardAddress = new Address(s"0xaaa0000123000000000011112222aaaa22222111")
@@ -706,7 +706,7 @@ class StakeStorageTest
       StakeStorage.addForger(view, blockSignerProposition1, vrfPublicKey1, rewardShare, rewardAddress, epochNumber, delegator1, stakeAmount1)
       var listOfExpectedData = ForgerStakeData(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), new AddressProposition(delegator1), stakeAmount1) :: Nil
 
-      listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertEquals(listOfExpectedData, listOfStakes)
 
       epochNumber += 10
@@ -715,14 +715,14 @@ class StakeStorageTest
       StakeStorage.addForger(view, blockSignerProposition2, vrfPublicKey2, rewardShare, rewardAddress, epochNumber, delegator1, stakeAmount2)
       listOfExpectedData = listOfExpectedData :+ ForgerStakeData(ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2), new AddressProposition(delegator1), stakeAmount2)
 
-      listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertEquals(listOfExpectedData, listOfStakes)
 
       epochNumber += 10
       StakeStorage.addStake(view, blockSignerProposition1, vrfPublicKey1, epochNumber, delegator1, stakeAmount1)
       listOfExpectedData = listOfExpectedData.updated(0, ForgerStakeData(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), new AddressProposition(delegator1), stakeAmount1.add(stakeAmount1)))
 
-      listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertEquals(listOfExpectedData, listOfStakes)
 
       epochNumber += 10
@@ -732,14 +732,14 @@ class StakeStorageTest
       StakeStorage.addStake(view, blockSignerProposition2, vrfPublicKey2, epochNumber, delegator3, stakeAmount2)
       listOfExpectedData = listOfExpectedData :+ ForgerStakeData(ForgerPublicKeys(blockSignerProposition2, vrfPublicKey2), new AddressProposition(delegator3), stakeAmount2)
 
-      listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertEquals(listOfExpectedData, listOfStakes)
 
       //  Remove all forger2/delegator3 stakes. forger2/delegator3 stake shouldn't be in the resulting list
       epochNumber += 10
       StakeStorage.removeStake(view, blockSignerProposition2, vrfPublicKey2, epochNumber, delegator3, stakeAmount2)
       listOfExpectedData = listOfExpectedData.slice(0, listOfExpectedData.size - 1)
-      listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertEquals(listOfExpectedData, listOfStakes)
 
 
@@ -747,7 +747,7 @@ class StakeStorageTest
       epochNumber += 10
       StakeStorage.removeStake(view, blockSignerProposition1, vrfPublicKey1, epochNumber, delegator1, stakeAmount1.add(stakeAmount1))
       listOfExpectedData = listOfExpectedData.slice(1, listOfExpectedData.size)
-      listOfStakes = StakeStorage.getAllForgerStakes(view).map(_.forgerStakeData)
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
       assertEquals(listOfExpectedData, listOfStakes)
     }
   }
@@ -953,7 +953,7 @@ class StakeStorageTest
         27-> 30000000000L + 300000L + 200L
        */
 
-      var stakePerEpoch = StakeStorage.getStakeTotal(view, null, null, 1, 30).listOfStakes
+      var stakePerEpoch = StakeStorage.getStakeTotal(view, None, None, 1, 30).listOfStakes
       assertEquals(
         Array.fill[BigInteger](4)(100000L).toSeq ++             //1
         Array.fill[BigInteger](5)(10000000000L + 100000L).toSeq ++        //5
@@ -967,7 +967,7 @@ class StakeStorageTest
         stakePerEpoch
       )
 
-      stakePerEpoch = StakeStorage.getStakeTotal(view, ForgerPublicKeys(blockSignerProposition3, vrfPublicKey3), null, 1, 30).listOfStakes
+      stakePerEpoch = StakeStorage.getStakeTotal(view, Some(ForgerPublicKeys(blockSignerProposition3, vrfPublicKey3)), None, 1, 30).listOfStakes
       assertEquals(
         Array.fill[BigInteger](16)(0L).toSeq ++ //1
           Array.fill[BigInteger](10)(100L).toSeq ++       //17
@@ -976,7 +976,7 @@ class StakeStorageTest
         stakePerEpoch
       )
 
-      stakePerEpoch = StakeStorage.getStakeTotal(view, ForgerPublicKeys(blockSignerProposition3, vrfPublicKey3), delegator1, 1, 30).listOfStakes
+      stakePerEpoch = StakeStorage.getStakeTotal(view, Some(ForgerPublicKeys(blockSignerProposition3, vrfPublicKey3)), Some(delegator1), 1, 30).listOfStakes
       assertEquals(
         Array.fill[BigInteger](30)(0L).toSeq //1
         ,

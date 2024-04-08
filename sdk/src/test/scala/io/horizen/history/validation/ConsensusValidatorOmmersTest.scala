@@ -35,7 +35,7 @@ class ConsensusValidatorOmmersTest
 
   val consensusValidator: BoxConsensusValidator = new BoxConsensusValidator(timeProvider) {
     // always successful
-    override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {}
+    override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {}
   }
 
   @Before
@@ -101,7 +101,7 @@ class ConsensusValidatorOmmersTest
 
 
     val currentEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         assertEquals("Different stakeConsensusEpochInfo expected", currentFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
         assertEquals("Different vrfOutput expected", generateDummyVrfOutput(header), vrfOutput)
       }
@@ -119,7 +119,7 @@ class ConsensusValidatorOmmersTest
     val fsException = new Exception("ForgingStakeException")
     val forgingStakeFailConsensusValidator = new BoxConsensusValidator(timeProvider) {
       // always fail
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = throw fsException
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = throw fsException
     }
 
     Try {
@@ -182,7 +182,7 @@ class ConsensusValidatorOmmersTest
     Mockito.when(verifiedBlock.ommers).thenReturn(ommers)
 
     val previousEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         assertEquals("Different stakeConsensusEpochInfo expected", previousFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
         assertEquals("Different vrfOutput expected", generateDummyVrfOutput(header), vrfOutput)
       }
@@ -291,7 +291,7 @@ class ConsensusValidatorOmmersTest
     })
 
     var switchedEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         val epochAndSlot = TimeToEpochUtils.timestampToEpochAndSlot(history.params.sidechainGenesisBlockTimestamp, header.timestamp)
         epochAndSlot.epochNumber match {
           case `previousEpochNumber` => assertEquals("Different stakeConsensusEpochInfo expected", previousFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
@@ -352,7 +352,7 @@ class ConsensusValidatorOmmersTest
     })
 
     switchedEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         val epochAndSlot = TimeToEpochUtils.timestampToEpochAndSlot(history.params.sidechainGenesisBlockTimestamp, header.timestamp)
         epochAndSlot.epochNumber match {
           case `previousEpochNumber` => assertEquals("Different stakeConsensusEpochInfo expected", previousFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
@@ -453,7 +453,7 @@ class ConsensusValidatorOmmersTest
     })
 
     var switchedEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         val epochAndSlot = TimeToEpochUtils.timestampToEpochAndSlot(history.params.sidechainGenesisBlockTimestamp, header.timestamp)
         epochAndSlot.epochNumber match {
           case `preForkEpochNumber` => assertEquals("Different stakeConsensusEpochInfo expected", preForkFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
@@ -514,7 +514,7 @@ class ConsensusValidatorOmmersTest
     })
 
     switchedEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         val epochAndSlot = TimeToEpochUtils.timestampToEpochAndSlot(history.params.sidechainGenesisBlockTimestamp, header.timestamp)
         epochAndSlot.epochNumber match {
           case `preForkEpochNumber` => assertEquals("Different stakeConsensusEpochInfo expected", preForkFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
@@ -629,7 +629,7 @@ class ConsensusValidatorOmmersTest
     })
 
     val switchedEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         val epochAndSlot = TimeToEpochUtils.timestampToEpochAndSlot(history.params.sidechainGenesisBlockTimestamp, header.timestamp)
         epochAndSlot.epochNumber match {
           case `previousEpochNumber` => assertEquals("Different stakeConsensusEpochInfo expected", previousFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)
@@ -752,7 +752,7 @@ class ConsensusValidatorOmmersTest
     })
 
     val switchedEpochConsensusValidator = new BoxConsensusValidator(timeProvider) {
-      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, forkV1_4Active: Boolean, activeSlotCoefficient: Double): Unit = {
+      override private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
         val epochAndSlot = TimeToEpochUtils.timestampToEpochAndSlot(history.params.sidechainGenesisBlockTimestamp, header.timestamp)
         epochAndSlot.epochNumber match {
           case `preForkEpochNumber` => assertEquals("Different stakeConsensusEpochInfo expected", preForkFullConsensusEpochInfo.stakeConsensusEpochInfo, stakeConsensusEpochInfo)

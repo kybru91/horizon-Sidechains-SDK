@@ -6,7 +6,7 @@ trait ForgerStakesProviderV2 {
 
   private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse
 
-  private[horizen] def getListOfForgersStakes(view: BaseAccountStateView): Seq[AccountForgingStakeInfo]
+  private[horizen] def getListOfForgersStakes(view: BaseAccountStateView): Seq[ForgerStakeData]
 
   private[horizen] def getForgingStakes(view: BaseAccountStateView): Seq[ForgingStakeInfo]
 

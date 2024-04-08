@@ -9,7 +9,7 @@ import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.{BigIntegerUtil, MainchainTxCrosschainOutputAddressUtil, ZenWeiConverter}
 import io.horizen.block.{MainchainBlockReferenceData, MainchainTxForwardTransferCrosschainOutput, MainchainTxSidechainCreationCrosschainOutput}
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof, KeyRotationProofTypes}
-import io.horizen.consensus.ForgingStakeInfo
+import io.horizen.consensus.{ForgingStakeInfo, minForgerStake}
 import io.horizen.evm.results.{EvmLog, ProofAccountResult}
 import io.horizen.evm._
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
@@ -67,6 +67,7 @@ class StateDbAccountStateView(
   override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = {
     if (isForkV1_4Active && forgerStakesProviderV2.isActive(this)) {
       forgerStakesProviderV2.getListOfForgersStakes(this)
+        .map(AccountForgingStakeInfo(Array.emptyByteArray, _))
     } else {
       forgerStakesProviderV1.getListOfForgersStakes(this, isForkV1_3Active)
     }
@@ -145,10 +146,15 @@ class StateDbAccountStateView(
   def getOrderedForgingStakesInfoSeq(epochNumber: Int): Seq[ForgingStakeInfo] = {
     val isForkV1_3Active = Version1_3_0Fork.get(epochNumber).active
     val isForkV1_4Active = Version1_4_0Fork.get(epochNumber).active
+    val minStakeFilter: ForgingStakeInfo => Boolean = if (isForkV1_4Active) {
+      fsi => fsi.stakeAmount >= minForgerStake
+    } else {
+      _ => true
+    }
 
     if (isForkV1_4Active && forgerStakesProviderV2.isActive(this)) {
       // V2 Stake storage provides stakes per forger
-      forgerStakesProviderV2.getForgingStakes(this).sorted(Ordering[ForgingStakeInfo].reverse)
+      forgerStakesProviderV2.getForgingStakes(this)
     } else {
       // get forger stakes list view (scala lazy collection)
       forgerStakesProviderV1.getListOfForgersStakes(this, isForkV1_3Active).view
@@ -169,9 +175,11 @@ class StateDbAccountStateView(
           )
         }
         .toSeq
-        // sort the resulting sequence by decreasing stake amount
-        .sorted(Ordering[ForgingStakeInfo].reverse)
     }
+      // if 1.4 fork applied, filter stakes of less than 10 zen
+      .filter(minStakeFilter)
+      // sort the resulting sequence by decreasing stake amount
+      .sorted(Ordering[ForgingStakeInfo].reverse)
   }
 
   @throws(classOf[InvalidMessageException])

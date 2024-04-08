@@ -16,7 +16,7 @@ import sparkz.crypto.hash.Blake2b256
 import sparkz.util.serialization.{Reader, Writer}
 
 import java.math.BigInteger
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 
 
 object StakeStorage {
@@ -149,20 +149,19 @@ object StakeStorage {
     }
   }
 
-  def getAllForgerStakes(view: BaseAccountStateView): Seq[AccountForgingStakeInfo] = {
+  def getAllForgerStakes(view: BaseAccountStateView): Seq[ForgerStakeData] = {
     val listOfForgerKeys = ForgerMap.getForgerKeys(view)
     listOfForgerKeys.flatMap { forgerKey =>
       val forger = ForgerMap.getForger(view, forgerKey)
       val delegatorList = DelegatorList(forgerKey)
       val delegatorSize = delegatorList.getSize(view)
-      val listOfStakes: ListBuffer[AccountForgingStakeInfo] = ListBuffer()
+      val listOfStakes: ListBuffer[ForgerStakeData] = ListBuffer()
       for (idx <- 0 until delegatorSize) {
         val delegator = delegatorList.getDelegatorAt(view, idx)
         val stakeHistory = StakeHistory(forgerKey, delegator)
         val amount = stakeHistory.getLatestAmount(view)
         if (amount.signum() == 1) {
-          val stakeId = Blake2b256.hash(Bytes.concat(forgerKey.bytes, delegator.toBytes))
-          listOfStakes.append(AccountForgingStakeInfo(stakeId, ForgerStakeData(forger.forgerPublicKeys, new AddressProposition(delegator), amount)))
+          listOfStakes.append(ForgerStakeData(forger.forgerPublicKeys, new AddressProposition(delegator), amount))
         }
       }
       listOfStakes
@@ -170,43 +169,46 @@ object StakeStorage {
   }
 
   def getStakeTotal(view: BaseAccountStateView,
-                    forgerKeys: ForgerPublicKeys,
-                    delegator: Address,
+                    forgerKeys: Option[ForgerPublicKeys],
+                    delegator: Option[Address],
                     consensusEpochStart: Int,
                     consensusEpochEnd: Int): StakeTotalCmdOutput = {
-    if (forgerKeys == null) {
-      // sum all forging stakes per epochs
-      val totalStakesPerEpoch = ForgerMap.getForgerKeys(view).map(ForgerStakeHistory)
-        .map(history => getForgerStakesPerEpoch(view, history, consensusEpochStart, consensusEpochEnd))
-        .transpose
-        .map(stakes => stakes.foldLeft(BigInteger.ZERO)((a, b) => a.add(b)))
+    forgerKeys match {
+      case Some(forgerKeys) =>
+        val forgerKey = ForgerKey(forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey)
+        val history: BaseStakeHistory = delegator match {
+          case Some(address) => StakeHistory(forgerKey, DelegatorKey(address))
+          case None => ForgerStakeHistory(forgerKey)
+        }
+        StakeTotalCmdOutput(getForgerStakesPerEpoch(view, history, consensusEpochStart, consensusEpochEnd))
 
-      StakeTotalCmdOutput(totalStakesPerEpoch)
-    } else {
-      val forgerKey = ForgerKey(forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey)
-      val history: BaseStakeHistory = if (delegator == null) {
-        ForgerStakeHistory(forgerKey)
-      } else {
-        StakeHistory(forgerKey, DelegatorKey(delegator))
-      }
-      StakeTotalCmdOutput(getForgerStakesPerEpoch(view, history, consensusEpochStart, consensusEpochEnd))
+      case None =>
+        // sum all forging stakes per epochs
+        val totalStakesPerEpoch = ForgerMap.getForgerKeys(view).map(ForgerStakeHistory)
+          .map(history => getForgerStakesPerEpoch(view, history, consensusEpochStart, consensusEpochEnd))
+          .transpose
+          .map(stakes => stakes.foldLeft(BigInteger.ZERO)((a, b) => a.add(b)))
+
+        StakeTotalCmdOutput(totalStakesPerEpoch)
     }
   }
 
   private[forgerstakev2] def getForgerStakesPerEpoch(view: BaseAccountStateView, history: BaseStakeHistory, consensusEpochStart: Int, consensusEpochEnd: Int): Seq[BigInteger] = {
     // if requested slice completely before the first checkpoint
     if (history.getCheckpoint(view, 0).fromEpochNumber > consensusEpochEnd)
-      return Array.fill[BigInteger](consensusEpochEnd - consensusEpochStart + 1)(BigInteger.ZERO)
+      return List.fill[BigInteger](consensusEpochEnd - consensusEpochStart + 1)(BigInteger.ZERO)
 
     var currIndex = checkpointBSearch(view, history, consensusEpochEnd)
     var currCheckpoint = history.getCheckpoint(view, currIndex)
-    val result = ArrayBuffer[BigInteger]()
+    val result = ListBuffer[BigInteger]()
     for (currEpoch <- consensusEpochEnd to consensusEpochStart by -1) {
       result.prepend(currCheckpoint.stakedAmount)
       if (currCheckpoint.fromEpochNumber == currEpoch) {
         currIndex = currIndex - 1
-        if (currIndex == -1) return Array.fill[BigInteger](currEpoch - consensusEpochStart)(BigInteger.ZERO) ++ result
-        currCheckpoint = history.getCheckpoint(view, currIndex)
+        if (currIndex == -1)
+          return List.fill[BigInteger](currEpoch - consensusEpochStart)(BigInteger.ZERO) ++ result
+        if (currEpoch != consensusEpochStart)
+          currCheckpoint = history.getCheckpoint(view, currIndex)
       }
     }
     result
