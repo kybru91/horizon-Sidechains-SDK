@@ -14,6 +14,10 @@ import java.math.BigInteger
 trait ForgerStakesV2Provider {
   private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
   private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
+  private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse
+  private[horizen] def getListOfForgersStakes(view: BaseAccountStateView): Seq[ForgerStakeData]
+  private[horizen] def getForgingStakes(view: BaseAccountStateView): Seq[ForgingStakeInfo]
+  private[horizen] def isActive(view: BaseAccountStateView): Boolean
 }
 
 object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with ForgerStakesV2Provider {

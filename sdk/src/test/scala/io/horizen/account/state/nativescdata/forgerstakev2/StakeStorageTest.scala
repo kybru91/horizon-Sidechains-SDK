@@ -35,7 +35,6 @@ class StakeStorageTest
   val delegator1 = new Address("0xaaa00001230000000000deadbeefaaaa2222de01")
   val delegator2 = new Address("0xaaa00001230000000000aaaaaaabbbbb2222de02")
   val delegator3 = new Address("0xaaabbbb1230000000000aaaaaaabbbbb2222de03")
-  val delegator3 = new Address("0xaaa00001230000000000aaaaaaabbbbb33333333")
 
   implicit def addressToChecksumAddress(t: Address): DelegatorKey = DelegatorKey(t)
 

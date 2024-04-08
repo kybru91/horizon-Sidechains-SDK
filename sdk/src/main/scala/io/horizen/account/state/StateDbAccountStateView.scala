@@ -3,16 +3,16 @@ package io.horizen.account.state
 import io.horizen.SidechainTypes
 import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
 import io.horizen.account.proposition.AddressProposition
-import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse, StakeDataDelegator, StakeDataForger}
+import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt.ReceiptStatus
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumConsensusDataReceipt}
 import io.horizen.account.transaction.EthereumTransaction
-import io.horizen.account.utils.{AccountPayment, BigIntegerUtil, MainchainTxCrosschainOutputAddressUtil, ZenWeiConverter}
+import io.horizen.account.utils.{BigIntegerUtil, MainchainTxCrosschainOutputAddressUtil, ZenWeiConverter}
 import io.horizen.block.{MainchainBlockReferenceData, MainchainTxForwardTransferCrosschainOutput, MainchainTxSidechainCreationCrosschainOutput}
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof, KeyRotationProofTypes}
 import io.horizen.consensus.{ForgingStakeInfo, minForgerStake}
-import io.horizen.evm.results.{EvmLog, ProofAccountResult}
 import io.horizen.evm._
+import io.horizen.evm.results.{EvmLog, ProofAccountResult}
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.transaction.mainchain.{ForwardTransfer, SidechainCreation}
 import io.horizen.utils.BytesUtils
@@ -60,26 +60,26 @@ class StateDbAccountStateView(
     withdrawalReqProvider.getListOfWithdrawalReqRecords(withdrawalEpoch, this)
 
   override def getForgerStakeData(stakeId: String, isForkV1_3Active: Boolean): Option[ForgerStakeData] =
-    forgerStakesProviderV1.findStakeData(this, BytesUtils.fromHexString(stakeId), isForkV1_3Active)
+    forgerStakesProvider.findStakeData(this, BytesUtils.fromHexString(stakeId), isForkV1_3Active)
 
   override def isForgingOpen: Boolean =
-    forgerStakesProviderV1.isForgerListOpen(this)
+    forgerStakesProvider.isForgerListOpen(this)
 
   override def isForgerStakeAvailable(isForkV1_3Active: Boolean): Boolean = {
-    forgerStakesProviderV1.isForgerStakeAvailable(this, isForkV1_3Active)
+    forgerStakesProvider.isForgerStakeAvailable(this, isForkV1_3Active)
   }
 
   override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = {
-    if (isForkV1_4Active && forgerStakesProviderV2.isActive(this)) {
-      forgerStakesProviderV2.getListOfForgersStakes(this)
+    if (isForkV1_4Active && forgerStakesV2Provider.isActive(this)) {
+      forgerStakesV2Provider.getListOfForgersStakes(this)
         .map(AccountForgingStakeInfo(Array.emptyByteArray, _))
     } else {
-      forgerStakesProviderV1.getListOfForgersStakes(this, isForkV1_3Active)
+      forgerStakesProvider.getListOfForgersStakes(this, isForkV1_3Active)
     }
   }
 
   override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) = {
-    forgerStakesProviderV1.getPagedListOfForgersStakes(this, startPos, pageSize)
+    forgerStakesProvider.getPagedListOfForgersStakes(this, startPos, pageSize)
   }
 
   override def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse =
@@ -89,7 +89,7 @@ class StateDbAccountStateView(
     forgerStakesV2Provider.getPagedForgersStakesByDelegator(this, delegator, startPos, pageSize)
 
   override def getAllowedForgerList: Seq[Int] =
-    forgerStakesProviderV1.getAllowedForgerListIndexes(this)
+    forgerStakesProvider.getAllowedForgerListIndexes(this)
 
   override def getListOfMcAddrOwnerships(scAddressOpt: Option[String]): Seq[McAddrOwnershipData] =
     mcAddrOwnershipProvider.getListOfMcAddrOwnerships(this, scAddressOpt)
@@ -119,7 +119,7 @@ class StateDbAccountStateView(
           )
 
           val cmdInput = AddNewStakeCmdInput(ForgerPublicKeys(blockSignerProposition, vrfPublicKey), ownerAddress)
-          val returnData = forgerStakesProviderV1.addScCreationForgerStake(this, ownerAddress, stakedAmount, cmdInput)
+          val returnData = forgerStakesProvider.addScCreationForgerStake(this, ownerAddress, stakedAmount, cmdInput)
           log.debug(s"sc creation forging stake added with stakeid: ${BytesUtils.toHexString(returnData)}")
 
         case ft: ForwardTransfer =>
@@ -163,12 +163,12 @@ class StateDbAccountStateView(
       _ => true
     }
 
-    if (isForkV1_4Active && forgerStakesProviderV2.isActive(this)) {
+    if (isForkV1_4Active && forgerStakesV2Provider.isActive(this)) {
       // V2 Stake storage provides stakes per forger
-      forgerStakesProviderV2.getForgingStakes(this)
+      forgerStakesV2Provider.getForgingStakes(this)
     } else {
       // get forger stakes list view (scala lazy collection)
-      forgerStakesProviderV1.getListOfForgersStakes(this, isForkV1_3Active).view
+      forgerStakesProvider.getListOfForgersStakes(this, isForkV1_3Active).view
         // group delegation stakes by blockSignPublicKey/vrfPublicKey pairs
         .groupBy(stake =>
           (stake.forgerStakeData.forgerPublicKeys.blockSignPublicKey, stake.forgerStakeData.forgerPublicKeys.vrfPublicKey)
