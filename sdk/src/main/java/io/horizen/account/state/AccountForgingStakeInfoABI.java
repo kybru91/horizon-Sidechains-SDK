@@ -23,7 +23,7 @@ public class AccountForgingStakeInfoABI extends StaticStruct {
                 new org.web3j.abi.datatypes.Address(owner),
                 new Bytes32(pubKey),
                 new Bytes32(vrf1),
-                new Bytes32(vrf2)
+                new Bytes1(vrf2)
                 );
         this.stakeId = stakeId;
         this.amount = amount;

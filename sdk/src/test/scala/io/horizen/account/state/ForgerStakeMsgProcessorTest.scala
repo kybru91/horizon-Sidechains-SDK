@@ -183,7 +183,7 @@ class ForgerStakeMsgProcessorTest
     assertEquals("Wrong MethodId for GetPagedListOfForgersCmd", "af5f63ef", ForgerStakeMsgProcessor.GetPagedListOfForgersCmd)
     assertEquals("Wrong MethodId for GetPagedForgersStakesOfUserCmd", "5f6dfc1d", ForgerStakeMsgProcessor.GetPagedForgersStakesOfUserCmd)
     assertEquals("Wrong MethodId for UpgradeCmd", "d55ec697", ForgerStakeMsgProcessor.UpgradeCmd)
-    assertEquals("Wrong MethodId for DisableCmd", "2f2770db", ForgerStakeMsgProcessor.DisableCmd)
+    assertEquals("Wrong MethodId for DisableAndMigrateCmd", "ca6aaf28", ForgerStakeMsgProcessor.DisableAndMigrateCmd)
   }
 
   @Test
@@ -2281,7 +2281,7 @@ class ForgerStakeMsgProcessorTest
   }
 
   @Test
-  def testDisable(): Unit = {
+  def testDisableAndMigrate(): Unit = {
 
     usingView(forgerStakeMessageProcessor) { view =>
 
@@ -2299,19 +2299,19 @@ class ForgerStakeMsgProcessorTest
 
       // Test with the correct signature before fork. It should fail.
       var msg = getMessage(
-        contractAddress, 0, BytesUtils.fromHexString(DisableCmd), nonce, ownerAddressProposition.address())
+        contractAddress, 0, BytesUtils.fromHexString(DisableAndMigrateCmd), nonce, ownerAddressProposition.address())
 
       // should fail because, before Version 1.4 fork, DisableCmd is not a valid function signature
       var exc = intercept[ExecutionRevertedException] {
         assertGas(0, msg, view, forgerStakeMessageProcessor, blockContextForkV1_3)
       }
-      assertEquals(s"op code not supported: $DisableCmd", exc.getMessage)
+      assertEquals(s"op code not supported: $DisableAndMigrateCmd", exc.getMessage)
 
       // Test after fork.
       // Check that it is not payable
       val value = validWeiAmount
       msg = getMessage(
-        contractAddress, value, BytesUtils.fromHexString(DisableCmd), nonce, ownerAddressProposition.address())
+        contractAddress, value, BytesUtils.fromHexString(DisableAndMigrateCmd), nonce, ownerAddressProposition.address())
 
       val excPayable = intercept[ExecutionRevertedException] {
         assertGas(2100, msg, view, forgerStakeMessageProcessor, blockContextForkV1_4)
@@ -2320,7 +2320,7 @@ class ForgerStakeMsgProcessorTest
 
       // Check for wrong input data
       val badData = new Array[Byte](1)
-      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(DisableCmd) ++ badData, nonce, ownerAddressProposition.address())
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(DisableAndMigrateCmd) ++ badData, nonce, ownerAddressProposition.address())
       exc = intercept[ExecutionRevertedException] {
         withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContextForkV1_4, _))
       }
@@ -2329,7 +2329,7 @@ class ForgerStakeMsgProcessorTest
 
       // Test that disable can be called only by Forger stake contract V2
       msg = getMessage(
-        contractAddress, 0, BytesUtils.fromHexString(DisableCmd), nonce, ownerAddressProposition.address())
+        contractAddress, 0, BytesUtils.fromHexString(DisableAndMigrateCmd), nonce, ownerAddressProposition.address())
       exc = intercept[ExecutionRevertedException] {
         assertGas(2100, msg, view, forgerStakeMessageProcessor, blockContextForkV1_4)
       }
@@ -2338,7 +2338,7 @@ class ForgerStakeMsgProcessorTest
       // Test that disable can be called not only by Forger stake contract V2 address but it needs also the hashcode (i.e.
       // that it is initialized)
       msg = getMessage(
-        contractAddress, 0, BytesUtils.fromHexString(DisableCmd), nonce, WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
+        contractAddress, 0, BytesUtils.fromHexString(DisableAndMigrateCmd), nonce, WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
 
       exc = intercept[ExecutionRevertedException] {
         withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContextForkV1_4, _))
@@ -2347,7 +2347,7 @@ class ForgerStakeMsgProcessorTest
 
       ForgerStakeV2MsgProcessor.init(view, blockContextForkV1_4.consensusEpochNumber)
 
-      assertGas(22950, msg, view, forgerStakeMessageProcessor, blockContextForkV1_4)
+      assertGas(2100, msg, view, forgerStakeMessageProcessor, blockContextForkV1_4)
 
       val listOfLogs = view.getLogs(txHash1)
       assertEquals("Wrong number of logs", 1, listOfLogs.length)
@@ -2401,7 +2401,7 @@ class ForgerStakeMsgProcessorTest
       assertTrue(s"Wrong error message ${exc.getMessage}", exc.getMessage.contains("disabled"))
 
       exc = intercept[ExecutionRevertedException] {
-        val msg = getMessage(contractAddress, 0, BytesUtils.fromHexString(DisableCmd), nonce)
+        val msg = getMessage(contractAddress, 0, BytesUtils.fromHexString(DisableAndMigrateCmd), nonce)
         withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContextForkV1_4, _))
       }
       assertTrue(s"Wrong error message ${exc.getMessage}", exc.getMessage.contains("disabled"))
