@@ -430,7 +430,7 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
     restrictForgerList
   }
 
-  def doDisable(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
+  def doDisableAndMigrate(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
     requireIsNotPayable(invocation)
     checkInputDoesntContainParams(invocation.input)
     if (WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS != invocation.caller ||
@@ -442,7 +442,7 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
     val evmLog = getEthereumConsensusDataLog(new DisableStakeV1)
     view.addLog(evmLog)
 
-    Array.emptyByteArray
+    doUncheckedGetListOfForgersStakesCmd(view, isForkV1_3Active = true)
   }
 
     @throws(classOf[ExecutionFailedException])
@@ -453,7 +453,7 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
           case OpenStakeForgerListCmd => doOpenStakeForgerListCmd(invocation, gasView, context.msg)
           case OpenStakeForgerListCmdCorrect => doOpenStakeForgerListCmd(invocation, gasView, context.msg)
           case GetPagedListOfForgersCmd | GetListOfForgersCmd | AddNewStakeCmd | RemoveStakeCmd |
-            UpgradeCmd | StakeOfCmd | GetPagedForgersStakesOfUserCmd | DisableCmd => throw new ExecutionRevertedException(s"Method is disabled")
+               UpgradeCmd | StakeOfCmd | GetPagedForgersStakesOfUserCmd | DisableAndMigrateCmd => throw new ExecutionRevertedException(s"Method is disabled - Please use the new ForgeStakeV2")
           case opCodeHex => throw new ExecutionRevertedException(s"op code not supported: $opCodeHex")
         }
       }
@@ -474,8 +474,8 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
           => doStakeOfCmd(invocation, gasView)
           case GetPagedForgersStakesOfUserCmd if Version1_3_0Fork.get(context.blockContext.consensusEpochNumber).active
           => doGetPagedForgersStakesOfUserCmd(invocation, gasView)
-          case DisableCmd if Version1_4_0Fork.get(context.blockContext.consensusEpochNumber).active
-          => doDisable(invocation, gasView)
+          case DisableAndMigrateCmd if Version1_4_0Fork.get(context.blockContext.consensusEpochNumber).active
+          => doDisableAndMigrate(invocation, view) // This doesn't consume gas, so it doesn't use GasTrackedView
           case opCodeHex => throw new ExecutionRevertedException(s"op code not supported: $opCodeHex")
         }
       }
@@ -523,7 +523,7 @@ object ForgerStakeMsgProcessor {
   val StakeOfCmd: String = getABIMethodId("stakeOf(address)")
   val GetPagedForgersStakesOfUserCmd: String = getABIMethodId("getPagedForgersStakesByUser(address,int32,int32)")
   // Methods added after Fork v. 1.4
-  val DisableCmd: String = getABIMethodId("disable()")
+  val DisableAndMigrateCmd: String = getABIMethodId("disableAndMigrate()")
 
   // ensure we have strings consistent with size of opcode
   require(
@@ -536,7 +536,7 @@ object ForgerStakeMsgProcessor {
       UpgradeCmd.length == 2 * METHOD_ID_LENGTH &&
       StakeOfCmd.length == 2 * METHOD_ID_LENGTH &&
       GetPagedForgersStakesOfUserCmd.length == 2 * METHOD_ID_LENGTH &&
-      DisableCmd.length == 2 * METHOD_ID_LENGTH
+      DisableAndMigrateCmd.length == 2 * METHOD_ID_LENGTH
   )
 
   def getRemoveStakeCmdMessageToSign(stakeId: Array[Byte], from: Address, nonce: Array[Byte]): Array[Byte] = {

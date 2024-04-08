@@ -9,10 +9,14 @@ import io.horizen.consensus.ForgingStakeInfo
 import io.horizen.evm.Address
 import io.horizen.utils.BytesUtils
 import sparkz.crypto.hash.Keccak256
-
 import java.math.BigInteger
 
-object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with ForgerStakesProviderV2 {
+trait ForgerStakesV2Provider {
+  private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
+  private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
+}
+
+object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with ForgerStakesV2Provider {
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
 
@@ -88,25 +92,32 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
     response.encode()
   }
 
-  def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
-    log.info(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
+    log.debug(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    //TODO: add logic and return data
-
-    Array.emptyByteArray
+    val result = getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
+    PagedForgersStakesByDelegatorOutput(result.nextStartPos, result.stakesData).encode()
   }
 
-  def doPagedForgersStakesByForgerCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
-    log.info(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
+    log.debug(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    //TODO: add logic and return data
-
-    Array.emptyByteArray
+    val response = getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
+    PagedForgersStakesByForgerOutput(response.nextStartPos, response.stakesData).encode()
   }
+
+  override def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
+    StakeStorage.getPagedForgersStakesByForger(view, forger, startPos, pageSize)
+  }
+
+  override def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
+    StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
+  }
+
 
   def doActivateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
@@ -123,14 +134,16 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
 
     val intrinsicGas = invocation.gasPool.getUsedGas
 
-    //Get all existing stakes from old native contract
+    //Call "disableAndMigrate" on old forger stake msg processor, so it won't be used anymore.
+    //It returns all existing stakes that will be recreated in the ForgerStakes V2
     val result = context.execute(invocation.call(FORGER_STAKE_SMART_CONTRACT_ADDRESS, BigInteger.ZERO,
-      BytesUtils.fromHexString(ForgerStakeMsgProcessor.GetListOfForgersCmd), invocation.gasPool.getGas))
+      BytesUtils.fromHexString(ForgerStakeMsgProcessor.DisableAndMigrateCmd), invocation.gasPool.getGas))
     val listOfExistingStakes = AccountForgingStakeInfoListDecoder.decode(result).listOfStakes
     val stakesByForger = listOfExistingStakes.groupBy(_.forgerStakeData.forgerPublicKeys)
 
     val epochNumber = context.blockContext.consensusEpochNumber
 
+    var totalMigratedStakeAmount = BigInteger.ZERO
     stakesByForger.foreach { case (forgerKeys, stakesByForger) =>
       // Sum the stakes by delegator
       val stakesByDelegator = stakesByForger.groupBy(_.forgerStakeData.ownerPublicKey)
@@ -138,28 +151,32 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork with Forger
         (sum, stake) => sum.add(stake.forgerStakeData.stakedAmount)})
       //Take first delegator for registering the forger
       val (firstDelegator, firstDelegatorStakeAmount) = listOfTotalStakesByDelegator.head
+      //in this case we don't have to check the 10 ZEN minimum threshold for adding a new forger
       StakeStorage.addForger(view, forgerKeys.blockSignPublicKey,
         forgerKeys.vrfPublicKey, 0, Address.ZERO, epochNumber, firstDelegator.address(), firstDelegatorStakeAmount)
+      totalMigratedStakeAmount = totalMigratedStakeAmount.add(firstDelegatorStakeAmount)
       listOfTotalStakesByDelegator.tail.foreach { case (delegator, delegatorStakeAmount) =>
         StakeStorage.addStake(view, forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey,
           epochNumber, delegator.address(), delegatorStakeAmount)
+        totalMigratedStakeAmount = totalMigratedStakeAmount.add(delegatorStakeAmount)
       }
     }
 
-    //Call "disable" on old forger stake msg processor, so it won't be used anymore
-    context.execute(invocation.call(FORGER_STAKE_SMART_CONTRACT_ADDRESS, BigInteger.ZERO,
-      BytesUtils.fromHexString(ForgerStakeMsgProcessor.DisableCmd), invocation.gasPool.getGas))
+    //Update the balance of both forger stake msg processors
+    view.subBalance(FORGER_STAKE_SMART_CONTRACT_ADDRESS, totalMigratedStakeAmount)
+    view.addBalance(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, totalMigratedStakeAmount)
 
     // Refund the used gas, because activate should be free, except for the intrinsic gas
     invocation.gasPool.addGas(invocation.gasPool.getUsedGas.subtract(intrinsicGas))
+
+    StakeStorage.setActive(view)
 
     val activateEvent = ActivateStakeV2()
     val evmLog = getEthereumConsensusDataLog(activateEvent)
     view.addLog(evmLog)
 
-    StakeStorage.setActive(view)
-
-    log.info(s"Forger stakes V2 activated successfully - ${listOfExistingStakes.size} items migrated")
+    log.info(s"Forger stakes V2 activated successfully - ${listOfExistingStakes.size} items migrated, " +
+      s"total stake amount $totalMigratedStakeAmount")
     Array.emptyByteArray
   }
 

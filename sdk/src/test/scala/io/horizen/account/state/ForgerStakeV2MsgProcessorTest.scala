@@ -389,18 +389,28 @@ class ForgerStakeV2MsgProcessorTest
         // Create some stakes with old storage model
         val privateKey1: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8))
         val owner1: AddressProposition = privateKey1.publicImage()
-        val amount1 = addStakesV2(view, blockSignerProposition, vrfPublicKey, owner1, 40, blockContextForkV1_3)
+        val amount1 = addStakesV2(view, blockSignerProposition, vrfPublicKey, owner1, 400, blockContextForkV1_3)
 
         val privateKey2: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest2".getBytes(StandardCharsets.UTF_8))
         val owner2: AddressProposition = privateKey2.publicImage()
-        val amount2 = addStakesV2(view, blockSignerProposition, vrfPublicKey, owner2, 50, blockContextForkV1_3)
+        val amount2 = addStakesV2(view, blockSignerProposition, vrfPublicKey, owner2, 350, blockContextForkV1_3)
 
         val privateKey3: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest3".getBytes(StandardCharsets.UTF_8))
         val owner3: AddressProposition = privateKey3.publicImage()
-        val amount3 = addStakesV2(view, blockSignerProposition, vrfPublicKey, owner3, 100, blockContextForkV1_3)
+        val amount3 = addStakesV2(view, blockSignerProposition, vrfPublicKey, owner3, 250, blockContextForkV1_3)
         val listOfStakes = (owner3, amount3) :: (owner2, amount2) :: (owner1, amount1) :: Nil
         (ForgerPublicKeys(blockSignerProposition, vrfPublicKey), listOfStakes)
       }
+
+
+      // The balance of forgerStakeMessageProcessor corresponds to the total staked amount. Note that this is not always
+      // true, e.g. a forward transfer can increase the balance.
+
+      val forgerStakeBalanceBeforeActivate = view.getBalance(forgerStakeMessageProcessor.contractAddress)
+
+      // Check that before activate the balance of ForgerStakeV2 is zero
+      assertEquals(BigInteger.ZERO, view.getBalance(contractAddress))
+
       //Setting the context
       val txHash1 = Keccak256.hash("first tx")
       view.setupTxContext(txHash1, 10)
@@ -446,7 +456,10 @@ class ForgerStakeV2MsgProcessorTest
 
       // Checking log
       val listOfLogs = view.getLogs(txHash1)
-     checkActivateEvents(listOfLogs)
+      checkActivateEvents(listOfLogs)
+
+      assertEquals(BigInteger.ZERO, view.getBalance(forgerStakeMessageProcessor.contractAddress))
+      assertEquals(forgerStakeBalanceBeforeActivate, view.getBalance(contractAddress))
 
       view.commit(bytesToVersion(getVersion.data()))
 
@@ -513,7 +526,7 @@ class ForgerStakeV2MsgProcessorTest
 
       val data3: Array[Byte] = stakeTotalInput.encode()
       val msg3 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(StakeTotalCmd) ++ data3, randomNonce)
-      val returnData3= assertGas(0, msg2, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val returnData3 = assertGas(0, msg3, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData3)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
@@ -523,13 +536,13 @@ class ForgerStakeV2MsgProcessorTest
 
       val pagedForgersStakesByForgerCmd = PagedForgersStakesByForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey),
-        5,
+        0,
         5
       )
 
       val data4: Array[Byte] = pagedForgersStakesByForgerCmd.encode()
-      val msg4 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByForgerCmd) ++ data3, randomNonce)
-      val returnData4 = assertGas(0, msg2, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val msg4 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByForgerCmd) ++ data4, randomNonce)
+      val returnData4 = assertGas(2100, msg4, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData4)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
@@ -539,13 +552,13 @@ class ForgerStakeV2MsgProcessorTest
 
       val pagedForgersStakesByDelegatorCmd = PagedForgersStakesByDelegatorCmdInput(
         scAddressObj1,
-        5,
+        0,
         5
       )
 
       val data5: Array[Byte] = pagedForgersStakesByDelegatorCmd.encode()
       val msg5 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByDelegatorCmd) ++ data5, randomNonce)
-      val returnData5 = assertGas(0, msg5, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val returnData5 = assertGas(2100, msg5, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData5)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
