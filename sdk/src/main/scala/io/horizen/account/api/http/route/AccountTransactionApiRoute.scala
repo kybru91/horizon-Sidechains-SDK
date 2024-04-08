@@ -18,8 +18,9 @@ import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.PrivateKeySecp256k1
 import io.horizen.account.state.McAddrOwnershipMsgProcessor._
 import io.horizen.account.state._
+import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInput
 import io.horizen.account.transaction.EthereumTransaction
-import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
+import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.{EthereumTransactionUtils, ZenWeiConverter}
 import io.horizen.api.http.JacksonSupport._
 import io.horizen.api.http.route.TransactionBaseErrorResponse.{ErrorBadCircuit, ErrorByteTransactionParsing}
@@ -33,14 +34,16 @@ import io.horizen.evm.Address
 import io.horizen.json.Views
 import io.horizen.node.NodeWalletBase
 import io.horizen.params.{NetworkParams, RegTestParams}
-import io.horizen.proof.{SchnorrSignatureSerializer, Signature25519}
-import io.horizen.proposition.{MCPublicKeyHashPropositionSerializer, PublicKey25519Proposition, SchnorrPropositionSerializer, VrfPublicKey}
-import io.horizen.secret.PrivateKey25519
+import io.horizen.proof.{SchnorrSignatureSerializer, Signature25519, VrfProof}
+import io.horizen.proposition.{MCPublicKeyHashPropositionSerializer, PublicKey25519Proposition, PublicKey25519PropositionSerializer, SchnorrPropositionSerializer, VrfPublicKey, VrfPublicKeySerializer}
+import io.horizen.secret.{PrivateKey25519, VrfSecretKey}
 import io.horizen.utils.BytesUtils
 import org.web3j.crypto.Keys
+import org.web3j.utils.Numeric
 import sparkz.core.settings.RESTApiSettings
 
 import java.math.BigInteger
+import java.nio.charset.StandardCharsets
 import java.util.{Optional => JOptional}
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.concurrent.ExecutionContext
@@ -73,7 +76,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
       signTransaction ~ makeForgerStake ~ withdrawCoins ~ spendForgingStake ~ createSmartContract ~ allWithdrawalRequests ~
       allForgingStakes ~ myForgingStakes ~ decodeTransactionBytes ~ openForgerList ~ allowedForgerList ~ createKeyRotationTransaction ~
       invokeProxyCall ~ invokeProxyStaticCall  ~ sendKeysOwnership ~ getKeysOwnership ~ removeKeysOwnership ~
-      getKeysOwnerScAddresses ~ sendMultisigKeysOwnership ~ pagedForgingStakes
+      getKeysOwnerScAddresses ~ sendMultisigKeysOwnership ~ pagedForgingStakes ~ registerForger
   }
 
   private def getFittingSecret(nodeView: AccountNodeView, fromAddress: Option[String], txValueInWei: BigInteger)
@@ -100,6 +103,40 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         tx,
         new SignatureSecp256k1(msgSignature.getV, msgSignature.getR, msgSignature.getS)
     )
+  }
+
+  private def getMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String) : Array[Byte] = {
+    //val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(vrfPublicKeyStr))
+    //val blockSignPubKey = PublicKey25519PropositionSerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(blockSignPubKeyStr))
+    //val vrfPubKeyBytes = BytesUtils.fromHexString(vrfPublicKeyStr)
+    //val blockSignPubKeyBytes = BytesUtils.fromHexString(blockSignPubKeyStr)
+    val messageToSignString = (blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address))
+    messageToSignString.getBytes(StandardCharsets.UTF_8)
+
+  }
+
+  private def signMessageWithSecrets(
+                                      nodeView: AccountNodeView,
+                                      blockSignPubKey: PublicKey25519Proposition, vrfPublicKey: VrfPublicKey,
+                                      messageToSign: Array[Byte]): (Signature25519, VrfProof) = {
+    val wallet = nodeView.getNodeWallet
+
+    val allAccounts25519 = wallet.secretsOfType(classOf[PrivateKey25519])
+    val signature25519 = allAccounts25519.find(_.asInstanceOf[PrivateKey25519].publicImage.equals(blockSignPubKey)) match {
+      case None => throw new IllegalArgumentException("No matching secrte for input blockSignPubKey")
+      case secret =>
+        secret.get.asInstanceOf[PrivateKey25519].sign(messageToSign)
+    }
+
+    val allAccountsVrf = wallet.secretsOfType(classOf[VrfSecretKey])
+    val signatureVrf = allAccountsVrf.find(_.asInstanceOf[VrfSecretKey].publicImage.equals(vrfPublicKey)) match {
+      case None => throw new IllegalArgumentException("No matching secrte for input vrfPublicKey")
+      case secret =>
+        secret.get.asInstanceOf[VrfSecretKey].sign(messageToSign)
+    }
+
+    (signature25519, signatureVrf)
+
   }
 
   /**
@@ -530,6 +567,68 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
             } else {
               ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.3 is not active, can not invoke this command",
                 JOptional.empty()))
+            }
+          }
+        }
+      }
+    }
+  }
+
+
+  def registerForger: Route = (post & path("registerForger")) {
+    withBasicAuth {
+      _ => {
+        entity(as[ReqRegisterForger]) { body =>
+          // lock the view and try to create CoreTransaction
+          applyOnNodeView { sidechainNodeView =>
+            val valueInWei = BigInteger.ZERO
+
+            val accountState = sidechainNodeView.getNodeState
+
+            // default gas related params
+            val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
+            var maxPriorityFeePerGas = BigInteger.valueOf(120)
+            var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
+            var gasLimit = BigInteger.valueOf(500000)
+
+            if (body.gasInfo.isDefined) {
+              maxFeePerGas = body.gasInfo.get.maxFeePerGas
+              maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
+              gasLimit = body.gasInfo.get.gasLimit
+            }
+            val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
+
+            val secret = getFittingSecret(sidechainNodeView, None, txCost)
+
+            secret match {
+              case Some(secret) =>
+
+                val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
+
+                val msg = getMessageToSign(body.blockSignPubKey, body.vrfPubKey, body.rewardShare, body.smartcontract_address)
+
+                val blockSignPubKey = PublicKey25519PropositionSerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.blockSignPubKey))
+                val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.vrfPubKey))
+
+                val signatures = signMessageWithSecrets(sidechainNodeView, blockSignPubKey, vrfPubKey, msg)
+
+                val dataBytes = encodeRegisterForgerCmdRequest(blockSignPubKey, vrfPubKey, body.rewardShare, new AddressProposition(BytesUtils.fromHexString(body.smartcontract_address)),
+                  signatures._1, signatures._2)
+
+                val tmpTx: EthereumTransaction = new EthereumTransaction(
+                  params.chainId,
+                  JOptional.of(new AddressProposition(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)),
+                  nonce,
+                  gasLimit,
+                  maxPriorityFeePerGas,
+                  maxFeePerGas,
+                  valueInWei,
+                  dataBytes,
+                  null
+                )
+                validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
+              case None =>
+                ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
             }
           }
         }
@@ -1109,6 +1208,13 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     }
   }
 
+  def encodeRegisterForgerCmdRequest(blockSignPubKey: PublicKey25519Proposition, vrfPubKey: VrfPublicKey, rewardShare: Int,
+                                     smartcontract_address: AddressProposition, sign1: Signature25519, sign2: VrfProof): Array[Byte] = {
+
+    val registerForgerInput = RegisterForgerCmdInput(ForgerPublicKeys(blockSignPubKey, vrfPubKey), rewardShare, smartcontract_address.address(), signature25519 = ???, signatureVrf = ???)
+
+    Bytes.concat(BytesUtils.fromHexString(ForgerStakeV2MsgProcessor.RegisterForgerCmd), registerForgerInput.encode())
+  }
 
 
   def encodeAddNewStakeCmdRequest(forgerStakeInfo: TransactionForgerOutput): Array[Byte] = {
@@ -1446,6 +1552,17 @@ object AccountTransactionRestScheme {
                                                      size: Int = 10,
                                                      gasInfo: Option[EIP1559GasInfo]) {
     require(size > 0 , "Size must be positive")
+  }
+
+
+  @JsonView(Array(classOf[Views.Default]))
+  private[horizen] case class ReqRegisterForger(
+                                                     nonce: Option[BigInteger],
+                                                     blockSignPubKey: String,
+                                                     vrfPubKey: String,
+                                                     rewardShare: Int,
+                                                     smartcontract_address: String,
+                                                     gasInfo: Option[EIP1559GasInfo]) {
   }
 
   @JsonView(Array(classOf[Views.Default]))

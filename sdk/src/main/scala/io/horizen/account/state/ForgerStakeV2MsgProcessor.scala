@@ -149,6 +149,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork {
   }
 
 
+  val RegisterForgerCmd: String = getABIMethodId("registerForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32)")
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
   val StakeTotalCmd: String = getABIMethodId("stakeTotal(bytes32,bytes32,bytes1,address,uint32,uint32)")
