@@ -202,11 +202,11 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH
   )
 
-  override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int) = {
+  override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
     StakeStorage.getPagedListOfForgers(view, startPos, pageSize)
   }
 
-  override private[horizen] def getListOfForgersStakes(view: BaseAccountStateView) = {
+  override private[horizen] def getListOfForgersStakes(view: BaseAccountStateView): Seq[ForgerStakeData] = {
     StakeStorage.getAllForgerStakes(view)
   }
 

@@ -155,7 +155,6 @@ class StateDbAccountStateView(
   }
 
   def getOrderedForgingStakesInfoSeq(epochNumber: Int): Seq[ForgingStakeInfo] = {
-    val isForkV1_3Active = Version1_3_0Fork.get(epochNumber).active
     val isForkV1_4Active = Version1_4_0Fork.get(epochNumber).active
     val minStakeFilter: ForgingStakeInfo => Boolean = if (isForkV1_4Active) {
       fsi => fsi.stakeAmount >= minForgerStake
@@ -168,6 +167,7 @@ class StateDbAccountStateView(
       forgerStakesV2Provider.getForgingStakes(this)
     } else {
       // get forger stakes list view (scala lazy collection)
+      val isForkV1_3Active = Version1_3_0Fork.get(epochNumber).active
       forgerStakesProvider.getListOfForgersStakes(this, isForkV1_3Active).view
         // group delegation stakes by blockSignPublicKey/vrfPublicKey pairs
         .groupBy(stake =>
