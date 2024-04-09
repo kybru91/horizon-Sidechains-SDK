@@ -38,7 +38,9 @@ public class MetricsManager {
     }
 
     public static void init(TimeProvider timeProvider) throws IOException {
-        me = new MetricsManager(timeProvider);
+        if (me == null){
+            me = new MetricsManager(timeProvider);
+        }
     }
 
     private MetricsManager(TimeProvider timeProvider) throws IOException {
