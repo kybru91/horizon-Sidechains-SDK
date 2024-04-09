@@ -65,12 +65,12 @@ class SidechainNodeViewHolderTest extends JUnitSuite
 
   @Before
   def setUp(): Unit = {
+    MetricsManager.init(mock[NetworkTimeProvider])
     history = mock[SidechainHistory]
     state = mock[SidechainState]
     wallet = mock[SidechainWallet]
     mempool = SidechainMemoryPool.createEmptyMempool(getMockedMempoolSettings(300))
     mockedNodeViewHolderRef = getMockedSidechainNodeViewHolderRef(history, state, wallet, mempool)
-    MetricsManager.init(mock[NetworkTimeProvider])
   }
 
   private def getMockedMempoolSettings(maxSize: Int): MempoolSettings = {
