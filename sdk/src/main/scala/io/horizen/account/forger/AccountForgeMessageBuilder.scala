@@ -6,7 +6,7 @@ import io.horizen.account.block.AccountBlock.calculateReceiptRoot
 import io.horizen.account.block.{AccountBlock, AccountBlockHeader}
 import io.horizen.account.chain.AccountFeePaymentsInfo
 import io.horizen.account.companion.SidechainAccountTransactionsCompanion
-import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork, Version1_4_0Fork}
+import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork}
 import io.horizen.account.history.AccountHistory
 import io.horizen.account.mempool.{AccountMemoryPool, MempoolMap, TransactionsByPriceAndNonceIter}
 import io.horizen.account.proposition.AddressProposition
@@ -409,7 +409,7 @@ class AccountForgeMessageBuilder(
     // 2. get from stateDb using root above the collection of all forger stakes (ordered)
     val forgingStakeInfoSeq: Seq[ForgingStakeInfo] = using(state.getStateDbViewFromRoot(stateRoot)) {
       stateViewFromRoot =>
-        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber, nextConsensusEpochNumber - 2)
+        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber - 2)
     }
 
     // 3. using wallet secrets, filter out the not-mine forging stakes
