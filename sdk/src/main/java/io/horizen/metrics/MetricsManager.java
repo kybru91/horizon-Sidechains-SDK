@@ -1,14 +1,10 @@
 package io.horizen.metrics;
 
-import io.horizen.block.SidechainBlockBase;
-import io.horizen.block.SidechainBlockBase$;
 import io.prometheus.metrics.core.metrics.Counter;
 import io.prometheus.metrics.core.metrics.Gauge;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import sparkz.core.utils.NetworkTimeProvider;
 import sparkz.core.utils.TimeProvider;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -74,12 +70,8 @@ public class MetricsManager {
     }
 
     public long currentMillis(){
-        return timeProvider.time()/1000;
+        return timeProvider.time();
     }
-    public long computeMillis(long startMillis){
-        return timeProvider.time()/1000 - startMillis;
-    }
-
 
     public List<MetricsHelp> getHelp(){
         return helps;
