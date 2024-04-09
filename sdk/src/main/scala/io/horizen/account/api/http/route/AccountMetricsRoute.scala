@@ -57,7 +57,6 @@ case class AccountMetricsRoute(
   def metrics: Route = get {
           entity(as[JsonNode]) { body =>
             {
-              System.out.println("aaaaaaaaaa1")
               val snapshots = PrometheusRegistry.defaultRegistry.scrape
               val stream = new ByteArrayOutputStream
               ExpositionFormats.init.getPrometheusTextFormatWriter.write(stream, snapshots)
@@ -68,7 +67,6 @@ case class AccountMetricsRoute(
 
   def metricsHelp: Route = (get & path("help")) {
     entity(as[JsonNode]) { body =>
-      System.out.println("aaaaaaaaaa2")
       ApiResponseUtil.toResponse(MetricsHelpList(MetricsManager.getInstance().getHelp()))
     }
   }
