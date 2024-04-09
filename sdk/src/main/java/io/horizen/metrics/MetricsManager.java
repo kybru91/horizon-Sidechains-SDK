@@ -50,8 +50,8 @@ public class MetricsManager {
         blockApplyTime  =  Gauge.builder().name("block_apply_time").register();
         helps.add(new MetricsHelp(blockApplyTime.getPrometheusName(), "Time to apply block to node wallet and state (milliseconds)"));
 
-        blockApplyTimeAbsolute =  Gauge.builder().name("block_apply_time_fromforging").register();
-        helps.add(new MetricsHelp(blockApplyTimeAbsolute.getPrometheusName(), "Delta between timestamp when block has been applied succesfully on this node and timestamp of the block indicated by the forger (milliseconds)"));
+        blockApplyTimeAbsolute =  Gauge.builder().name("block_apply_time_fromslotstart").register();
+        helps.add(new MetricsHelp(blockApplyTimeAbsolute.getPrometheusName(), "Delta between timestamp when block has been applied succesfully on this node and start timestamp of the slot it belongs to (milliseconds)"));
 
         blocksAppliedSuccesfully =   Counter.builder().name("block_applied_ok").register();
         helps.add(new MetricsHelp(blocksAppliedSuccesfully.getPrometheusName(),"Number of received blocks applied succesfully (absolute value since start of the node)"));
@@ -66,7 +66,7 @@ public class MetricsManager {
         helps.add(new MetricsHelp(forgeLotteryTime.getPrometheusName(), "Time to execute the lottery (milliseconds)"));
 
         forgeBlockCreationTime = Gauge.builder().name("forge_blockcreation_time").register();
-        helps.add(new MetricsHelp(forgeBlockCreationTime.getPrometheusName(),  "Time to create a new forged block (milliseconds)"));
+        helps.add(new MetricsHelp(forgeBlockCreationTime.getPrometheusName(),  "Time to create a new forged block (calculated from the start timestamp of the slot it belongs to) (milliseconds)"));
     }
 
     public long currentMillis(){

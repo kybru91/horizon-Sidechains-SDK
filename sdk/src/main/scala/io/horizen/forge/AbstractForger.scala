@@ -172,7 +172,7 @@ abstract class AbstractForger[
     forgedBlockAsFuture.onComplete{
       case Success(ForgeSuccess(block)) => {
         log.info(s"Got successfully forged block with id ${block.id}")
-        metricsManager.forgedBlock(metricsManager.currentMillis() - block.timestamp);
+        metricsManager.forgedBlock(metricsManager.currentMillis() - (block.timestamp * 1000))
         viewHolderRef ! LocallyGeneratedModifier(block)
         respondsToOpt.map(respondsTo => respondsTo ! Success(block.id))
       }

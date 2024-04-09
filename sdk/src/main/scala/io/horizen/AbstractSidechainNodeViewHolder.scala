@@ -307,7 +307,7 @@ abstract class AbstractSidechainNodeViewHolder[
                 metricsManager.mempoolSize(newMemPool.size)
                 metricsManager.appliedBlockOk(
                   endTime- startTime,
-                  endTime - pmod.timestamp
+                  endTime - (pmod.timestamp * 1000)
                 );
 
               // TODO FOR MERGE: usedSizeKBytes()/usedPercentage() should be moved into sparkz.core.transaction.MemoryPool
