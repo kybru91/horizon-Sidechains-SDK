@@ -199,11 +199,12 @@ def eoa_transfer(node, sender, receiver, amount, call_method: CallMethod = CallM
     return res
 
 
-def contract_function_static_call(node, smart_contract_type, smart_contract_address, from_address, method, *args,
+def contract_function_static_call(node, smart_contract_type, smart_contract_address, from_address, method, *args, value = 0,
                                   tag = 'latest', eip1898 = False, isBlockHash = False):
     logging.info("Calling {}: using static call function".format(method))
     res = smart_contract_type.static_call(node, method, *args, fromAddress=from_address,
-                                          toAddress=smart_contract_address, tag=tag, eip1898=eip1898, isBlockHash=isBlockHash)
+                                          toAddress=smart_contract_address, value=value, tag=tag, eip1898=eip1898,
+                                          isBlockHash=isBlockHash)
     return res
 
 
@@ -296,4 +297,7 @@ def ac_invokeProxy(sc_node, contract_address, data, nonce=None, static=False):
     else:
         return sc_node.transaction_invokeProxyCall(json.dumps(params))
 
+def rpc_get_balance(sc_node, address):
+    return int(
+        sc_node.rpc_eth_getBalance(format_evm(address), 'latest')['result'], 16)
 
