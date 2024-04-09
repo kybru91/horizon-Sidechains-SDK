@@ -188,7 +188,7 @@ class ConsensusValidatorTest extends JUnitSuite with HistoryConsensusChecker {
     println("Test blockWithNotEnoughStake")
     val blockWithNotEnoughStake = generateBlockWithNotEnoughStake(lastGenerator)
     history.append(blockWithNotEnoughStake).failed.get match {
-      case expected: IllegalArgumentException => assert(expected.getMessage == s"Stake value in forger box in block ${blockWithNotEnoughStake.id} is not enough for to be forger.")
+      case expected: IllegalArgumentException => assert(expected.getMessage == s"Forging stake value in block ${blockWithNotEnoughStake.id} is not enough for to be forger.")
       case nonExpected => assert(false, s"Got incorrect exception: ${nonExpected}")
     }
   }

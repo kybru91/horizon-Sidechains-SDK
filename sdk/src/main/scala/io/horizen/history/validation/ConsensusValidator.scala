@@ -178,7 +178,13 @@ class ConsensusValidator[
   }
 
   //Verify that forging stake info in block is correct (including stake), exist in history and had enough stake to be forger
-  private[horizen] def verifyForgingStakeInfo(header: SidechainBlockHeaderBase, stakeConsensusEpochInfo: StakeConsensusEpochInfo, vrfOutput: VrfOutput, percentageForkApplied: Boolean, activeSlotCoefficient: Double): Unit = {
+  private[horizen] def verifyForgingStakeInfo(
+                                               header: SidechainBlockHeaderBase,
+                                               stakeConsensusEpochInfo: StakeConsensusEpochInfo,
+                                               vrfOutput: VrfOutput,
+                                               percentageForkApplied: Boolean,
+                                               activeSlotCoefficient: Double
+                                             ): Unit = {
     log.whenDebugEnabled {
       s"Verify Forging stake info against root hash: ${BytesUtils.toHexString(stakeConsensusEpochInfo.rootHash)} by merkle path ${header.forgingStakeMerklePath.bytes().deep.mkString}"
     }
@@ -196,7 +202,7 @@ class ConsensusValidator[
     val stakeIsEnough = vrfProofCheckAgainstStake(vrfOutput, value, stakeConsensusEpochInfo.totalStake, percentageForkApplied, activeSlotCoefficient)
     if (!stakeIsEnough) {
       throw new IllegalArgumentException(
-        s"Stake value in forger box in block ${header.id} is not enough for to be forger.")
+        s"Forging stake value in block ${header.id} is not enough for to be forger.")
     }
   }
 }

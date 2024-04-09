@@ -17,7 +17,7 @@ import io.horizen.fixtures.StoreFixture
 import io.horizen.fork.{ForkConfigurator, ForkManagerUtil, OptionalSidechainFork, SidechainForkConsensusEpoch}
 import io.horizen.params.NetworkParams
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
-import io.horizen.utils.{BytesUtils, Pair}
+import io.horizen.utils.{BytesUtils, Pair, ZenCoinsUtils}
 import org.junit.Assert._
 import org.junit._
 import org.mockito._
@@ -46,7 +46,7 @@ class ForgerStakeV2MsgProcessorTest
   val validWeiAmount: BigInteger = new BigInteger("10000000000")
 
   val mockNetworkParams: NetworkParams = mock[NetworkParams]
-  val forgerStakeV2MessageProcessor = ForgerStakeV2MsgProcessor
+  val forgerStakeV2MessageProcessor: ForgerStakeV2MsgProcessor.type = ForgerStakeV2MsgProcessor
   val forgerStakeMessageProcessor: ForgerStakeMsgProcessor = ForgerStakeMsgProcessor(mockNetworkParams)
 
   /** short hand: forger state native contract address */
@@ -77,6 +77,19 @@ class ForgerStakeV2MsgProcessorTest
     DefaultGasFeeFork.blockGasLimit,
     0,
     V1_4_MOCK_FORK_POINT,
+    0,
+    1,
+    MockedHistoryBlockHashProvider,
+    Hash.ZERO
+  )
+
+  val blockContextForkV1_4_plus10 =  new BlockContext(
+    Address.ZERO,
+    0,
+    0,
+    DefaultGasFeeFork.blockGasLimit,
+    0,
+    V1_4_MOCK_FORK_POINT + 10,
     0,
     1,
     MockedHistoryBlockHashProvider,
@@ -453,8 +466,6 @@ class ForgerStakeV2MsgProcessorTest
     }
   }
 
-
-
   @Test
   def testAddAndRemoveStake(): Unit = {
 
@@ -507,19 +518,22 @@ class ForgerStakeV2MsgProcessorTest
       //stake total
 
       val stakeTotalInput = StakeTotalCmdInput(
-        ForgerPublicKeys(blockSignerProposition, vrfPublicKey),
-        scAddressObj1,
-        5,
-        5
+        Some(ForgerPublicKeys(blockSignerProposition, vrfPublicKey)),
+        Some(scAddressObj1),
+        Some(5),
+        Some(5)
       )
 
+      /*
       val data3: Array[Byte] = stakeTotalInput.encode()
-      val msg3 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(StakeTotalCmd) ++ data3, randomNonce)
-      val returnData3 = assertGas(0, msg3, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+      val msg3 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data3, randomNonce)
+      val returnData3 = assertGas(2100, msg3, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
       assertNotNull(returnData3)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
-      //TODO: add checks...
+      //TODO: commented part works when the stake v2 will be activated. add checks...
+       */
+
 
       //GetPagedForgersStakesByForger
 
@@ -554,6 +568,108 @@ class ForgerStakeV2MsgProcessorTest
       //TODO: add checks...
     }
   }
+
+  @Test
+  def testGetStakeTotal(): Unit = {
+    val blockSignerProposition1 = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
+    val vrfPublicKey1 = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+    val blockSignerProposition2 = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667799")) // 32 bytes
+    val vrfPublicKey2 = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1190")) // 33 bytes
+    val address1: Address = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8)).publicImage().address()
+    val address2: Address = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest2".getBytes(StandardCharsets.UTF_8)).publicImage().address()
+    val address3: Address = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest3".getBytes(StandardCharsets.UTF_8)).publicImage().address()
+    val address4: Address = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest4".getBytes(StandardCharsets.UTF_8)).publicImage().address()
+
+    usingView(forgerStakeV2MessageProcessor) { view =>
+      forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
+      // Setup
+      val initialAmount = BigInteger.valueOf(100).multiply(validWeiAmount)
+      createSenderAccount(view, initialAmount)
+      val txHash1 = Keccak256.hash("first tx")
+      view.setupTxContext(txHash1, 10)
+
+      // assert invocation fails until stake v2 is active
+      val msg1 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ Array.emptyByteArray, randomNonce)
+      val gas = new GasPool(1000000000)
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas))
+
+      val BI_0 = BigInteger.ZERO
+      val BI_20 = BigInteger.valueOf(20 * ZenCoinsUtils.COIN)
+      val BI_40 = BigInteger.valueOf(40 * ZenCoinsUtils.COIN)
+      val BI_60 = BigInteger.valueOf(60 * ZenCoinsUtils.COIN)
+      val BI_80 = BigInteger.valueOf(80 * ZenCoinsUtils.COIN)
+
+      StakeStorage.setActive(view)
+      StakeStorage.addForger(view, blockSignerProposition1, vrfPublicKey1, 100, Address.ZERO, V1_4_MOCK_FORK_POINT + 3, address1, BI_20)
+      StakeStorage.addForger(view, blockSignerProposition2, vrfPublicKey2, 100, Address.ZERO, V1_4_MOCK_FORK_POINT + 5, address2, BI_20)
+      StakeStorage.addStake(view, blockSignerProposition1, vrfPublicKey1, V1_4_MOCK_FORK_POINT + 7, address3, BI_20)
+      StakeStorage.addStake(view, blockSignerProposition1, vrfPublicKey1, V1_4_MOCK_FORK_POINT + 9, address4, BI_20)
+      /*
+          epoch forger1 forger2 delegator1  delegator2  total
+          300   0       0       0           0           0
+          303   20      0       0           0           20
+          305   20      20      0           0           40
+          307   40      20      20          0           60
+          309   60      20      20          20          80
+
+       */
+
+      // get single delegation for current epoch
+      var stakeTotalCmdInput = StakeTotalCmdInput(Some(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1)), Some(address3), None, None)
+      var data: Array[Byte] = stakeTotalCmdInput.encode()
+      var msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
+      var returnData = assertGas(6500, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      var stakeTotalResponse = StakeTotalCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        Seq(BI_20),
+        stakeTotalResponse.listOfStakes
+      )
+
+      // get single forger for current epoch
+      stakeTotalCmdInput = StakeTotalCmdInput(Some(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1)), None, None, None)
+      data= stakeTotalCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
+      returnData = assertGas(10600, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      stakeTotalResponse = StakeTotalCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        Seq(BI_60),
+        stakeTotalResponse.listOfStakes
+      )
+
+      // get total stake for current epoch
+      stakeTotalCmdInput = StakeTotalCmdInput(None, None, None, None)
+      data= stakeTotalCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
+      returnData = assertGas(21300, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      stakeTotalResponse = StakeTotalCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        Seq(BI_80),
+        stakeTotalResponse.listOfStakes
+      )
+
+      // get total stake for last 11 epochs
+      stakeTotalCmdInput = StakeTotalCmdInput(None, None, Some(V1_4_MOCK_FORK_POINT), Some(11))
+      data= stakeTotalCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
+      returnData = assertGas(21500, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      stakeTotalResponse = StakeTotalCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        Seq(BI_0, BI_0, BI_0, BI_20, BI_20, BI_40, BI_40, BI_60, BI_60, BI_80, BI_80),
+        stakeTotalResponse.listOfStakes
+      )
+
+      // negative - illegal input params combination
+      stakeTotalCmdInput = StakeTotalCmdInput(None, Some(address4), None, None)
+      data= stakeTotalCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas))
+    }
+  }
+
 
   def checkActivateEvents(listOfLogs: Array[EthereumConsensusDataLog]): Unit = {
     assertEquals("Wrong number of logs", 2, listOfLogs.length)
