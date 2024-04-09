@@ -48,10 +48,10 @@ public class MetricsManager {
         helps = new ArrayList<>();
 
         blockApplyTime  =  Gauge.builder().name("block_apply_time").register();
-        helps.add(new MetricsHelp(blockApplyTime.getPrometheusName(), "Time to apply block (milliseconds)"));
+        helps.add(new MetricsHelp(blockApplyTime.getPrometheusName(), "Time to apply block to node wallet and state (milliseconds)"));
 
-        blockApplyTimeAbsolute =  Gauge.builder().name("block_apply_time_absolute").register();
-        helps.add(new MetricsHelp(blockApplyTimeAbsolute.getPrometheusName(), "Delta between block timestamp and timestamp when block has been applied succesfully on this node (milliseconds)"));
+        blockApplyTimeAbsolute =  Gauge.builder().name("block_apply_time_fromforging").register();
+        helps.add(new MetricsHelp(blockApplyTimeAbsolute.getPrometheusName(), "Delta between timestamp when block has been applied succesfully on this node and timestamp of the block indicated by the forger (milliseconds)"));
 
         blocksAppliedSuccesfully =   Counter.builder().name("block_applied_ok").register();
         helps.add(new MetricsHelp(blocksAppliedSuccesfully.getPrometheusName(),"Number of received blocks applied succesfully (absolute value since start of the node)"));

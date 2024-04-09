@@ -303,10 +303,11 @@ abstract class AbstractSidechainNodeViewHolder[
                 log.info(s"Persistent modifier ${pmod.encodedId} applied successfully and node view updated!")
                 log.debug(s"Current mempool size: ${newMemPool.size} transactions")
 
+                var endTime = metricsManager.currentMillis()
                 metricsManager.mempoolSize(newMemPool.size)
                 metricsManager.appliedBlockOk(
-                  metricsManager.currentMillis() - pmod.timestamp,
-                  metricsManager.currentMillis()- startTime
+                  endTime- startTime,
+                  endTime - pmod.timestamp
                 );
 
               // TODO FOR MERGE: usedSizeKBytes()/usedPercentage() should be moved into sparkz.core.transaction.MemoryPool
