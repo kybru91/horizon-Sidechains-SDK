@@ -55,6 +55,8 @@ abstract class AbstractForger[
   private def forgingInitiatorTimerTask: TimerTask = new TimerTask {override def run(): Unit = tryToCreateBlockNow()}
   private var timerOpt: Option[Timer] = None
 
+  private val metricsManager = MetricsManager.getInstance()
+
   private def startTimer(): Unit = {
     this.timerOpt match {
       case Some(_) => log.info("Automatically forging already had been started")
@@ -170,7 +172,7 @@ abstract class AbstractForger[
     forgedBlockAsFuture.onComplete{
       case Success(ForgeSuccess(block)) => {
         log.info(s"Got successfully forged block with id ${block.id}")
-        MetricsManager.getInstance().forgedBlock(timeProvider.time() / 1000 - block.timestamp);
+        metricsManager.forgedBlock(metricsManager.currentMillis() - block.timestamp);
         viewHolderRef ! LocallyGeneratedModifier(block)
         respondsToOpt.map(respondsTo => respondsTo ! Success(block.id))
       }

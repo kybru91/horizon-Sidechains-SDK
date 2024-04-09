@@ -278,7 +278,7 @@ abstract class AbstractSidechainNodeViewHolder[
   // This method is actually a copy-paste of parent NodeViewHolder.pmodModify method.
   // The difference is that modifiers are applied to the State and Wallet simultaneously.
   override protected def pmodModify(pmod: PMOD): Unit = {
-    val startTime = timeProvider.time()/1000;
+    val startTime = metricsManager.currentMillis()
     if (!history().contains(pmod.id)) {
       context.system.eventStream.publish(StartingPersistentModifierApplication(pmod))
 
@@ -305,8 +305,8 @@ abstract class AbstractSidechainNodeViewHolder[
 
                 metricsManager.mempoolSize(newMemPool.size)
                 metricsManager.appliedBlockOk(
-                  timeProvider.time()/1000 - pmod.timestamp,
-                  timeProvider.time()/1000 - startTime
+                  metricsManager.currentMillis() - pmod.timestamp,
+                  metricsManager.currentMillis()- startTime
                 );
 
               // TODO FOR MERGE: usedSizeKBytes()/usedPercentage() should be moved into sparkz.core.transaction.MemoryPool

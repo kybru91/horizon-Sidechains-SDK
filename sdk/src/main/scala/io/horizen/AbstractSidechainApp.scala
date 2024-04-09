@@ -76,7 +76,7 @@ abstract class AbstractSidechainApp
 
   log.info(s"Starting application with settings \n$sidechainSettings")
 
-  protected val metricsManager = MetricsManager.init();
+  protected val metricsManager = MetricsManager.init(timeProvider);
 
   override implicit def exceptionHandler: ExceptionHandler = SidechainApiErrorHandler.exceptionHandler
 

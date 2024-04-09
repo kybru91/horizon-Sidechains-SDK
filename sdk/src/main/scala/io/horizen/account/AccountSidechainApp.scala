@@ -167,7 +167,6 @@ class AccountSidechainApp @Inject()
       nodeViewHolderRef,
       networkControllerRef,
       settings.restApi.timeout,
-      timeProvider,
       params,
       sidechainSettings.ethService,
       sidechainSettings.sparkzSettings.network.maxIncomingConnections,

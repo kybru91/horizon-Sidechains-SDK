@@ -32,7 +32,6 @@ import io.horizen.utils.{ByteArrayWrapper, ClosableResourceHandler, DynamicTyped
 import io.horizen.vrf.VrfOutput
 import sparkz.core.NodeViewModifier
 import sparkz.core.block.Block.{BlockId, Timestamp}
-import sparkz.core.utils.NetworkTimeProvider
 import sparkz.util.{ModifierId, bytesToId}
 
 import java.math.BigInteger
@@ -45,13 +44,11 @@ import scala.util.{Failure, Success, Try}
 class AccountForgeMessageBuilder(
     mainchainSynchronizer: MainchainSynchronizer,
     companion: SidechainAccountTransactionsCompanion,
-    timeProvider: NetworkTimeProvider,
     params: NetworkParams,
     allowNoWebsocketConnectionInRegtest: Boolean
 ) extends AbstractForgeMessageBuilder[SidechainTypes#SCAT, AccountBlockHeader, AccountBlock](
       mainchainSynchronizer,
       companion,
-      timeProvider,
       params,
       allowNoWebsocketConnectionInRegtest
     )

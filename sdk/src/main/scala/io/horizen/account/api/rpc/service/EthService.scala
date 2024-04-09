@@ -43,7 +43,6 @@ import sparkz.core.NodeViewHolder.CurrentView
 import sparkz.core.consensus.ModifierSemanticValidity
 import sparkz.core.network.ConnectedPeer
 import sparkz.core.network.NetworkController.ReceivableMessages.GetConnectedPeers
-import sparkz.core.utils.NetworkTimeProvider
 import sparkz.core.{NodeViewHolder, bytesToId, idToBytes}
 import sparkz.crypto.hash.Keccak256
 import sparkz.util.{ModifierId, SparkzLogging}
@@ -66,7 +65,6 @@ class EthService(
     scNodeViewHolderRef: ActorRef,
     networkControllerRef: ActorRef,
     nvtimeout: FiniteDuration,
-    timeProvider: NetworkTimeProvider,
     networkParams: NetworkParams,
     settings: EthServiceSettings,
     maxIncomingConnections: Int,
@@ -682,7 +680,7 @@ class EthService(
   }
 
   private def getPendingBlock(nodeView: NV): Option[AccountBlock] = {
-    new AccountForgeMessageBuilder(new MainchainSynchronizer(null), transactionsCompanion, timeProvider, networkParams, false)
+    new AccountForgeMessageBuilder(new MainchainSynchronizer(null), transactionsCompanion, networkParams, false)
       .getPendingBlock(nodeView)
   }
 

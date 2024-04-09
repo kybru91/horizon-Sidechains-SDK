@@ -2,27 +2,26 @@ package io.horizen.account.api.http.route
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
+import com.fasterxml.jackson.annotation.JsonView
 import com.fasterxml.jackson.databind.JsonNode
 import io.horizen.SidechainTypes
-import io.horizen.account.api.http.route.AccountEthRpcRejectionHandler.rejectionHandler
 import io.horizen.account.api.rpc.service.RpcProcessor
 import io.horizen.account.block.{AccountBlock, AccountBlockHeader}
 import io.horizen.account.chain.AccountFeePaymentsInfo
 import io.horizen.account.node.{AccountNodeView, NodeAccountHistory, NodeAccountMemoryPool, NodeAccountState}
 import io.horizen.api.http.JacksonSupport._
-import io.horizen.api.http.SidechainApiResponse
+import io.horizen.api.http.{ApiResponseUtil, SidechainApiResponse, SuccessResponse}
 import io.horizen.api.http.route.SidechainApiRoute
 import io.horizen.node.NodeWalletBase
 import io.horizen.utils.ClosableResourceHandler
-import io.prometheus.metrics.exporter.common.PrometheusScrapeHandler
 import io.prometheus.metrics.expositionformats.ExpositionFormats
 import io.prometheus.metrics.model.registry.PrometheusRegistry
-import io.prometheus.metrics.model.snapshots.MetricSnapshots
 import sparkz.core.api.http.ApiDirectives
 import sparkz.core.settings.RESTApiSettings
 import sparkz.util.SparkzLogging
-
-import java.io.{ByteArrayOutputStream, StringWriter}
+import io.horizen.json.Views
+import io.horizen.metrics.{MetricsHelp, MetricsManager}
+import java.io.ByteArrayOutputStream
 import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
 
@@ -49,14 +48,13 @@ case class AccountMetricsRoute(
 
   override implicit val tag: ClassTag[AccountNodeView] = ClassTag[AccountNodeView](classOf[AccountNodeView])
   override val route: Route = pathPrefix("metrics") {
-    metrics
+    metrics ~ metricsHelp
   }
 
   /**
-   * Returns the success / error response of called rpc method or error if method does not exist
+   * Returns registered metrics
    */
-  def metrics: Route = handleRejections(rejectionHandler) {
-    get {
+  def metrics: Route = get {
           entity(as[JsonNode]) { body =>
             {
               val snapshots = PrometheusRegistry.defaultRegistry.scrape
@@ -65,7 +63,18 @@ case class AccountMetricsRoute(
               SidechainApiResponse(stream.toString, false)
             }
       }
-    }
   }
+
+  def metricsHelp: Route =  (get & path("help")){
+      entity(as[JsonNode]) { body => {
+        ApiResponseUtil.toResponse(MetricsHelpList(MetricsManager.getInstance().getHelp()))
+      }
+      }
+  }
+
+  @JsonView(Array(classOf[Views.Default]))
+  private[horizen] case class MetricsHelpList(helps: java.util.List[MetricsHelp])
+    extends SuccessResponse
+
 
 }

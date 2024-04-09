@@ -26,7 +26,6 @@ import io.horizen.vrf.VrfOutput
 import sparkz.core.NodeViewModifier
 import sparkz.core.block.Block
 import sparkz.core.block.Block.BlockId
-import sparkz.core.utils.TimeProvider
 import sparkz.util.ModifierId
 
 import scala.collection.JavaConverters._
@@ -34,14 +33,13 @@ import scala.util.{Failure, Success, Try}
 
 class ForgeMessageBuilder(mainchainSynchronizer: MainchainSynchronizer,
                           companion: SidechainTransactionsCompanion,
-                          timeProvider: TimeProvider,
                           params: NetworkParams,
                           allowNoWebsocketConnectionInRegtest: Boolean)
   extends AbstractForgeMessageBuilder[
     SidechainTypes#SCBT,
     SidechainBlockHeader,
     SidechainBlock](
-  mainchainSynchronizer, companion, timeProvider, params, allowNoWebsocketConnectionInRegtest
+  mainchainSynchronizer, companion, params, allowNoWebsocketConnectionInRegtest
 ) {
   type FPI = SidechainFeePaymentsInfo
   type HSTOR = SidechainHistoryStorage
