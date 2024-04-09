@@ -398,7 +398,7 @@ class AccountState(
 
   override def getConsensusEpochNumber: Option[ConsensusEpochNumber] = stateMetadataStorage.getConsensusEpochNumber
 
-  override def getOrderedForgingStakesInfoSeq(epochNumber: Int): Seq[ForgingStakeInfo] = using(getView)(_.getOrderedForgingStakesInfoSeq(epochNumber))
+  override def getOrderedForgingStakesInfoSeq(epochNumber: Int): Seq[ForgingStakeInfo] = using(getView)(_.getOrderedForgingStakesInfoSeq(epochNumber, epochNumber))
 
   // Returns lastBlockInEpoch and ConsensusEpochInfo for that epoch
   // TODO this is common code with SidechainState

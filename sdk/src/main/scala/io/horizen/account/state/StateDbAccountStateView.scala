@@ -154,15 +154,14 @@ class StateDbAccountStateView(
     })
   }
 
-  def getOrderedForgingStakesInfoSeq(epochNumber: Int): Seq[ForgingStakeInfo] = {
-    val isForkV1_4Active = Version1_4_0Fork.get(epochNumber).active
-    val minStakeFilter: ForgingStakeInfo => Boolean = if (isForkV1_4Active) {
+  def getOrderedForgingStakesInfoSeq(epochNumber: Int, stakeEpochNumber: Int): Seq[ForgingStakeInfo] = {
+    val minStakeFilter: ForgingStakeInfo => Boolean = if (Version1_4_0Fork.get(stakeEpochNumber).active) {
       fsi => fsi.stakeAmount >= minForgerStake
     } else {
       _ => true
     }
 
-    if (isForkV1_4Active && forgerStakesV2Provider.isActive(this)) {
+    if (Version1_4_0Fork.get(epochNumber).active && forgerStakesV2Provider.isActive(this)) {
       // V2 Stake storage provides stakes per forger
       forgerStakesV2Provider.getForgingStakes(this)
     } else {
