@@ -48,7 +48,7 @@ case class AccountMetricsRoute(
 
   override implicit val tag: ClassTag[AccountNodeView] = ClassTag[AccountNodeView](classOf[AccountNodeView])
   override val route: Route = pathPrefix("metrics") {
-    metrics ~ metricsHelp
+     metricsHelp ~ metrics
   }
 
   /**
@@ -57,6 +57,7 @@ case class AccountMetricsRoute(
   def metrics: Route = get {
           entity(as[JsonNode]) { body =>
             {
+              System.out.println("aaaaaaaaaa1")
               val snapshots = PrometheusRegistry.defaultRegistry.scrape
               val stream = new ByteArrayOutputStream
               ExpositionFormats.init.getPrometheusTextFormatWriter.write(stream, snapshots)
@@ -65,11 +66,11 @@ case class AccountMetricsRoute(
       }
   }
 
-  def metricsHelp: Route =  (get & path("help")){
-      entity(as[JsonNode]) { body => {
-        ApiResponseUtil.toResponse(MetricsHelpList(MetricsManager.getInstance().getHelp()))
-      }
-      }
+  def metricsHelp: Route = (get & path("help")) {
+    entity(as[JsonNode]) { body =>
+      System.out.println("aaaaaaaaaa2")
+      ApiResponseUtil.toResponse(MetricsHelpList(MetricsManager.getInstance().getHelp()))
+    }
   }
 
   @JsonView(Array(classOf[Views.Default]))
