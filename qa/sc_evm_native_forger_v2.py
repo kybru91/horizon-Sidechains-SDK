@@ -132,25 +132,25 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         orig_stake_list = sc_node_1.transaction_allForgingStakes()["result"]['stakes']
         assert_equal(9, len(orig_stake_list))
 
-        exp_stake_own_1 = []
-        exp_stake_own_2 = []
-        exp_stake_own_3 = []
-        exp_stake_own_4 = []
-        exp_stake_own_5 = []
-        genesis_stake = None
+        exp_stake_own_1 = 0
+        exp_stake_own_2 = 0
+        exp_stake_own_3 = 0
+        exp_stake_own_4 = 0
+        exp_stake_own_5 = 0
+        genesis_stake = 0
         for stake in orig_stake_list:
             if stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_1:
-                exp_stake_own_1.append(stake)
+                exp_stake_own_1 += stake['forgerStakeData']['stakedAmount']
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_2:
-                exp_stake_own_2.append(stake)
+                exp_stake_own_2 += stake['forgerStakeData']['stakedAmount']
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_3:
-                exp_stake_own_3.append(stake)
+                exp_stake_own_3 += stake['forgerStakeData']['stakedAmount']
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_4:
-                exp_stake_own_4.append(stake)
+                exp_stake_own_4 += stake['forgerStakeData']['stakedAmount']
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_5:
-                exp_stake_own_5.append(stake)
+                exp_stake_own_5 += stake['forgerStakeData']['stakedAmount']
             else:
-                genesis_stake = stake
+                genesis_stake   += stake['forgerStakeData']['stakedAmount']
 
         exp_total_stake_own_1 = sum_stakes(exp_stake_own_1)
         exp_total_stake_own_2 = sum_stakes(exp_stake_own_2)
@@ -274,8 +274,24 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             encode_hex(event_signature_to_log_topic('ActivateStakeV2()')))
         assert_equal(event_signature, event_id, "Wrong event signature in topics")
 
-        # TODO here we should check if the stakes are correct. At the moment no method is implemented that allows to
         # retrieve the stakes from the Forger Stake V2
+        stakeList_node1 = sc_node_1.transaction_allForgingStakes()["result"]['stakes']
+        stakeList_node2 = sc_node_2.transaction_allForgingStakes()["result"]['stakes']
+        assert_equal(stakeList_node1, stakeList_node2, "Forging stakes are different on 2 nodes")
+
+        for stake in stakeList_node1:
+            if stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_1:
+                assert_equal(exp_stake_own_1, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_2:
+                assert_equal(exp_stake_own_2, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_3:
+                assert_equal(exp_stake_own_3, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_4:
+                assert_equal(exp_stake_own_4, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_5:
+                assert_equal(exp_stake_own_5, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            else:
+                assert_equal(genesis_stake, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
 
         # Check the balance of the 2 smart contracts
         assert_equal(0, rpc_get_balance(sc_node_1, FORGER_STAKE_SMART_CONTRACT_ADDRESS))
@@ -303,6 +319,8 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             print("Expected exception thrown: {}".format(err))
             # error is raised from API since the address has no balance
             assert_true("Method is disabled" in str(err))
+
+        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
 
         ################################
         # Delegate

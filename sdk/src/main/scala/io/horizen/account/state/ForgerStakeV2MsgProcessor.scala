@@ -6,6 +6,7 @@ import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, WithdrawForgerStake}
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
+import io.horizen.consensus.ForgingStakeInfo
 import io.horizen.evm.Address
 import io.horizen.utils.BytesUtils
 import sparkz.crypto.hash.Keccak256
@@ -15,6 +16,10 @@ import java.math.BigInteger
 trait ForgerStakesV2Provider {
   private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
   private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
+  private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse
+  private[horizen] def getListOfForgersStakes(view: BaseAccountStateView): Seq[ForgerStakeData]
+  private[horizen] def getForgingStakes(view: BaseAccountStateView): Seq[ForgingStakeInfo]
+  private[horizen] def isActive(view: BaseAccountStateView): Boolean
 }
 
 object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with ForgerStakesV2Provider {
@@ -24,7 +29,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   override def isForkActive(consensusEpochNumber: Int): Boolean = {
     Version1_4_0Fork.get(consensusEpochNumber).active
   }
-  
+
   override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
     if (!Version1_4_0Fork.get(context.blockContext.consensusEpochNumber).active)
       throw new ExecutionRevertedException(s"fork not active")
@@ -34,13 +39,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
         doDelegateCmd(invocation, gasView, context)
       case WithdrawCmd =>
         doWithdrawCmd(invocation, gasView, context)
-      case StakeTotalCmd  =>
-        doStakeTotalCmd(invocation, gasView, context.msg)
-      case GetPagedForgersStakesByForgerCmd  =>
+      case StakeTotalCmd =>
+        doStakeTotalCmd(invocation, gasView, context.blockContext.consensusEpochNumber)
+      case GetPagedForgersStakesByForgerCmd =>
         doPagedForgersStakesByForgerCmd(invocation, gasView, context.msg)
-      case GetPagedForgersStakesByDelegatorCmd  =>
+      case GetPagedForgersStakesByDelegatorCmd =>
         doPagedForgersStakesByDelegatorCmd(invocation, gasView, context.msg)
-      case ActivateCmd  =>
+      case ActivateCmd =>
         doActivateCmd(invocation, view, context) // That shouldn't consume gas, so it doesn't use gasView
       case opCodeHex => throw new ExecutionRevertedException(s"op code not supported: $opCodeHex")
     }
@@ -121,14 +126,33 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     }
   }
 
-  def doStakeTotalCmd(invocation: Invocation, gasView: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doStakeTotalCmd(invocation: Invocation, view: BaseAccountStateView, currentEpoch: Int): Array[Byte] = {
+    requireIsNotPayable(invocation)
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new ExecutionRevertedException(msgStr)
+    }
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = StakeTotalCmdInputDecoder.decode(inputParams)
-    log.info(s"stakeTotal called - ${cmdInput.forgerPublicKeys} ${cmdInput.delegator} epochStart: ${cmdInput.consensusEpochStart} - maxNumOfEpoch: ${cmdInput.maxNumOfEpoch}")
 
-    //TODO: add logic and return data
+    val forgerKeys = cmdInput.forgerPublicKeys
+    val delegator = cmdInput.delegator
+    val consensusEpochStart = if (cmdInput.consensusEpochStart.isEmpty) currentEpoch else cmdInput.consensusEpochStart.get
+    val maxNumOfEpoch = cmdInput.maxNumOfEpoch
+    log.info(s"stakeTotal called - $forgerKeys $delegator epochStart: $consensusEpochStart - maxNumOfEpoch: $maxNumOfEpoch")
 
-    Array.emptyByteArray
+    if (forgerKeys.isEmpty && delegator.isDefined) {
+      val msgStr = s"Illegal argument - delegator is defined while forger keys are not"
+      throw new ExecutionRevertedException(msgStr)
+    }
+    val consensusEpochEnd =
+      if (maxNumOfEpoch.isEmpty) consensusEpochStart
+      else if (consensusEpochStart + maxNumOfEpoch.get > currentEpoch) currentEpoch
+      else consensusEpochStart + maxNumOfEpoch.get - 1
+
+    val response: StakeTotalCmdOutput = StakeStorage.getStakeTotal(view, forgerKeys, delegator, consensusEpochStart, consensusEpochEnd)
+
+    response.encode()
   }
 
   def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
@@ -238,4 +262,18 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
     GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH
   )
+
+  override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
+    StakeStorage.getPagedListOfForgers(view, startPos, pageSize)
+  }
+
+  override private[horizen] def getListOfForgersStakes(view: BaseAccountStateView): Seq[ForgerStakeData] = {
+    StakeStorage.getAllForgerStakes(view)
+  }
+
+  override private[horizen] def getForgingStakes(view: BaseAccountStateView): Seq[ForgingStakeInfo] = {
+    StakeStorage.getForgingStakes(view)
+  }
+
+  override private[horizen] def isActive(view: BaseAccountStateView): Boolean = StakeStorage.isActive(view)
 }
