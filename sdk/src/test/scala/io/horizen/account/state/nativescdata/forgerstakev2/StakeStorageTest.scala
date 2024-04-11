@@ -1,5 +1,6 @@
 package io.horizen.account.state.nativescdata.forgerstakev2
 
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage._
@@ -245,7 +246,7 @@ class StakeStorageTest
 
       val pageSize = 11
       var continue = true
-      var listOfResults = Seq.empty[ForgerDetails]
+      var listOfResults = Seq.empty[ForgerInfo]
       var startPos = 0
 
       while (continue) {

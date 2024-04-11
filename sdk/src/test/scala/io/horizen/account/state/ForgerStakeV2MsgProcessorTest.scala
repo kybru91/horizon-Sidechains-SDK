@@ -3,9 +3,10 @@ package io.horizen.account.state
 import com.google.common.primitives.Bytes
 import io.horizen.account.fork.GasFeeFork.DefaultGasFeeFork
 import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
+import io.horizen.account.network.{ForgerInfo, GetForgerOutputDecoder, PagedForgersOutputDecoder}
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.{PrivateKeySecp256k1, PrivateKeySecp256k1Creator}
-import io.horizen.account.state.ForgerStakeMsgProcessor.{AddNewStakeCmd => AddNewStakeCmdV1, GetListOfForgersCmd => GetListOfForgersCmdV1}
+import io.horizen.account.state.ForgerStakeMsgProcessor.{GetPagedForgersStakesOfUserCmd, AddNewStakeCmd => AddNewStakeCmdV1, GetListOfForgersCmd => GetListOfForgersCmdV1}
 import io.horizen.account.state.ForgerStakeV2MsgProcessor._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage._
 import io.horizen.account.state.nativescdata.forgerstakev2._
@@ -30,6 +31,7 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Optional
+import scala.annotation.tailrec
 import scala.collection.JavaConverters.seqAsJavaListConverter
 import scala.language.implicitConversions
 
@@ -669,6 +671,284 @@ class ForgerStakeV2MsgProcessorTest
       assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas))
     }
   }
+
+  @Test
+  def testGetForgers(): Unit = {
+
+    val processors = Seq(forgerStakeV2MessageProcessor, forgerStakeMessageProcessor)
+
+    usingView(processors) { view =>
+      forgerStakeMessageProcessor.init(view, V1_3_MOCK_FORK_POINT)
+      forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
+
+      // create sender account with some fund in it
+      val initialAmount = BigInteger.valueOf(100).multiply(validWeiAmount)
+      createSenderAccount(view, initialAmount)
+
+      //Setting the context
+
+      val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
+      val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Before activate tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      // Check that getForger and getPagedForgers cannot be called before activate
+
+      var getForgerCmdInput = GetForgerCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
+      )
+
+      var getForgerData: Array[Byte] = BytesUtils.fromHexString(GetForgerCmd) ++ getForgerCmdInput.encode()
+      var msg = getMessage(contractAddress, BigInteger.ZERO,  getForgerData, randomNonce)
+
+
+      var exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+
+      var expectedErr = "Forger stake V2 has not been activated yet"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      var getPagedForgersCmdInput = PagedForgersCmdInput(
+        0, 100
+      )
+
+      var getPagedForgersData: Array[Byte] = BytesUtils.fromHexString(GetPagedForgersCmd) ++ getPagedForgersCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO,  getPagedForgersData, randomNonce)
+
+
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+
+      // Call activate
+
+      val initialOwnerBalance = BigInteger.valueOf(200).multiply(validWeiAmount)
+      createSenderAccount(view, initialOwnerBalance, ownerAddressProposition.address())
+
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(ActivateCmd), randomNonce, ownerAddressProposition.address())
+
+      assertGasInterop(0, msg, view, processors, blockContextForkV1_4)
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      // Try getForger for a non-existing forger. It should fail.
+      msg = getMessage(contractAddress, BigInteger.ZERO,  getForgerData, randomNonce)
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "Forger doesn't exist."
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Try getPagedForgers without any forger. It should return an empty list
+      msg = getMessage(contractAddress, BigInteger.ZERO,  getPagedForgersData, randomNonce)
+      var res = assertGas(4200, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+
+      var getForgersOutput = PagedForgersOutputDecoder.decode(res)
+      assertEquals(-1, getForgersOutput.nextStartPos)
+      assertTrue(getForgersOutput.listOfForgerInfo.isEmpty)
+
+      // Register a forger
+      val initialStake = new BigInteger("1000000000000")
+
+      StakeStorage.addForger(view, blockSignerProposition, vrfPublicKey,
+        0, Address.ZERO, blockContextForkV1_4.consensusEpochNumber, ownerAddressProposition.address(), initialStake)
+
+
+      // Try getForger
+      msg = getMessage(contractAddress, BigInteger.ZERO,  getForgerData, randomNonce)
+      res = assertGas(10600, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+
+      var getForgerOutput = GetForgerOutputDecoder.decode(res)
+      assertEquals(getForgerCmdInput.forgerPublicKeys, getForgerOutput.forgerPublicKeys)
+      assertEquals(0, getForgerOutput.rewardShare)
+      assertEquals(Address.ZERO, getForgerOutput.rewardAddress.address())
+
+      // Try getPagedForgers
+      msg = getMessage(contractAddress, BigInteger.ZERO,  getPagedForgersData, randomNonce)
+      res = assertGas(14700, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+
+      getForgersOutput = PagedForgersOutputDecoder.decode(res)
+      assertEquals(-1, getForgersOutput.nextStartPos)
+      assertEquals(1, getForgersOutput.listOfForgerInfo.size)
+      assertEquals(getForgerCmdInput.forgerPublicKeys, getForgersOutput.listOfForgerInfo.head.forgerPublicKeys)
+      assertEquals(0, getForgersOutput.listOfForgerInfo.head.rewardShare)
+      assertEquals(Address.ZERO, getForgersOutput.listOfForgerInfo.head.rewardAddress.address())
+
+      // Register more forgers, with a reward address
+
+      // add the initial forger to the expected forgers
+      var listOfExpectedForgers = getForgersOutput.listOfForgerInfo ++ (1 to 100).map {idx =>
+
+        val postfix = f"$idx%03d"
+        val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString(s"1122334455667788112233445566778811223344556677881122334455667$postfix")) // 32 bytes
+        val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString(s"d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1$postfix")) // 33 bytes
+
+        val privateKey1: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret(s"nativemsgprocessortest$postfix".getBytes(StandardCharsets.UTF_8))
+        val rewardAddress: AddressProposition = privateKey1.publicImage()
+        val rewardShare = 1000 - idx
+
+        StakeStorage.addForger(view, blockSignerProposition, vrfPublicKey,
+          rewardShare, rewardAddress.address(), blockContextForkV1_4.consensusEpochNumber, ownerAddressProposition.address(), initialStake)
+        ForgerInfo(ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, rewardAddress)
+      }
+
+     // Try getForger
+      listOfExpectedForgers.foreach { expForgerInfo =>
+        getForgerCmdInput = GetForgerCmdInput(expForgerInfo.forgerPublicKeys)
+        getForgerData = BytesUtils.fromHexString(GetForgerCmd) ++ getForgerCmdInput.encode()
+        msg = getMessage(contractAddress, BigInteger.ZERO, getForgerData, randomNonce)
+        res = assertGas(10600, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+
+        getForgerOutput = GetForgerOutputDecoder.decode(res)
+        assertEquals(expForgerInfo, getForgerOutput)
+      }
+
+      // Try getPagedForgers
+
+      @tailrec
+      def checkPagedResult(listOfExpectedForgers: Seq[ForgerInfo], startPos: Int, pageSize: Int): Unit = {
+        val (currentPage, remaining) = listOfExpectedForgers.splitAt(pageSize)
+        if (listOfExpectedForgers.size < pageSize)
+          assertTrue(remaining.isEmpty)
+        else
+          assertEquals(listOfExpectedForgers.size - pageSize, remaining.size)
+
+        val cmdInput = PagedForgersCmdInput(
+          startPos,
+          pageSize
+        )
+        val msg = getMessage(
+          contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
+        val returnData = withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        //Check getPagedForgers
+        val res = PagedForgersOutputDecoder.decode(returnData)
+        assertEquals(currentPage, res.listOfForgerInfo)
+        if (remaining.isEmpty)
+          assertEquals(-1, res.nextStartPos)
+        else {
+          checkPagedResult(remaining, res.nextStartPos, pageSize)
+        }
+
+      }
+
+      checkPagedResult(listOfExpectedForgers, 0, listOfExpectedForgers.size + 10)
+      checkPagedResult(listOfExpectedForgers, 0, listOfExpectedForgers.size)
+      checkPagedResult(listOfExpectedForgers, 0, listOfExpectedForgers.size - 1)
+      checkPagedResult(listOfExpectedForgers, 0, 13)
+
+      var startPos = 3
+      checkPagedResult(listOfExpectedForgers.drop(startPos), startPos, 5)
+
+      startPos = listOfExpectedForgers.size - 1
+      checkPagedResult(listOfExpectedForgers.drop(startPos), startPos, 1)
+
+
+      ////////////////////////////////////////////////////////////
+      // Negative tests
+      //////////////////////////////////////////////////////////
+
+      // Check that it is not payable
+      msg = getMessage(contractAddress, validWeiAmount, getForgerData, randomNonce)
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "Call value must be zero"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+
+      msg = getMessage(contractAddress, validWeiAmount, getPagedForgersData, randomNonce)
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "Call value must be zero"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+
+      // try processing a msg with a trailing byte in the arguments
+      var badData = Bytes.concat(getForgerData, new Array[Byte](1))
+      var msgBad = getMessage(contractAddress, BigInteger.ZERO, badData, randomNonce)
+
+      // should fail because input has a trailing byte
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "Wrong message data field length"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      badData = Bytes.concat(getPagedForgersData, new Array[Byte](1))
+      msgBad = getMessage(contractAddress, BigInteger.ZERO, badData, randomNonce)
+
+      // should fail because input has a trailing byte
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+      }
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Try getPagedForgers with invalid input
+
+      var cmdInput = PagedForgersCmdInput(
+        -1,
+        10
+      )
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
+      var exc2 = intercept[IllegalArgumentException] {
+        assertGasInterop(2100, msg, view, processors, blockContextForkV1_4)
+      }
+      expectedErr = "Invalid startPos input"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+
+
+      cmdInput = PagedForgersCmdInput(
+        listOfExpectedForgers.size,
+        10
+      )
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
+      exc2 = intercept[IllegalArgumentException] {
+        assertGasInterop(4200, msg, view, processors, blockContextForkV1_4)
+      }
+      expectedErr = "Invalid start position"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+
+
+      cmdInput = PagedForgersCmdInput(
+        0,
+        -1
+      )
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
+      exc2 = intercept[IllegalArgumentException] {
+        assertGasInterop(2100, msg, view, processors, blockContextForkV1_4)
+      }
+      expectedErr = "Invalid page size"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+
+      cmdInput = PagedForgersCmdInput(
+        0,
+        0
+      )
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
+      exc2 = intercept[IllegalArgumentException] {
+        assertGasInterop(2100, msg, view, processors, blockContextForkV1_4)
+      }
+      expectedErr = "Invalid page size"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+
+    }
+
+  }
+
 
 
   def checkActivateEvents(listOfLogs: Array[EthereumConsensusDataLog]): Unit = {

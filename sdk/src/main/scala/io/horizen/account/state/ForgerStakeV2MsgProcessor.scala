@@ -2,6 +2,7 @@ package io.horizen.account.state
 
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
+import io.horizen.account.network.PagedForgersOutput
 import io.horizen.account.state.events.ActivateStakeV2
 import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
@@ -9,6 +10,7 @@ import io.horizen.consensus.ForgingStakeInfo
 import io.horizen.evm.Address
 import io.horizen.utils.BytesUtils
 import sparkz.crypto.hash.Keccak256
+
 import java.math.BigInteger
 
 trait ForgerStakesV2Provider {
@@ -45,6 +47,10 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
         doPagedForgersStakesByDelegatorCmd(invocation, gasView, context.msg)
       case ActivateCmd =>
         doActivateCmd(invocation, view, context) // That shouldn't consume gas, so it doesn't use gasView
+      case GetPagedForgersCmd =>
+        doGetPagedForgersCmd(invocation, gasView)
+      case GetForgerCmd =>
+        doGetForgerCmd(invocation, gasView)
       case opCodeHex => throw new ExecutionRevertedException(s"op code not supported: $opCodeHex")
     }
   }
@@ -122,6 +128,37 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
   }
 
+  def doGetForgerCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 has not been activated yet"
+      throw new ExecutionRevertedException(msgStr)
+    }
+    requireIsNotPayable(invocation)
+
+    val inputParams = getArgumentsFromData(invocation.input)
+    val cmdInput = GetForgerCmdInputDecoder.decode(inputParams)
+
+    val forgerOpt = StakeStorage.getForger(view, cmdInput.forgerPublicKeys.blockSignPublicKey, cmdInput.forgerPublicKeys.vrfPublicKey)
+    if (forgerOpt.isEmpty)
+      throw new ExecutionRevertedException("Forger doesn't exist.")
+
+    forgerOpt.get.encode()
+  }
+
+  def doGetPagedForgersCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
+
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 has not been activated yet"
+      throw new ExecutionRevertedException(msgStr)
+    }
+    requireIsNotPayable(invocation)
+
+    val inputParams = getArgumentsFromData(invocation.input)
+    val PagedForgersCmdInput(startPos, pageSize) = PagedForgersCmdInputDecoder.decode(inputParams)
+
+    val res = StakeStorage.getPagedListOfForgers(view, startPos, pageSize)
+    PagedForgersOutput(res.nextStartPos, res.forgers).encode()
+  }
 
   def doActivateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
@@ -188,18 +225,22 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
   val StakeTotalCmd: String = getABIMethodId("stakeTotal(bytes32,bytes32,bytes1,address,uint32,uint32)")
-  val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)");
-  val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)");
-  val ActivateCmd: String = getABIMethodId("activate()");
+  val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)")
+  val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)")
+  val ActivateCmd: String = getABIMethodId("activate()")
+  val GetForgerCmd: String = getABIMethodId("getForger(bytes32,bytes32,bytes1)")
+  val GetPagedForgersCmd: String = getABIMethodId("getPagedForgers(int32,int32)")
 
   // ensure we have strings consistent with size of opcode
   require(
-    DelegateCmd.length == 2 * METHOD_ID_LENGTH &&
-    WithdrawCmd.length == 2 * METHOD_ID_LENGTH &&
-    StakeTotalCmd.length == 2 * METHOD_ID_LENGTH &&
-    ActivateCmd.length == 2 * METHOD_ID_LENGTH &&
-    GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
-    GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH
+      DelegateCmd.length == 2 * METHOD_ID_LENGTH &&
+      WithdrawCmd.length == 2 * METHOD_ID_LENGTH &&
+      StakeTotalCmd.length == 2 * METHOD_ID_LENGTH &&
+      ActivateCmd.length == 2 * METHOD_ID_LENGTH &&
+      GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
+      GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH &&
+      GetForgerCmd.length == 2 * METHOD_ID_LENGTH &&
+      GetPagedForgersCmd.length == 2 * METHOD_ID_LENGTH
   )
 
   override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
