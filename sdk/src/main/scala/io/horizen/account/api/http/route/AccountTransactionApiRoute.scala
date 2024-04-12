@@ -566,7 +566,6 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     }
   }
 
-
   def registerForger: Route = (post & path("registerForger")) {
     withBasicAuth {
       _ => {
@@ -637,12 +636,14 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     }
   }
 
+
   def pagedForgersStakesByForger: Route = (post & path("pagedForgersStakesByForger")) {
     withBasicAuth {
       _ => {
         entity(as[ReqPagedForgerStakesByForger]) { body =>
           withNodeView { sidechainNodeView =>
             val accountState = sidechainNodeView.getNodeState
+
             Try {
               accountState.getPagedForgersStakesByForger(body.forger, body.startPos, body.size)
             } match {

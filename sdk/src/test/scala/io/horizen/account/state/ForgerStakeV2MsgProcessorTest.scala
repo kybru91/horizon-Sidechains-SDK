@@ -46,7 +46,7 @@ class ForgerStakeV2MsgProcessorTest
   val validWeiAmount: BigInteger = new BigInteger("10000000000")
 
   val mockNetworkParams: NetworkParams = mock[NetworkParams]
-  val forgerStakeV2MessageProcessor: ForgerStakeV2MsgProcessor = ForgerStakeV2MsgProcessor()
+  val forgerStakeV2MessageProcessor: ForgerStakeV2MsgProcessor.type = ForgerStakeV2MsgProcessor
   val forgerStakeMessageProcessor: ForgerStakeMsgProcessor = ForgerStakeMsgProcessor(mockNetworkParams)
 
   /** short hand: forger state native contract address */

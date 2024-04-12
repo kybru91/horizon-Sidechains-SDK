@@ -16,7 +16,6 @@ import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
 import org.web3j.crypto.Keys
 import sparkz.crypto.hash.Keccak256
-
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
@@ -25,7 +24,8 @@ trait ForgerStakesV2Provider {
   private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
 }
 
-case class ForgerStakeV2MsgProcessor() extends NativeSmartContractWithFork with ForgerStakesV2Provider {
+
+object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with ForgerStakesV2Provider {
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
 
@@ -260,9 +260,6 @@ case class ForgerStakeV2MsgProcessor() extends NativeSmartContractWithFork with 
       s"total stake amount $totalMigratedStakeAmount")
     Array.emptyByteArray
   }
-}
-
-object ForgerStakeV2MsgProcessor {
 
   val MAX_REWARD_SHARE = 1000
   val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = BigInteger.TEN.pow(18).multiply(BigInteger.TEN) // 10 Zen
