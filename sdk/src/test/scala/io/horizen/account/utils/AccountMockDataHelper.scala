@@ -380,6 +380,8 @@ case class AccountMockDataHelper(genesis: Boolean)
         msgProcessors.find(_.isInstanceOf[WithdrawalRequestProvider]).get.asInstanceOf[WithdrawalRequestProvider]
       override lazy val forgerStakesProvider: ForgerStakesProvider =
         msgProcessors.find(_.isInstanceOf[ForgerStakesProvider]).get.asInstanceOf[ForgerStakesProvider]
+      override lazy val forgerStakesV2Provider: ForgerStakesV2Provider =
+        msgProcessors.find(_.isInstanceOf[ForgerStakesV2Provider]).get.asInstanceOf[ForgerStakesV2Provider]
 
       override def getProof(address: Address, keys: Array[Array[Byte]], stateRoot: Hash): ProofAccountResult = {
         new ProofAccountResult(

@@ -688,7 +688,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     withNodeView { sidechainNodeView =>
       val accountState = sidechainNodeView.getNodeState
       val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-      val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active)
+      val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active, Version1_4_0Fork.get(epochNumber).active)
       ApiResponseUtil.toResponse(RespForgerStakes(listOfForgerStakes.toList))
     }
   }
@@ -722,7 +722,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         withNodeView { sidechainNodeView =>
           val accountState = sidechainNodeView.getNodeState
           val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-          val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active)
+          val listOfForgerStakes = accountState.getListOfForgersStakes(Version1_3_0Fork.get(epochNumber).active, Version1_4_0Fork.get(epochNumber).active)
           if (listOfForgerStakes.nonEmpty) {
             val wallet = sidechainNodeView.getNodeWallet
             val walletPubKeys = wallet.allSecrets().map(_.publicImage).toSeq

@@ -6,7 +6,7 @@ import io.horizen.account.block.AccountBlock
 import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork}
 import io.horizen.account.history.validation.InvalidTransactionChainIdException
 import io.horizen.account.node.NodeAccountState
-import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse, StakeDataDelegator, StakeDataForger}
+import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumReceipt}
 import io.horizen.account.storage.AccountStateMetadataStorage
 import io.horizen.account.transaction.EthereumTransaction
@@ -20,7 +20,6 @@ import io.horizen.evm._
 import io.horizen.params.NetworkParams
 import io.horizen.state.State
 import io.horizen.utils.{ByteArrayWrapper, BytesUtils, ClosableResourceHandler, MerkleTree, TimeToEpochUtils, WithdrawalEpochInfo, WithdrawalEpochUtils}
-import io.horizen.transaction.exception.TransactionSemanticValidityException
 import sparkz.core._
 import sparkz.core.transaction.state.TransactionValidation
 import sparkz.core.utils.NetworkTimeProvider
@@ -431,7 +430,7 @@ class AccountState(
 
   override def getNonce(address: Address): BigInteger = using(getView)(_.getNonce(address))
 
-  override def getListOfForgersStakes(isForkV1_3Active: Boolean): Seq[AccountForgingStakeInfo] = using(getView)(_.getListOfForgersStakes(isForkV1_3Active))
+  override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = using(getView)(_.getListOfForgersStakes(isForkV1_3Active, isForkV1_4Active))
 
   override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) = using(getView)(_.getPagedListOfForgersStakes(startPos, pageSize))
 
