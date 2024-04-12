@@ -184,7 +184,6 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
                                          evm_address_sc_node_1, method, value=convertZenToZennies(2))
 
-        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
         self.sc_sync_all()
         tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')

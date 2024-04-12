@@ -451,7 +451,7 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
     requireIsNotPayable(invocation)
     checkInputDoesntContainParams(invocation.input)
     if (WellKnownAddresses.FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS != invocation.caller ||
-      !view.getCodeHash(invocation.caller).sameElements(contractCodeHash))
+      !view.getCodeHash(invocation.caller).sameElements(ForgerStakeV2MsgProcessor.contractCodeHash))
       throw new ExecutionRevertedException("Authorization failed")
 
     ForgerStakeStorage.setDisabled(view)

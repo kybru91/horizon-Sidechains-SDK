@@ -2,13 +2,14 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.state.ForgerPublicKeys
+import io.horizen.account.state.nativescdata.forgerstakev2.DelegateCmdInputDecoder.vrfPublicKeyToAbi
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.PublicKey25519Proposition
 import io.horizen.utils.Ed25519
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.{StaticStruct, Type, Address => AbiAddress}
-import org.web3j.abi.datatypes.generated.{Bytes1, Bytes32, Int32, Uint32}
+import org.web3j.abi.datatypes.generated.{Bytes1, Bytes32, Uint32}
 
 import java.util
 
@@ -57,7 +58,7 @@ case class RegisterForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, rewardShar
   override def asABIType(): StaticStruct = {
     val listOfParams: util.List[Type[_]] = new util.ArrayList()
 
-    val vrfPublicKeyBytes = ForgerPublicKeys.vrfPublicKeyToAbi(forgerPublicKeys.vrfPublicKey.pubKeyBytes())
+    val vrfPublicKeyBytes = vrfPublicKeyToAbi(forgerPublicKeys.vrfPublicKey.pubKeyBytes())
     val sign1Bytes = signature25519.bytes
     val sign2Bytes = signatureVrf.bytes
 

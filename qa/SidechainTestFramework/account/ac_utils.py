@@ -295,6 +295,24 @@ def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount
 
     return sc_node.transaction_registerForger(json.dumps(parameters))
 
+def ac_pagedForgersStakesByForger(sc_node, block_sign_pub_key, vrf_public_key, start_pos=0, size=10):
+    parameters = {
+        "blockSignPubKey": block_sign_pub_key,
+        "vrfPubKey": vrf_public_key,
+        "startPos": start_pos,
+        "size": size
+    }
+    return sc_node.transaction_pagedForgersStakesByForger(json.dumps(parameters))
+
+
+def ac_pagedForgersStakesByDelegator(sc_node, delegator_address, start_pos=0, size=10):
+    parameters = {
+        "delegatorAddress": delegator_address,
+        "startPos": start_pos,
+        "size": size
+    }
+    return sc_node.transaction_pagedForgersStakesByDelegator(json.dumps(parameters))
+
 
 def ac_invokeProxy(sc_node, contract_address, data, nonce=None, static=False):
     params = {

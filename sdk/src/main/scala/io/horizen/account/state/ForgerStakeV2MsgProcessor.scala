@@ -7,15 +7,15 @@ import io.horizen.account.state.events.ActivateStakeV2
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger}
 import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
-import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
-import io.horizen.consensus.generateHashAndCleanUp
-import io.horizen.consensus.ForgingStakeInfo
+import io.horizen.account.utils.ZenWeiConverter.{convertZenniesToWei, isValidZenAmount}
+import io.horizen.consensus.{ForgingStakeInfo, generateHashAndCleanUp, minForgerStake}
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
 import org.web3j.crypto.Keys
 import sparkz.crypto.hash.Keccak256
+
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
@@ -78,6 +78,10 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   def doRegisterForger(invocation: Invocation, gasView: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
     log.info(s"register forger called")
+    if (!StakeStorage.isActive(gasView)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new ExecutionRevertedException(msgStr)
+    }
 
     val stakedAmount = invocation.value
 
@@ -194,6 +198,11 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
+    requireIsNotPayable(invocation)
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new ExecutionRevertedException(msgStr)
+    }
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
     log.debug(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
@@ -203,6 +212,12 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
+    requireIsNotPayable(invocation)
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new ExecutionRevertedException(msgStr)
+    }
+
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
     log.debug(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
@@ -284,8 +299,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   val MAX_REWARD_SHARE = 1000
-  val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = BigInteger.TEN.pow(18).multiply(BigInteger.TEN) // 10 Zen
-
+  val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = convertZenniesToWei(minForgerStake) // 10 Zen
 
   val RegisterForgerCmd: String = getABIMethodId("registerForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)")
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
@@ -308,11 +322,10 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String): Array[Byte] = {
     val messageToSignString = blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address)
-
     val chunks = messageToSignString.getBytes(StandardCharsets.UTF_8).grouped(Constants.FIELD_ELEMENT_LENGTH - 1).toArray
-
     generateHashAndCleanUp(chunks: _*)
   }
+
   override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
     StakeStorage.getPagedListOfForgers(view, startPos, pageSize)
   }
