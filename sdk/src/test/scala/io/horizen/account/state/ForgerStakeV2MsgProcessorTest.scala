@@ -46,7 +46,7 @@ class ForgerStakeV2MsgProcessorTest
   val validWeiAmount: BigInteger = new BigInteger("10000000000")
 
   val mockNetworkParams: NetworkParams = mock[NetworkParams]
-  val forgerStakeV2MessageProcessor = ForgerStakeV2MsgProcessor
+  val forgerStakeV2MessageProcessor: ForgerStakeV2MsgProcessor = ForgerStakeV2MsgProcessor()
   val forgerStakeMessageProcessor: ForgerStakeMsgProcessor = ForgerStakeMsgProcessor(mockNetworkParams)
 
   /** short hand: forger state native contract address */
@@ -149,7 +149,7 @@ class ForgerStakeV2MsgProcessorTest
   @Test
   def testMethodIds(): Unit = {
     //The expected methodIds were calculated using this site: https://emn178.github.io/online-tools/keccak_256.html
-    assertEquals("Wrong MethodId for activate", "0f15f4c0", ForgerStakeV2MsgProcessor.ActivateCmd)
+    assertEquals("Wrong MethodId for activate", "0f15f4c0", ActivateCmd)
   }
 
 

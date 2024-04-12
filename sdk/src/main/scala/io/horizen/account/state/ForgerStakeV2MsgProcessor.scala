@@ -3,15 +3,12 @@ package io.horizen.account.state
 import com.horizen.librustsidechains.Constants
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
+import io.horizen.account.state.ForgerStakeV2MsgProcessor._
 import io.horizen.account.state.events.ActivateStakeV2
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger}
 import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
-import io.horizen.consensus.generateHashAndCleanUp
-import io.horizen.evm.Address
-import io.horizen.params.NetworkParams
-import io.horizen.account.utils.ZenWeiConverter.{convertWeiToZennies, convertZenniesToWei, isValidZenAmount}
 import io.horizen.consensus.generateHashAndCleanUp
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
@@ -28,12 +25,9 @@ trait ForgerStakesV2Provider {
   private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
 }
 
-case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends NativeSmartContractWithFork with ForgerStakesV2Provider {
+case class ForgerStakeV2MsgProcessor() extends NativeSmartContractWithFork with ForgerStakesV2Provider {
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
-
-  val MAX_REWARD_SHARE = 1000
-  val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI = BigInteger.TEN.pow(18).multiply(BigInteger.TEN) // 10 Zen
 
   override def isForkActive(consensusEpochNumber: Int): Boolean = {
     Version1_4_0Fork.get(consensusEpochNumber).active
@@ -63,13 +57,7 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
   }
 
 
-  def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String) : Array[Byte] = {
-    val messageToSignString = blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address)
 
-    val chunks = messageToSignString.getBytes(StandardCharsets.UTF_8).grouped(Constants.FIELD_ELEMENT_LENGTH-1).toArray
-
-    generateHashAndCleanUp(chunks:_*)
-  }
 
   def verifySignatures(msgToSign: Array[Byte], blockSignPubKey: PublicKey25519Proposition, vrfPubKey: VrfPublicKey, sign25519: Signature25519, signVrf: VrfProof): Unit = {
     if (!sign25519.isValid(blockSignPubKey, msgToSign)) {
@@ -91,11 +79,6 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
 
     val stakedAmount = invocation.value
 
-    // check that msg.value is greater than zero
-    if (stakedAmount.signum() <= 0) {
-      throw new ExecutionRevertedException("Value must not be zero")
-    }
-
     // check that msg.value is a legal wei amount convertible to satoshis without any remainder and that
     // it is over the minimum threshold
     if (!isValidZenAmount(stakedAmount)) {
@@ -104,7 +87,7 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
       throw new ExecutionRevertedException(errMsg)
     }
     if (stakedAmount.compareTo(MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI) < 0) {
-      val errMsg = s"Value ${stakedAmount.toString()} is below the minimum stake amount threshold: ${MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI} "
+      val errMsg = s"Value ${stakedAmount.toString()} is below the minimum stake amount threshold: $MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI "
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
@@ -113,7 +96,6 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
 
     // check that sender account exists
     if (!gasView.accountExists(delegatorAddress)) {
-
       val errMsg = s"Sender account does not exist: msg = ${context.msg}"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
@@ -131,7 +113,7 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
 
     // check that rewardShare is in legal range
     if (rewardShare < 0 || rewardShare > 1000) {
-      val errMsg = s"Illegal reward share value: = ${rewardShare}"
+      val errMsg = s"Illegal reward share value: = $rewardShare"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
@@ -278,15 +260,21 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
       s"total stake amount $totalMigratedStakeAmount")
     Array.emptyByteArray
   }
+}
+
+object ForgerStakeV2MsgProcessor {
+
+  val MAX_REWARD_SHARE = 1000
+  val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = BigInteger.TEN.pow(18).multiply(BigInteger.TEN) // 10 Zen
 
 
   val RegisterForgerCmd: String = getABIMethodId("registerForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)")
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
   val StakeTotalCmd: String = getABIMethodId("stakeTotal(bytes32,bytes32,bytes1,address,uint32,uint32)")
-  val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)");
-  val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)");
-  val ActivateCmd: String = getABIMethodId("activate()");
+  val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)")
+  val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)")
+  val ActivateCmd: String = getABIMethodId("activate()")
 
   // ensure we have strings consistent with size of opcode
   require(
@@ -298,4 +286,12 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
     GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
     GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH
   )
+
+  def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String): Array[Byte] = {
+    val messageToSignString = blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address)
+
+    val chunks = messageToSignString.getBytes(StandardCharsets.UTF_8).grouped(Constants.FIELD_ELEMENT_LENGTH - 1).toArray
+
+    generateHashAndCleanUp(chunks: _*)
+  }
 }

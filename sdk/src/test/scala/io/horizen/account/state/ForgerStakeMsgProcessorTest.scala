@@ -2345,7 +2345,7 @@ class ForgerStakeMsgProcessorTest
       }
       assertEquals(s"Authorization failed", exc.getMessage)
 
-      ForgerStakeV2MsgProcessor.init(view, blockContextForkV1_4.consensusEpochNumber)
+      ForgerStakeV2MsgProcessor().init(view, blockContextForkV1_4.consensusEpochNumber)
 
       assertGas(2100, msg, view, forgerStakeMessageProcessor, blockContextForkV1_4)
 
