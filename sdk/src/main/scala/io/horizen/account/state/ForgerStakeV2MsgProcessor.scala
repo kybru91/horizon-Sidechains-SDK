@@ -11,6 +11,9 @@ import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
 import io.horizen.consensus.generateHashAndCleanUp
 import io.horizen.evm.Address
 import io.horizen.params.NetworkParams
+import io.horizen.account.utils.ZenWeiConverter.{convertWeiToZennies, convertZenniesToWei, isValidZenAmount}
+import io.horizen.consensus.generateHashAndCleanUp
+import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
@@ -41,6 +44,8 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
       throw new ExecutionRevertedException(s"fork not active")
     val gasView = view.getGasTrackedView(invocation.gasPool)
     getFunctionSignature(invocation.input) match {
+      case RegisterForgerCmd =>
+        doRegisterForger(invocation, gasView, context)
       case DelegateCmd =>
         doDelegateCmd(invocation, gasView, context.msg)
       case WithdrawCmd =>
@@ -58,12 +63,12 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
   }
 
 
-  def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String): Array[Byte] = {
+  def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String) : Array[Byte] = {
     val messageToSignString = blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address)
 
-    val chunks = messageToSignString.getBytes(StandardCharsets.UTF_8).grouped(Constants.FIELD_ELEMENT_LENGTH - 1).toArray
+    val chunks = messageToSignString.getBytes(StandardCharsets.UTF_8).grouped(Constants.FIELD_ELEMENT_LENGTH-1).toArray
 
-    generateHashAndCleanUp(chunks: _*)
+    generateHashAndCleanUp(chunks:_*)
   }
 
   def verifySignatures(msgToSign: Array[Byte], blockSignPubKey: PublicKey25519Proposition, vrfPubKey: VrfPublicKey, sign25519: Signature25519, signVrf: VrfProof): Unit = {
@@ -108,6 +113,7 @@ case class ForgerStakeV2MsgProcessor(networkParams: NetworkParams) extends Nativ
 
     // check that sender account exists
     if (!gasView.accountExists(delegatorAddress)) {
+
       val errMsg = s"Sender account does not exist: msg = ${context.msg}"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
