@@ -74,7 +74,7 @@ package object consensus {
       VrfMessage @@ resBytes
   }
 
-  private def generateHashAndCleanUp(elements: Array[Byte]*): Array[Byte] = {
+  def generateHashAndCleanUp(elements: Array[Byte]*): Array[Byte] = {
     val digest = PoseidonHash.getInstanceConstantLength(elements.length)
     elements.foreach { element =>
       val fieldElement = FieldElementUtils.elementToFieldElement(element)

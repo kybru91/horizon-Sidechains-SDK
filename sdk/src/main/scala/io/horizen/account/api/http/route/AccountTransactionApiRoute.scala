@@ -2,6 +2,7 @@ package io.horizen.account.api.http.route
 
 import akka.actor.{ActorRef, ActorRefFactory}
 import akka.http.scaladsl.server.Route
+import cats.conversions.all.autoConvertProfunctorVariance
 import com.fasterxml.jackson.annotation.JsonView
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import com.google.common.primitives.Bytes
@@ -19,6 +20,7 @@ import io.horizen.account.secret.PrivateKeySecp256k1
 import io.horizen.account.state.McAddrOwnershipMsgProcessor._
 import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInput
+import io.horizen.account.state.nativescdata.forgerstakev2.StakeDataDelegator
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.{AccountPayment, EthereumTransactionUtils, ZenWeiConverter}
@@ -1396,7 +1398,7 @@ object AccountTransactionRestScheme {
   private[horizen] case class RespPagedForgerStakes(nextPos: Int, stakes: List[AccountForgingStakeInfo]) extends SuccessResponse
 
   @JsonView(Array(classOf[Views.Default]))
-  private[horizen] case class RespPagedForgerStakesByForger(nextPos: Int, stakes: List[AccountPayment]) extends SuccessResponse
+  private[horizen] case class RespPagedForgerStakesByForger(nextPos: Int, stakes: List[StakeDataDelegator]) extends SuccessResponse
 
   @JsonView(Array(classOf[Views.Default]))
   private[horizen] case class RespMcAddrOwnership(keysOwnership: Map[String, Seq[String]]) extends SuccessResponse
