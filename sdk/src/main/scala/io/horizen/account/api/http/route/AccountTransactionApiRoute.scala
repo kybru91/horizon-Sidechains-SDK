@@ -11,7 +11,7 @@ import io.horizen.account.api.http.route.AccountTransactionRestScheme._
 import io.horizen.account.block.{AccountBlock, AccountBlockHeader}
 import io.horizen.account.chain.AccountFeePaymentsInfo
 import io.horizen.account.companion.SidechainAccountTransactionsCompanion
-import io.horizen.account.fork.Version1_3_0Fork
+import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
 import io.horizen.account.node.{AccountNodeView, NodeAccountHistory, NodeAccountMemoryPool, NodeAccountState}
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.AddressProposition
@@ -21,7 +21,7 @@ import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInput
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
-import io.horizen.account.utils.{EthereumTransactionUtils, ZenWeiConverter}
+import io.horizen.account.utils.{AccountPayment, EthereumTransactionUtils, ZenWeiConverter}
 import io.horizen.api.http.JacksonSupport._
 import io.horizen.api.http.route.TransactionBaseErrorResponse.{ErrorBadCircuit, ErrorByteTransactionParsing}
 import io.horizen.api.http.route.{ErrorNotEnabledOnSeederNode, TransactionBaseApiRoute}
@@ -35,11 +35,10 @@ import io.horizen.json.Views
 import io.horizen.node.NodeWalletBase
 import io.horizen.params.{NetworkParams, RegTestParams}
 import io.horizen.proof.{SchnorrSignatureSerializer, Signature25519, VrfProof}
-import io.horizen.proposition.{MCPublicKeyHashPropositionSerializer, PublicKey25519Proposition, PublicKey25519PropositionSerializer, SchnorrPropositionSerializer, VrfPublicKey, VrfPublicKeySerializer}
+import io.horizen.proposition._
 import io.horizen.secret.{PrivateKey25519, VrfSecretKey}
 import io.horizen.utils.BytesUtils
 import org.web3j.crypto.Keys
-import org.web3j.utils.Numeric
 import sparkz.core.settings.RESTApiSettings
 
 import java.math.BigInteger
@@ -76,7 +75,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
       signTransaction ~ makeForgerStake ~ withdrawCoins ~ spendForgingStake ~ createSmartContract ~ allWithdrawalRequests ~
       allForgingStakes ~ myForgingStakes ~ decodeTransactionBytes ~ openForgerList ~ allowedForgerList ~ createKeyRotationTransaction ~
       invokeProxyCall ~ invokeProxyStaticCall  ~ sendKeysOwnership ~ getKeysOwnership ~ removeKeysOwnership ~
-      getKeysOwnerScAddresses ~ sendMultisigKeysOwnership ~ pagedForgingStakes ~ registerForger
+      getKeysOwnerScAddresses ~ sendMultisigKeysOwnership ~ pagedForgingStakes ~ pagedForgersStakesByForger ~ registerForger
   }
 
   private def getFittingSecret(nodeView: AccountNodeView, fromAddress: Option[String], txValueInWei: BigInteger)
@@ -629,6 +628,32 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
                 validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
               case None =>
                 ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  def pagedForgersStakesByForger: Route = (post & path("pagedForgersStakesByForger")) {
+    withBasicAuth {
+      _ => {
+        entity(as[ReqPagedForgerStakesByForger]) { body =>
+          withNodeView { sidechainNodeView =>
+            val accountState = sidechainNodeView.getNodeState
+            val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
+            if (Version1_4_0Fork.get(epochNumber).active) {
+              Try {
+                accountState.getPagedForgersStakesByForger(body.forger, body.startPos, body.size)
+              } match {
+                case Success((nextPos, listOfForgerStakes)) =>
+                  ApiResponseUtil.toResponse(RespPagedForgerStakesByForger(nextPos, listOfForgerStakes.toList))
+                case Failure(exception) =>
+                  ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
+              }
+            } else {
+              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
+                JOptional.empty()))
             }
           }
         }
@@ -1371,6 +1396,9 @@ object AccountTransactionRestScheme {
   private[horizen] case class RespPagedForgerStakes(nextPos: Int, stakes: List[AccountForgingStakeInfo]) extends SuccessResponse
 
   @JsonView(Array(classOf[Views.Default]))
+  private[horizen] case class RespPagedForgerStakesByForger(nextPos: Int, stakes: List[AccountPayment]) extends SuccessResponse
+
+  @JsonView(Array(classOf[Views.Default]))
   private[horizen] case class RespMcAddrOwnership(keysOwnership: Map[String, Seq[String]]) extends SuccessResponse
 
   @JsonView(Array(classOf[Views.Default]))
@@ -1564,6 +1592,17 @@ object AccountTransactionRestScheme {
                                                      smartcontract_address: String,
                                                      gasInfo: Option[EIP1559GasInfo]) {
   }
+
+  @JsonView(Array(classOf[Views.Default]))
+  private[horizen] case class ReqPagedForgerStakesByForger(
+                                                     nonce: Option[BigInteger],
+                                                     forger: ForgerPublicKeys,
+                                                     startPos: Int = 0,
+                                                     size: Int = 10,
+                                                     gasInfo: Option[EIP1559GasInfo]) {
+    require(size > 0 , "Size must be positive")
+  }
+
 
   @JsonView(Array(classOf[Views.Default]))
    private[horizen] case class ReqEIP1559Transaction(
