@@ -703,14 +703,36 @@ class ForgerStakeV2MsgProcessorTest
       var getForgerData: Array[Byte] = BytesUtils.fromHexString(GetForgerCmd) ++ getForgerCmdInput.encode()
       var msg = getMessage(contractAddress, BigInteger.ZERO,  getForgerData, randomNonce)
 
+      // Try getForger before fork 1.4
+      val blockContextBeforeFork = new BlockContext(
+        Address.ZERO,
+        0,
+        0,
+        DefaultGasFeeFork.blockGasLimit,
+        0,
+        V1_4_MOCK_FORK_POINT - 1,
+        0,
+        1,
+        MockedHistoryBlockHashProvider,
+        Hash.ZERO
+      )
 
       var exc = intercept[ExecutionRevertedException] {
+        assertGas(0, msg, view, forgerStakeV2MessageProcessor, blockContextBeforeFork)
+      }
+      var expectedErr = "fork not active"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+
+      // Try getForger after fork 1.4 but before activate
+     exc = intercept[ExecutionRevertedException] {
         withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
       }
 
-      var expectedErr = "Forger stake V2 has not been activated yet"
+      expectedErr = "Forger stake V2 has not been activated yet"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
+      // Try getPagedForgers before fork 1.4
       var getPagedForgersCmdInput = PagedForgersCmdInput(
         0, 100
       )
@@ -718,11 +740,19 @@ class ForgerStakeV2MsgProcessorTest
       var getPagedForgersData: Array[Byte] = BytesUtils.fromHexString(GetPagedForgersCmd) ++ getPagedForgersCmdInput.encode()
       msg = getMessage(contractAddress, BigInteger.ZERO,  getPagedForgersData, randomNonce)
 
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(0, msg, view, forgerStakeV2MessageProcessor, blockContextBeforeFork)
+      }
 
+      expectedErr = "fork not active"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Try getPagedForgers after fork 1.4 but before activate
       exc = intercept[ExecutionRevertedException] {
         withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
       }
 
+      expectedErr = "Forger stake V2 has not been activated yet"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
 
@@ -761,7 +791,6 @@ class ForgerStakeV2MsgProcessorTest
 
       StakeStorage.addForger(view, blockSignerProposition, vrfPublicKey,
         0, Address.ZERO, blockContextForkV1_4.consensusEpochNumber, ownerAddressProposition.address(), initialStake)
-
 
       // Try getForger
       msg = getMessage(contractAddress, BigInteger.ZERO,  getForgerData, randomNonce)

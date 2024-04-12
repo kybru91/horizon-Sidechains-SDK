@@ -431,35 +431,6 @@ object StakeStorage {
   }
 }
 
-//case class ForgerDetails(
-//                          forgerPublicKeys: ForgerPublicKeys,
-//                          rewardShare: Int,
-//                          rewardAddress: AddressProposition)
-//  extends BytesSerializable {
-//
-//  override type M = ForgerDetails
-//
-//  override def serializer: SparkzSerializer[ForgerDetails] = ForgerDetailsSerializer
-//
-//  override def toString: String = "%s(forgerPubKeys: %s, rewardShare: %s, rewardAddress: %s)"
-//    .format(this.getClass.toString, forgerPublicKeys, rewardShare, rewardAddress)
-//}
-//
-//object ForgerDetailsSerializer extends SparkzSerializer[ForgerDetails] {
-//
-//  override def serialize(s: ForgerDetails, w: Writer): Unit = {
-//    ForgerPublicKeysSerializer.serialize(s.forgerPublicKeys, w)
-//    w.putInt(s.rewardShare)
-//    AddressPropositionSerializer.getSerializer.serialize(s.rewardAddress, w)
-//  }
-//
-//  override def parse(r: Reader): ForgerDetails = {
-//    val forgerPublicKeys = ForgerPublicKeysSerializer.parse(r)
-//    val rewardShare = r.getInt()
-//    val rewardAddress = AddressPropositionSerializer.getSerializer.parse(r)
-//    ForgerDetails(forgerPublicKeys, rewardShare, rewardAddress)
-//  }
-//}
 
 case class StakeCheckpoint(
                             fromEpochNumber: Int,
