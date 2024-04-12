@@ -543,9 +543,9 @@ object ForgerMap {
   def getPagedListOfForgers(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
 
     if (startPos < 0)
-      throw new IllegalArgumentException(s"Invalid startPos input: $startPos can not be negative")
+      throw new ExecutionRevertedException(s"Invalid startPos input: $startPos can not be negative")
     if (pageSize <= 0)
-      throw new IllegalArgumentException(s"Invalid page size $pageSize, must be positive")
+      throw new ExecutionRevertedException(s"Invalid page size $pageSize, must be positive")
 
     val listSize = getSize(view)
 
@@ -553,7 +553,7 @@ object ForgerMap {
       return PagedForgersListResponse(-1, Seq.empty[ForgerInfo])
 
     if (startPos > listSize - 1)
-      throw new IllegalArgumentException(s"Invalid start position: $startPos, array size: $listSize")
+      throw new ExecutionRevertedException(s"Invalid start position: $startPos, array size: $listSize")
 
     var endPos = startPos + pageSize
     if (endPos > listSize)

@@ -6,7 +6,7 @@ import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
 import io.horizen.account.network.{ForgerInfo, GetForgerOutputDecoder, PagedForgersOutputDecoder}
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.{PrivateKeySecp256k1, PrivateKeySecp256k1Creator}
-import io.horizen.account.state.ForgerStakeMsgProcessor.{GetPagedForgersStakesOfUserCmd, AddNewStakeCmd => AddNewStakeCmdV1, GetListOfForgersCmd => GetListOfForgersCmdV1}
+import io.horizen.account.state.ForgerStakeMsgProcessor.{AddNewStakeCmd => AddNewStakeCmdV1, GetListOfForgersCmd => GetListOfForgersCmdV1}
 import io.horizen.account.state.ForgerStakeV2MsgProcessor._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage._
 import io.horizen.account.state.nativescdata.forgerstakev2._
@@ -165,6 +165,11 @@ class ForgerStakeV2MsgProcessorTest
   def testMethodIds(): Unit = {
     //The expected methodIds were calculated using this site: https://emn178.github.io/online-tools/keccak_256.html
     assertEquals("Wrong MethodId for activate", "0f15f4c0", ForgerStakeV2MsgProcessor.ActivateCmd)
+    assertEquals("Wrong MethodId for StakeTotalCmd", "895117b1", ForgerStakeV2MsgProcessor.StakeTotalCmd)
+    assertEquals("Wrong MethodId for GetPagedForgersStakesByDelegatorCmd", "e99e75ac", ForgerStakeV2MsgProcessor.GetPagedForgersStakesByDelegatorCmd)
+    assertEquals("Wrong MethodId for GetPagedForgersStakesByForgerCmd", "23359a85", ForgerStakeV2MsgProcessor.GetPagedForgersStakesByForgerCmd)
+    assertEquals("Wrong MethodId for GetForgerCmd", "7d8589fd", ForgerStakeV2MsgProcessor.GetForgerCmd)
+    assertEquals("Wrong MethodId for GetPagedForgersCmd", "c1bf3d56", ForgerStakeV2MsgProcessor.GetPagedForgersCmd)
   }
 
 
@@ -733,11 +738,11 @@ class ForgerStakeV2MsgProcessorTest
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
       // Try getPagedForgers before fork 1.4
-      var getPagedForgersCmdInput = PagedForgersCmdInput(
+      val getPagedForgersCmdInput = PagedForgersCmdInput(
         0, 100
       )
 
-      var getPagedForgersData: Array[Byte] = BytesUtils.fromHexString(GetPagedForgersCmd) ++ getPagedForgersCmdInput.encode()
+      val getPagedForgersData: Array[Byte] = BytesUtils.fromHexString(GetPagedForgersCmd) ++ getPagedForgersCmdInput.encode()
       msg = getMessage(contractAddress, BigInteger.ZERO,  getPagedForgersData, randomNonce)
 
       exc = intercept[ExecutionRevertedException] {
@@ -815,7 +820,7 @@ class ForgerStakeV2MsgProcessorTest
       // Register more forgers, with a reward address
 
       // add the initial forger to the expected forgers
-      var listOfExpectedForgers = getForgersOutput.listOfForgerInfo ++ (1 to 100).map {idx =>
+      val listOfExpectedForgers = getForgersOutput.listOfForgerInfo ++ (1 to 100).map {idx =>
 
         val postfix = f"$idx%03d"
         val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString(s"1122334455667788112233445566778811223344556677881122334455667$postfix")) // 32 bytes
@@ -930,11 +935,11 @@ class ForgerStakeV2MsgProcessorTest
       )
       msg = getMessage(
         contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
-      var exc2 = intercept[IllegalArgumentException] {
+      exc = intercept[ExecutionRevertedException] {
         assertGasInterop(2100, msg, view, processors, blockContextForkV1_4)
       }
       expectedErr = "Invalid startPos input"
-      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
 
       cmdInput = PagedForgersCmdInput(
@@ -943,11 +948,11 @@ class ForgerStakeV2MsgProcessorTest
       )
       msg = getMessage(
         contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
-      exc2 = intercept[IllegalArgumentException] {
+      exc = intercept[ExecutionRevertedException] {
         assertGasInterop(4200, msg, view, processors, blockContextForkV1_4)
       }
       expectedErr = "Invalid start position"
-      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
 
       cmdInput = PagedForgersCmdInput(
@@ -956,11 +961,11 @@ class ForgerStakeV2MsgProcessorTest
       )
       msg = getMessage(
         contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
-      exc2 = intercept[IllegalArgumentException] {
+      exc = intercept[ExecutionRevertedException] {
         assertGasInterop(2100, msg, view, processors, blockContextForkV1_4)
       }
       expectedErr = "Invalid page size"
-      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
       cmdInput = PagedForgersCmdInput(
         0,
@@ -968,11 +973,11 @@ class ForgerStakeV2MsgProcessorTest
       )
       msg = getMessage(
         contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
-      exc2 = intercept[IllegalArgumentException] {
+      exc = intercept[ExecutionRevertedException] {
         assertGasInterop(2100, msg, view, processors, blockContextForkV1_4)
       }
       expectedErr = "Invalid page size"
-      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc2.getMessage}", exc2.getMessage.contains(expectedErr))
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
     }
 

@@ -188,19 +188,19 @@ class StakeStorageTest
       assertTrue(result.forgers.isEmpty)
       assertEquals(-1, result.nextStartPos)
 
-      assertThrows[IllegalArgumentException] {
+      assertThrows[ExecutionRevertedException] {
         StakeStorage.getPagedListOfForgers(view, 0, 0)
       }
 
-      assertThrows[IllegalArgumentException] {
+      assertThrows[ExecutionRevertedException] {
         StakeStorage.getPagedListOfForgers(view, 1, 10)
       }
 
-      assertThrows[IllegalArgumentException] {
+      assertThrows[ExecutionRevertedException] {
         StakeStorage.getPagedListOfForgers(view, 1, -10)
       }
 
-      assertThrows[IllegalArgumentException] {
+      assertThrows[ExecutionRevertedException] {
         StakeStorage.getPagedListOfForgers(view, -1, 10)
       }
 
