@@ -3,8 +3,9 @@ package io.horizen.account.network
 import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
+import io.horizen.account.state.nativescdata.forgerstakev2.ForgerInfoABI
 import io.horizen.account.state.nativescdata.forgerstakev2.GetForgerCmdInputDecoder.decodeVrfKey
-import io.horizen.account.state.{ForgerInfoABI, ForgerPublicKeys, ForgerPublicKeysSerializer}
+import io.horizen.account.state.{ForgerPublicKeys, ForgerPublicKeysSerializer}
 import io.horizen.evm.Address
 import io.horizen.json.Views
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}

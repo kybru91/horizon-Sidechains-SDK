@@ -1,12 +1,9 @@
-package io.horizen.account.state;
+package io.horizen.account.state.nativescdata.forgerstakev2;
 
 import org.web3j.abi.datatypes.StaticStruct;
 import org.web3j.abi.datatypes.generated.Bytes1;
 import org.web3j.abi.datatypes.generated.Bytes32;
-import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.abi.datatypes.generated.Uint32;
-
-import java.math.BigInteger;
 
 public class ForgerInfoABI extends StaticStruct {
     public byte[] pubKey;
