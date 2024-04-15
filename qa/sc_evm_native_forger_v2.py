@@ -152,12 +152,6 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             else:
                 genesis_stake   += stake['forgerStakeData']['stakedAmount']
 
-        exp_total_stake_own_1 = sum_stakes(exp_stake_own_1)
-        exp_total_stake_own_2 = sum_stakes(exp_stake_own_2)
-        exp_total_stake_own_3 = sum_stakes(exp_stake_own_3)
-        exp_total_stake_own_4 = sum_stakes(exp_stake_own_4)
-        exp_total_stake_own_5 = sum_stakes(exp_stake_own_5)
-
         # Reach fork point 1.3
         current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
         for i in range(0, VERSION_1_3_FORK_EPOCH - current_best_epoch):
@@ -376,12 +370,12 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(-1, next_pos)
         assert_equal(6, len(list_of_stakes))
 
-        exp_total_stake_own_1 += staked_amount
-        assert_equal(exp_total_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
-        assert_equal(exp_total_stake_own_2, list_of_stakes["0x" + evm_address_sc_node_2])
-        assert_equal(exp_total_stake_own_3, list_of_stakes["0x" + evm_address_3])
-        assert_equal(exp_total_stake_own_4, list_of_stakes["0x" + evm_address_4])
-        assert_equal(exp_total_stake_own_5, list_of_stakes["0x" + evm_address_5])
+        exp_stake_own_1 += staked_amount
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_equal(exp_stake_own_2, list_of_stakes["0x" + evm_address_sc_node_2])
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
 
         # Check stakes by delegator
         method_paged_stakes_by_delegator = "getPagedForgersStakesByDelegator(address,int32,int32)"
@@ -402,7 +396,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(1, len(list_of_stakes))
         assert_equal(block_sign_pub_key_1, list_of_stakes[0][0])
         assert_equal(vrf_pub_key_1, list_of_stakes[0][1])
-        assert_equal(exp_total_stake_own_1, list_of_stakes[0][2])
+        assert_equal(exp_stake_own_1, list_of_stakes[0][2])
 
         # Try delegate to a non-registered forger
 
@@ -422,7 +416,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         ################################
         evm_address_sc_node_2_balance = rpc_get_balance(sc_node_1, evm_address_sc_node_2)
 
-        staked_amount_withdrawn = exp_total_stake_own_2
+        staked_amount_withdrawn = exp_stake_own_2
         withdraw_method = "withdraw(bytes32,bytes32,bytes1,uint256)"
 
         tx_hash = contract_function_call(sc_node_2, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
@@ -463,10 +457,10 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(-1, next_pos)
         assert_equal(5, len(list_of_stakes))
 
-        assert_equal(exp_total_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
-        assert_equal(exp_total_stake_own_3, list_of_stakes["0x" + evm_address_3])
-        assert_equal(exp_total_stake_own_4, list_of_stakes["0x" + evm_address_4])
-        assert_equal(exp_total_stake_own_5, list_of_stakes["0x" + evm_address_5])
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
 
         assert_false(("0x" + evm_address_sc_node_2) in list_of_stakes)
 
@@ -576,11 +570,11 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(-1, next_pos)
         assert_equal(6, len(list_of_stakes))
 
-        assert_equal(exp_total_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
         assert_false(("0x" + evm_address_sc_node_2) in list_of_stakes)
-        assert_equal(exp_total_stake_own_3, list_of_stakes["0x" + evm_address_3])
-        assert_equal(exp_total_stake_own_4, list_of_stakes["0x" + evm_address_4])
-        assert_equal(exp_total_stake_own_5, list_of_stakes["0x" + evm_address_5])
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
         assert_equal(staked_amount, list_of_stakes[proxy_contract.contract_address.lower()])
 
         # Check stakes by delegator
@@ -646,11 +640,11 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(-1, next_pos)
         assert_equal(5, len(list_of_stakes))
 
-        assert_equal(exp_total_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
         assert_false(("0x" + evm_address_sc_node_2) in list_of_stakes)
-        assert_equal(exp_total_stake_own_3, list_of_stakes["0x" + evm_address_3])
-        assert_equal(exp_total_stake_own_4, list_of_stakes["0x" + evm_address_4])
-        assert_equal(exp_total_stake_own_5, list_of_stakes["0x" + evm_address_5])
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
         assert_false((proxy_contract.contract_address.lower()) in list_of_stakes)
 
         # Check stakes by delegator

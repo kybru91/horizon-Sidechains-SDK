@@ -58,15 +58,19 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val inputParams = getArgumentsFromData(invocation.input)
     val DelegateCmdInput(forgerPublicKeys) = DelegateCmdInputDecoder.decode(inputParams)
 
-    log.info(s"delegate called - $forgerPublicKeys")
+    log.debug(s"delegate called - $forgerPublicKeys")
     val stakedAmount = invocation.value
 
     if (stakedAmount.signum() <= 0) {
-      throw new ExecutionRevertedException("Value must not be zero")
+      val msg = "Value must not be zero"
+      log.debug(msg)
+      throw new ExecutionRevertedException(msg)
     }
 
     if (!isValidZenAmount(stakedAmount)) {
-      throw new ExecutionRevertedException(s"Value is not a legal wei amount: $stakedAmount")
+      val msg = s"Value is not a legal wei amount: $stakedAmount"
+      log.debug(msg)
+      throw new ExecutionRevertedException(msg)
     }
 
     if (view.getBalance(invocation.caller).compareTo(stakedAmount) < 0){
@@ -85,8 +89,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     view.subBalance(invocation.caller, stakedAmount)
     // increase the balance of the "forger stake smart contract” account
     view.addBalance(contractAddress, stakedAmount)
-
-
+    
     Array.emptyByteArray
   }
 
@@ -97,13 +100,19 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val inputParams = getArgumentsFromData(invocation.input)
     val WithdrawCmdInput(forgerPublicKeys, stakedAmount) = WithdrawCmdInputDecoder.decode(inputParams)
 
-    if (stakedAmount.signum() != 1) throw new ExecutionRevertedException(s"Withdrawal amount must be greater than zero: $stakedAmount")
+    log.debug(s"withdraw called - $forgerPublicKeys $stakedAmount")
 
-    if (!isValidZenAmount(stakedAmount)) {
-      throw new ExecutionRevertedException(s"Value is not a legal wei amount: $stakedAmount")
+    if (stakedAmount.signum() != 1) {
+      val msg = s"Withdrawal amount must be greater than zero: $stakedAmount"
+      log.debug(msg)
+      throw new ExecutionRevertedException(msg)
     }
 
-    log.debug(s"withdraw called - $forgerPublicKeys $stakedAmount")
+    if (!isValidZenAmount(stakedAmount)) {
+      val msg = s"Value is not a legal wei amount: $stakedAmount"
+      log.debug(msg)
+      throw new ExecutionRevertedException(msg)
+    }
 
     val epochNumber = context.blockContext.consensusEpochNumber
 
@@ -122,16 +131,16 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   private def checkForgerStakesV2IsActive(view: BaseAccountStateView): Unit = {
     if (!StakeStorage.isActive(view)) {
+      val msg = "Forger stake V2 has not been activated yet"
+      log.debug(msg)
       throw new ExecutionRevertedException("Forger stake V2 has not been activated yet")
     }
   }
 
   def doStakeTotalCmd(invocation: Invocation, view: BaseAccountStateView, currentEpoch: Int): Array[Byte] = {
     requireIsNotPayable(invocation)
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 is not activated"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
+
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = StakeTotalCmdInputDecoder.decode(inputParams)
 
