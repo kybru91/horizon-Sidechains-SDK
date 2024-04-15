@@ -86,7 +86,12 @@ trait MessageProcessorFixture extends AccountFixture with ClosableResourceHandle
     view.setupAccessList(msg, ctx.forgerAddress, new ForkRules(true))
     val gas = new GasPool(1000000000)
     val result = Try.apply(TestContext.process(processor, msg, view, ctx, gas))
-    assertEquals("Unexpected gas consumption", expectedGas, gas.getUsedGas)
+    if (expectedGas != gas.getUsedGas){
+      val msg = s"Unexpected gas consumption. Expected $expectedGas, actual: ${gas.getUsedGas}"
+      Console.err.println(msg)
+      throw new AssertionError(msg)
+    }
+//    assertEquals("Unexpected gas consumption", expectedGas, gas.getUsedGas)
     // return result or rethrow any exception
     result.get
   }
