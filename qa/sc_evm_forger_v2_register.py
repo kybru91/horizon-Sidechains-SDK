@@ -3,19 +3,21 @@ import logging
 import time
 from decimal import Decimal
 
-from eth_utils import add_0x_prefix
+from eth_abi import decode
+from eth_utils import add_0x_prefix, remove_0x_prefix, event_signature_to_log_topic, encode_hex
 
 from SidechainTestFramework.account.ac_chain_setup import AccountChainSetup
 from SidechainTestFramework.account.ac_use_smart_contract import SmartContract
 from SidechainTestFramework.account.ac_utils import generate_block_and_get_tx_receipt, contract_function_call, \
-    ac_registerForger, ac_pagedForgersStakesByForger, ac_pagedForgersStakesByDelegator
+    ac_registerForger, ac_pagedForgersStakesByForger, ac_pagedForgersStakesByDelegator, rpc_get_balance
 from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STAKE_SMART_CONTRACT_ADDRESS, \
     VERSION_1_3_FORK_EPOCH, \
-    VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, convertZenniesToWei, convertZenToWei
+    VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, convertZenniesToWei, convertZenToWei, \
+    computeForgedTxFee
 from SidechainTestFramework.scutil import generate_next_block, EVM_APP_SLOT_TIME
 from sc_evm_forger import print_current_epoch_and_slot
 from test_framework.util import (
-    assert_equal, assert_true, fail, forward_transfer_to_sidechain, )
+    assert_equal, assert_true, fail, forward_transfer_to_sidechain, hex_str_to_bytes, bytes_to_hex_str, )
 
 """
 Configuration: 
@@ -107,6 +109,19 @@ class SCEvmForgerV2register(AccountChainSetup):
         tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
 
+        # Try registerForger before fork 1.4
+        # Create one more forger keys pair on node 1
+        block_sign_pub_key_1_2 = sc_node_1.wallet_createPrivateKey25519()["result"]["proposition"]["publicKey"]
+        vrf_pub_key_1_2 = sc_node_1.wallet_createVrfSecret()["result"]["proposition"]["publicKey"]
+        self.sc_sync_all()
+
+        staked_amount = convertZenToZennies(10)
+        res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_share=0,
+                              smart_contract_address=None, nonce=None)
+        assert_true('error' in res)
+        assert_equal('0204', res['error']['code'])
+        assert_true('Fork 1.4 is not active, can not invoke this command' in res['error']['description'])
+
         # Reach fork point 1.4
         current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
         for i in range(0, VERSION_1_4_FORK_EPOCH - current_best_epoch):
@@ -129,11 +144,6 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal(intrinsic_gas, int(tx_receipt['gasUsed'], 16), "wrong used gas")
         assert_equal(2, len(tx_receipt['logs']), 'Wrong number of logs')
 
-        staked_amount = convertZenToZennies(10)
-        # Create one more forger keys pair on node 1
-        block_sign_pub_key_1_2 = sc_node_1.wallet_createPrivateKey25519()["result"]["proposition"]["publicKey"]
-        vrf_pub_key_1_2 = sc_node_1.wallet_createVrfSecret()["result"]["proposition"]["publicKey"]
-        self.sc_sync_all()
 
         # negative tests
         #==============================================================================================================
@@ -188,9 +198,27 @@ class SCEvmForgerV2register(AccountChainSetup):
         else:
             fail("Should not be able to use an illegal reward share value")
 
+        #   . invalid reward share/reward address
+        res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_share=1000,
+                              smart_contract_address=None, nonce=None)
+        assert_true('error' in res)
+        assert_equal('0211', res['error']['code'])
+        assert_true('Reward share cannot be different from 0 if reward address is not defined' in res['error']['description'])
+
+        reward_address = add_0x_prefix(evm_address_sc_node_2)
+        res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_share=0,
+                              smart_contract_address=reward_address, nonce=None)
+        assert_true('error' in res)
+        assert_equal('0211', res['error']['code'])
+        assert_true('Reward share cannot be 0 if reward address is defined ' in res['error']['description'])
+
         # register a new forger
-        result = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_share=123,
-                                   smart_contract_address=add_0x_prefix(evm_address_sc_node_2), nonce=None)
+        evm_address_sc_node_1_balance = rpc_get_balance(sc_node_1, evm_address_sc_node_1)
+        forger_contract_balance = rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
+
+        reward_share = 123
+        result = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_share=reward_share,
+                                   smart_contract_address=reward_address, nonce=None)
         self.sc_sync_all()
         generate_next_block(sc_node_1, "first node")
         self.sc_sync_all()
@@ -200,6 +228,18 @@ class SCEvmForgerV2register(AccountChainSetup):
         receipt = sc_node_2.rpc_eth_getTransactionReceipt(add_0x_prefix(tx_id))
         status = int(receipt['result']['status'], 16)
         assert_equal(1, status, "Registering a forger should succeed")
+        assert_equal(1, len(receipt['result']['logs']), 'Wrong number of logs')
+        register_event = receipt['result']['logs'][0]
+        staked_amount_in_wei = convertZenniesToWei(staked_amount)
+        check_register_event(register_event, evm_address_sc_node_1, vrf_pub_key_1_2, block_sign_pub_key_1_2,
+                             staked_amount_in_wei, reward_share, reward_address)
+
+        gas_fee_paid, _, _ = computeForgedTxFee(sc_node_1, tx_id)
+        assert_equal(evm_address_sc_node_1_balance - staked_amount_in_wei - gas_fee_paid,
+                     rpc_get_balance(sc_node_1, evm_address_sc_node_1))
+        assert_equal(staked_amount_in_wei + forger_contract_balance,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_contract_balance += staked_amount_in_wei
 
         # we have two forgers now, check legacy command
         stake_list = sc_node_1.transaction_allForgingStakes()["result"]['stakes']
@@ -211,13 +251,16 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal(list1['result']['stakes'][0]['delegator']['address'], delegator_address_genesis)
 
         # new forger
+        evm_address_sc_node_2_balance = rpc_get_balance(sc_node_1, evm_address_sc_node_2)
         list2 = ac_pagedForgersStakesByForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2)
-        assert_equal(list2['result']['stakes'][0]['stakedAmount'], convertZenniesToWei(staked_amount))
+        assert_equal(list2['result']['stakes'][0]['stakedAmount'], staked_amount_in_wei)
 
         # register a new forger at node2
         staked_amount2 = convertZenToZennies(33)
 
-        result = ac_registerForger(sc_node_2, block_sign_pub_key_2, vrf_pub_key_2, staked_amount2, reward_share=123,
+        reward_share = 1000
+        reward_address = add_0x_prefix(evm_address_sc_node_2)
+        result = ac_registerForger(sc_node_2, block_sign_pub_key_2, vrf_pub_key_2, staked_amount2, reward_share=reward_share,
                                    smart_contract_address=add_0x_prefix(evm_address_sc_node_2), nonce=None)
         self.sc_sync_all()
         generate_next_block(sc_node_1, "first node")
@@ -228,12 +271,23 @@ class SCEvmForgerV2register(AccountChainSetup):
         receipt = sc_node_2.rpc_eth_getTransactionReceipt(add_0x_prefix(tx_id))
         status = int(receipt['result']['status'], 16)
         assert_equal(1, status, "Registering a forger should succeed")
+        register_event = receipt['result']['logs'][0]
+        staked_amount_2_in_wei = convertZenniesToWei(staked_amount2)
+        check_register_event(register_event, evm_address_sc_node_2, vrf_pub_key_2, block_sign_pub_key_2,
+                             staked_amount_2_in_wei, reward_share, reward_address)
+
+        gas_fee_paid, _, _ = computeForgedTxFee(sc_node_2, tx_id)
+        assert_equal(evm_address_sc_node_2_balance - staked_amount_2_in_wei - gas_fee_paid,
+                     rpc_get_balance(sc_node_2, evm_address_sc_node_2))
+        assert_equal(staked_amount_2_in_wei + forger_contract_balance,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_contract_balance += staked_amount_2_in_wei
 
         list3 = ac_pagedForgersStakesByForger(sc_node_2, block_sign_pub_key_2, vrf_pub_key_2)
-        assert_equal(list3['result']['stakes'][0]['stakedAmount'], convertZenniesToWei(staked_amount2))
+        assert_equal(list3['result']['stakes'][0]['stakedAmount'], staked_amount_2_in_wei)
 
         list4 = ac_pagedForgersStakesByDelegator(sc_node_1, add_0x_prefix(evm_address_sc_node_1))
-        assert_equal(list4['result']['stakes'][0]['stakedAmount'], convertZenniesToWei(staked_amount))
+        assert_equal(list4['result']['stakes'][0]['stakedAmount'], staked_amount_in_wei)
         assert_equal(list4['result']['stakes'][0]['forgerPublicKeys']['blockSignPublicKey']['publicKey'], block_sign_pub_key_1_2)
         assert_equal(list4['result']['stakes'][0]['forgerPublicKeys']['vrfPublicKey']['publicKey'], vrf_pub_key_1_2)
 
@@ -241,6 +295,29 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal(list5['result']['stakes'][0]['stakedAmount'], convertZenToWei(self.forward_amount))
         assert_equal(list5['result']['stakes'][0]['forgerPublicKeys']['blockSignPublicKey']['publicKey'], block_sign_pub_key_genesis)
         assert_equal(list5['result']['stakes'][0]['forgerPublicKeys']['vrfPublicKey']['publicKey'], vrf_pub_key_genesis)
+
+def check_register_event(delegate_event, sender, vrf_pub_key, block_sign_pub_key, staked_amount, rewards_share, reward_address):
+    assert_equal(4, len(delegate_event['topics']), "Wrong number of topics in register_event")
+    event_id = remove_0x_prefix(delegate_event['topics'][0])
+    event_signature = remove_0x_prefix(
+        encode_hex(event_signature_to_log_topic('RegisterForger(address,bytes32,bytes32,bytes1,uint256,uint32,address)')))
+    assert_equal(event_signature, event_id, "Wrong event signature in topics")
+
+    from_addr = decode(['address'], hex_str_to_bytes(delegate_event['topics'][1][2:]))[0][2:]
+    assert_equal(sender.lower(), from_addr.lower(), "Wrong from address in topics")
+
+    vrf1 = decode(['bytes32'], hex_str_to_bytes(delegate_event['topics'][2][2:]))[0]
+    vrf2 = decode(['bytes1'], hex_str_to_bytes(delegate_event['topics'][3][2:]))[0]
+
+    assert_equal(vrf_pub_key,
+                 bytes_to_hex_str(vrf1) + bytes_to_hex_str(vrf2), "wrong vrfPublicKey")
+
+    (sign_pub_key, value, share, reward_contract_address) = decode(['bytes32', 'uint256', 'uint32', 'address'], hex_str_to_bytes(delegate_event['data'][2:]))
+    assert_equal(block_sign_pub_key, bytes_to_hex_str(sign_pub_key), "Wrong sign_pub_key in event")
+    assert_equal(staked_amount, value, "Wrong amount in event")
+    assert_equal(rewards_share, share, "Wrong rewards_share in event")
+    assert_equal(reward_address, reward_address, "Wrong reward_address in event")
+
 
 if __name__ == "__main__":
     SCEvmForgerV2register().main()

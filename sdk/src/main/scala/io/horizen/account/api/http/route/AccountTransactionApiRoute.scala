@@ -572,63 +572,84 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         entity(as[ReqRegisterForger]) { body =>
           // lock the view and try to create CoreTransaction
           applyOnNodeView { sidechainNodeView =>
-            val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
+            val accountState = sidechainNodeView.getNodeState
+            val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
+            if (Version1_4_0Fork.get(epochNumber).active) {
+              if ((body.smartcontractAddress.isDefined && body.rewardShare == 0) ||
+                (body.smartcontractAddress.isEmpty && body.rewardShare != 0)) {
+                val msg = if (body.smartcontractAddress.isDefined)
+                  s"Reward share cannot be 0 if reward address is defined - Reward share = ${body.rewardShare}, reward address = ${body.smartcontractAddress}"
+                else
+                  s"Reward share cannot be different from 0 if reward address is not defined - Reward share = ${body.rewardShare}, reward address = ${body.smartcontractAddress}"
+                ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
 
-            // default gas related params
-            val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
-            var maxPriorityFeePerGas = BigInteger.valueOf(120)
-            var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
-            var gasLimit = BigInteger.valueOf(500000)
+              }
+              else {
 
-            if (body.gasInfo.isDefined) {
-              maxFeePerGas = body.gasInfo.get.maxFeePerGas
-              maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
-              gasLimit = body.gasInfo.get.gasLimit
-            }
-            val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
+                val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
 
-            val secret = getFittingSecret(sidechainNodeView, None, txCost)
+                // default gas related params
+                val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
+                var maxPriorityFeePerGas = BigInteger.valueOf(120)
+                var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
+                var gasLimit = BigInteger.valueOf(500000)
 
-            secret match {
-              case Some(secret) =>
+                if (body.gasInfo.isDefined) {
+                  maxFeePerGas = body.gasInfo.get.maxFeePerGas
+                  maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
+                  gasLimit = body.gasInfo.get.gasLimit
+                }
+                val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
 
-                val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
+                val secret = getFittingSecret(sidechainNodeView, None, txCost)
 
-                val smartContractAddressStr = body.smartcontractAddress.getOrElse(NULL_ADDRESS_WITH_PREFIX_HEX_STRING)
+                secret match {
+                  case Some(secret) =>
 
-                val blockSignPubKey = PublicKey25519PropositionSerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.blockSignPubKey))
-                val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.vrfPubKey))
+                    val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
 
-                Try {
-                  val msg = ForgerStakeV2MsgProcessor.getHashedMessageToSign(body.blockSignPubKey, body.vrfPubKey, body.rewardShare, smartContractAddressStr)
-                  val signatures = signMessageWithSecrets(sidechainNodeView, blockSignPubKey, vrfPubKey, msg)
+                    val smartContractAddressStr = body.smartcontractAddress.getOrElse(NULL_ADDRESS_WITH_PREFIX_HEX_STRING)
 
-                  encodeRegisterForgerCmdRequest(
-                    blockSignPubKey, vrfPubKey, body.rewardShare, new AddressProposition(hexStringToByteArray(smartContractAddressStr)),
-                    signatures._1, signatures._2)
-                } match {
-                  case Success(dataBytes) =>
+                    val blockSignPubKey = PublicKey25519PropositionSerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.blockSignPubKey))
+                    val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.vrfPubKey))
 
-                    val tmpTx: EthereumTransaction = new EthereumTransaction(
-                      params.chainId,
-                      JOptional.of(new AddressProposition(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)),
-                      nonce,
-                      gasLimit,
-                      maxPriorityFeePerGas,
-                      maxFeePerGas,
-                      valueInWei,
-                      dataBytes,
-                      null
-                    )
-                    validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
+                    Try {
+                      val msg = ForgerStakeV2MsgProcessor.getHashedMessageToSign(body.blockSignPubKey, body.vrfPubKey, body.rewardShare, smartContractAddressStr)
+                      val signatures = signMessageWithSecrets(sidechainNodeView, blockSignPubKey, vrfPubKey, msg)
 
-                  case Failure(exception) =>
-                    ApiResponseUtil.toResponse(GenericTransactionError(s"Command failed: ", JOptional.of(exception)))
+                      encodeRegisterForgerCmdRequest(
+                        blockSignPubKey, vrfPubKey, body.rewardShare, new AddressProposition(hexStringToByteArray(smartContractAddressStr)),
+                        signatures._1, signatures._2)
+                    } match {
+                      case Success(dataBytes) =>
 
+                        val tmpTx: EthereumTransaction = new EthereumTransaction(
+                          params.chainId,
+                          JOptional.of(new AddressProposition(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)),
+                          nonce,
+                          gasLimit,
+                          maxPriorityFeePerGas,
+                          maxFeePerGas,
+                          valueInWei,
+                          dataBytes,
+                          null
+                        )
+                        validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
+
+                      case Failure(exception) =>
+                        ApiResponseUtil.toResponse(GenericTransactionError(s"Command failed: ", JOptional.of(exception)))
+
+                    }
+
+                  case None =>
+                    ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
                 }
 
-              case None =>
-                ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+              }
+            }
+            else {
+              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
+                JOptional.empty()))
             }
           }
         }
@@ -1742,4 +1763,8 @@ object AccountTransactionErrorResponse {
     override val code: String = "0210"
   }
 
+  case class ErrorRegisterForgerInvalidRewardParams(description: String) extends ErrorResponse {
+    override val code: String = "0211"
+    override val exception: JOptional[Throwable] = JOptional.empty()
+  }
 }

@@ -3,9 +3,10 @@ package io.horizen.account.state
 import com.horizen.librustsidechains.Constants
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
+import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger}
 import io.horizen.account.state.nativescdata.forgerstakev2._
-import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, WithdrawForgerStake}
+import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, RegisterForger, WithdrawForgerStake}
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.{convertZenniesToWei, isValidZenAmount}
 import io.horizen.consensus.{ForgingStakeInfo, generateHashAndCleanUp, minForgerStake}
@@ -124,6 +125,17 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       throw new ExecutionRevertedException(errMsg)
     }
 
+    if (rewardShare == 0 && smartContractAddr != NULL_ADDRESS_WITH_PREFIX_HEX_STRING) {
+      val errMsg = s"Reward share cannot be 0 if reward address is defined - Reward share = $rewardShare, reward address = $smartContractAddr"
+      log.warn(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
+    else if (rewardShare != 0 && smartContractAddr == NULL_ADDRESS_WITH_PREFIX_HEX_STRING) {
+      val errMsg = s"Reward share cannot be different from 0 if reward address is not defined - Reward share = $rewardShare, reward address = $smartContractAddr"
+      log.warn(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
+
     // we take for granted that forger list is open TODO comment also in fork list
 
     // check we do not have this forger yet. This is an early check, addForger will do it as well
@@ -146,7 +158,15 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     addForger(gasView, blockSignPubKey, vrfPubKey, rewardShare, smartContractAddr,
       context.blockContext.consensusEpochNumber, delegatorAddress, stakedAmount)
 
-    log.info(s"register forger exiting - ${cmdInput.toString}")
+    val registerForgerEvent = RegisterForger(invocation.caller, blockSignPubKey, vrfPubKey, stakedAmount, rewardShare, smartContractAddr)
+    val evmLog = getEthereumConsensusDataLog(registerForgerEvent)
+    gasView.addLog(evmLog)
+
+    gasView.subBalance(invocation.caller, stakedAmount)
+    // increase the balance of the "forger stake smart contract” account
+    gasView.addBalance(contractAddress, stakedAmount)
+
+    log.debug(s"register forger exiting - ${cmdInput.toString}")
     Array.emptyByteArray
   }
 

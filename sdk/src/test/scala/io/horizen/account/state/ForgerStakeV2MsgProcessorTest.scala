@@ -554,6 +554,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Register the forger
       val initialStake = new BigInteger("1000000000000")
+
       StakeStorage.addForger(view, delegateCmdInput.forgerPublicKeys.blockSignPublicKey, delegateCmdInput.forgerPublicKeys.vrfPublicKey,
         0, Address.ZERO, blockContextForkV1_4.consensusEpochNumber, ownerAddressProposition.address(), initialStake)
 
