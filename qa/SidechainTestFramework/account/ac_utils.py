@@ -200,7 +200,7 @@ def eoa_transfer(node, sender, receiver, amount, call_method: CallMethod = CallM
 
 
 def contract_function_static_call(node, smart_contract_type, smart_contract_address, from_address, method, *args, value = 0,
-                                  tag = 'latest', eip1898 = False, isBlockHash = False):
+                                  tag='latest', eip1898=False, isBlockHash=False):
     logging.info("Calling {}: using static call function".format(method))
     res = smart_contract_type.static_call(node, method, *args, fromAddress=from_address,
                                           toAddress=smart_contract_address, value=value, tag=tag, eip1898=eip1898,

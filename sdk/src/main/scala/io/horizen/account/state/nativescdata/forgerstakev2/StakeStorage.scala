@@ -1,6 +1,7 @@
 package io.horizen.account.state.nativescdata.forgerstakev2
 
 import com.google.common.primitives.Bytes
+import io.horizen.account.network.{ForgerInfo, ForgerInfoSerializer}
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
 import io.horizen.account.state._
@@ -82,7 +83,7 @@ object StakeStorage {
   def getPagedListOfForgers(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse =
     ForgerMap.getPagedListOfForgers(view, startPos, pageSize)
 
-  def getForger(view: BaseAccountStateView, signKey: PublicKey25519Proposition, vrfKey: VrfPublicKey): Option[ForgerDetails] = {
+  def getForger(view: BaseAccountStateView, signKey: PublicKey25519Proposition, vrfKey: VrfPublicKey): Option[ForgerInfo] = {
     val forgerKey = ForgerKey(signKey, vrfKey)
     ForgerMap.getForgerOption(view, forgerKey)
   }
@@ -430,35 +431,6 @@ object StakeStorage {
   }
 }
 
-case class ForgerDetails(
-                          forgerPublicKeys: ForgerPublicKeys,
-                          rewardShare: Int,
-                          rewardAddress: AddressProposition)
-  extends BytesSerializable {
-
-  override type M = ForgerDetails
-
-  override def serializer: SparkzSerializer[ForgerDetails] = ForgerDetailsSerializer
-
-  override def toString: String = "%s(forgerPubKeys: %s, rewardShare: %s, rewardAddress: %s)"
-    .format(this.getClass.toString, forgerPublicKeys, rewardShare, rewardAddress)
-}
-
-object ForgerDetailsSerializer extends SparkzSerializer[ForgerDetails] {
-
-  override def serialize(s: ForgerDetails, w: Writer): Unit = {
-    ForgerPublicKeysSerializer.serialize(s.forgerPublicKeys, w)
-    w.putInt(s.rewardShare)
-    AddressPropositionSerializer.getSerializer.serialize(s.rewardAddress, w)
-  }
-
-  override def parse(r: Reader): ForgerDetails = {
-    val forgerPublicKeys = ForgerPublicKeysSerializer.parse(r)
-    val rewardShare = r.getInt()
-    val rewardAddress = AddressPropositionSerializer.getSerializer.parse(r)
-    ForgerDetails(forgerPublicKeys, rewardShare, rewardAddress)
-  }
-}
 
 case class StakeCheckpoint(
                             fromEpochNumber: Int,
@@ -522,12 +494,12 @@ object ForgerMap {
                ): Unit = {
     ListOfForgers.addForgerKey(view, forgerKey)
 
-    val forgerStakeData = ForgerDetails(
+    val forgerStakeData = ForgerInfo(
       ForgerPublicKeys(blockSignProposition, vrfPublicKey), rewardShare, new AddressProposition(rewardAddress))
 
     // store the forger stake data
     view.updateAccountStorageBytes(ACCOUNT, forgerKey.bytes,
-      ForgerDetailsSerializer.toBytes(forgerStakeData))
+      ForgerInfoSerializer.toBytes(forgerStakeData))
   }
 
   def updateForger(view: BaseAccountStateView,
@@ -538,12 +510,12 @@ object ForgerMap {
                    rewardAddress: Address,
                   ): Unit = {
 
-    val forgerStakeData = ForgerDetails(
+    val forgerStakeData = ForgerInfo(
       ForgerPublicKeys(blockSignProposition, vrfPublicKey), rewardShare, new AddressProposition(rewardAddress))
 
     // store the forger stake data
     view.updateAccountStorageBytes(ACCOUNT, forgerKey.bytes,
-      ForgerDetailsSerializer.toBytes(forgerStakeData))
+      ForgerInfoSerializer.toBytes(forgerStakeData))
   }
 
 
@@ -556,32 +528,32 @@ object ForgerMap {
     })
   }
 
-  def getForgerOption(view: BaseAccountStateView, forgerKey: ForgerKey): Option[ForgerDetails] = {
+  def getForgerOption(view: BaseAccountStateView, forgerKey: ForgerKey): Option[ForgerInfo] = {
     val forgerData = view.getAccountStorage(ACCOUNT, forgerKey.bytes)
     if (!forgerData.sameElements(NULL_HEX_STRING_32))
-      Some(ForgerDetailsSerializer.parseBytes(view.getAccountStorageBytes(ACCOUNT, forgerKey.bytes)))
+      Some(ForgerInfoSerializer.parseBytes(view.getAccountStorageBytes(ACCOUNT, forgerKey.bytes)))
     else
       None
   }
 
-  def getForger(view: BaseAccountStateView, forgerKey: ForgerKey): ForgerDetails = {
-    ForgerDetailsSerializer.parseBytes(view.getAccountStorageBytes(ACCOUNT, forgerKey.bytes))
+  def getForger(view: BaseAccountStateView, forgerKey: ForgerKey): ForgerInfo = {
+    ForgerInfoSerializer.parseBytes(view.getAccountStorageBytes(ACCOUNT, forgerKey.bytes))
   }
 
   def getPagedListOfForgers(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
 
     if (startPos < 0)
-      throw new IllegalArgumentException(s"Invalid startPos input: $startPos can not be negative")
+      throw new ExecutionRevertedException(s"Invalid startPos input: $startPos can not be negative")
     if (pageSize <= 0)
-      throw new IllegalArgumentException(s"Invalid page size $pageSize, must be positive")
+      throw new ExecutionRevertedException(s"Invalid page size $pageSize, must be positive")
 
     val listSize = getSize(view)
 
     if (startPos == 0 && listSize == 0)
-      return PagedForgersListResponse(-1, Seq.empty[ForgerDetails])
+      return PagedForgersListResponse(-1, Seq.empty[ForgerInfo])
 
     if (startPos > listSize - 1)
-      throw new IllegalArgumentException(s"Invalid start position: $startPos, array size: $listSize")
+      throw new ExecutionRevertedException(s"Invalid start position: $startPos, array size: $listSize")
 
     var endPos = startPos + pageSize
     if (endPos > listSize)
@@ -602,7 +574,7 @@ object ForgerMap {
 
 }
 
-case class PagedForgersListResponse(nextStartPos: Int, forgers: Seq[ForgerDetails])
+case class PagedForgersListResponse(nextStartPos: Int, forgers: Seq[ForgerInfo])
 
 case class PagedStakesByForgerResponse(nextStartPos: Int, stakesData: Seq[StakeDataDelegator])
 

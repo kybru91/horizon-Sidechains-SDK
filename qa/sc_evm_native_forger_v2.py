@@ -7,9 +7,10 @@ from eth_utils import encode_hex, event_signature_to_log_topic, remove_0x_prefix
 
 from SidechainTestFramework.account.ac_chain_setup import AccountChainSetup
 from SidechainTestFramework.account.ac_use_smart_contract import SmartContract
-from SidechainTestFramework.account.ac_utils import ac_makeForgerStake, \
+from SidechainTestFramework.account.ac_utils import (ac_makeForgerStake, \
+    generate_block_and_get_tx_receipt, contract_function_static_call, contract_function_call, format_evm,
     generate_block_and_get_tx_receipt, contract_function_static_call, contract_function_call, format_eoa, \
-    rpc_get_balance
+    rpc_get_balance)
 from SidechainTestFramework.account.httpCalls.transaction.createEIP1559Transaction import createEIP1559Transaction
 from SidechainTestFramework.account.simple_proxy_contract import SimpleProxyContract
 from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STAKE_SMART_CONTRACT_ADDRESS, \
@@ -18,7 +19,9 @@ from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STA
 from SidechainTestFramework.scutil import generate_next_block, EVM_APP_SLOT_TIME
 from sc_evm_forger import print_current_epoch_and_slot
 from test_framework.util import (
-    assert_equal, assert_true, fail, forward_transfer_to_sidechain, hex_str_to_bytes, bytes_to_hex_str, assert_false, )
+    assert_equal, assert_true, assert_false, fail, forward_transfer_to_sidechain, bytes_to_hex_str, hex_str_to_bytes, )
+
+NULL_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 """
 If it is run with --allforks, all the existing forks are enabled at epoch 2, so it will use Shanghai EVM.
@@ -150,7 +153,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_5:
                 exp_stake_own_5 += stake['forgerStakeData']['stakedAmount']
             else:
-                genesis_stake   += stake['forgerStakeData']['stakedAmount']
+                genesis_stake += stake['forgerStakeData']['stakedAmount']
 
         # Reach fork point 1.3
         current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
@@ -238,6 +241,31 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             print("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
+        # Test that getForger and getPagedForgers fail before activate.
+
+        method = 'getForger(bytes32,bytes32,bytes1)'
+        forger_1_sign_key_to_bytes = hex_str_to_bytes(block_sign_pub_key_1)
+        forger_1_vrf_pub_key_to_bytes = hex_str_to_bytes(vrf_pub_key_1)
+        forger_1_keys_to_bytes = (forger_1_sign_key_to_bytes, forger_1_vrf_pub_key_to_bytes[:32],
+                                  forger_1_vrf_pub_key_to_bytes[32:])
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, *forger_1_keys_to_bytes)
+            fail("getForger call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
+        method = 'getPagedForgers(int32,int32)'
+        get_paged_forgers_args = (0, 100)
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, *get_paged_forgers_args)
+            fail("getForger call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
         # Execute activate.
         forger_stake_v2_balance = rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
         method = 'activate()'
@@ -269,11 +297,11 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(event_signature, event_id, "Wrong event signature in topics")
 
         # retrieve the stakes from the Forger Stake V2
-        stakeList_node1 = sc_node_1.transaction_allForgingStakes()["result"]['stakes']
-        stakeList_node2 = sc_node_2.transaction_allForgingStakes()["result"]['stakes']
-        assert_equal(stakeList_node1, stakeList_node2, "Forging stakes are different on 2 nodes")
+        stake_list_node1 = sc_node_1.transaction_allForgingStakes()["result"]['stakes']
+        stake_list_node2 = sc_node_2.transaction_allForgingStakes()["result"]['stakes']
+        assert_equal(stake_list_node1, stake_list_node2, "Forging stakes are different on 2 nodes")
 
-        for stake in stakeList_node1:
+        for stake in stake_list_node1:
             if stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_1:
                 assert_equal(exp_stake_own_1, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_2:
@@ -315,6 +343,58 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             assert_true("Method is disabled" in str(err))
 
         generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
+
+        # Check getPagedForgers
+        method = 'getPagedForgers(int32,int32)'
+        data = forger_v2_native_contract.raw_encode_call(method, *get_paged_forgers_args)
+
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": format_evm(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS),
+                "from": format_evm(evm_address_sc_node_1),
+                "input": data
+            }, "latest"
+        )
+
+        (next_pos, list_of_forgers) = decode_paged_list_of_forgers(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(1, len(list_of_forgers))
+        assert_equal(block_sign_pub_key_1, list_of_forgers[0][0])
+        assert_equal(vrf_pub_key_1, list_of_forgers[0][1])
+        assert_equal(0, list_of_forgers[0][2])
+        assert_equal(NULL_ADDRESS, list_of_forgers[0][3])
+
+        # Check getForger
+        method = 'getForger(bytes32,bytes32,bytes1)'
+        data = forger_v2_native_contract.raw_encode_call(method, *forger_1_keys_to_bytes)
+
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": format_evm(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS),
+                "from": format_evm(evm_address_sc_node_1),
+                "input": data
+            }, "latest"
+        )
+
+        forger_info = decode_forger_info(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(block_sign_pub_key_1, forger_info[0])
+        assert_equal(vrf_pub_key_1, forger_info[1])
+        assert_equal(0, forger_info[2])
+        assert_equal(NULL_ADDRESS, forger_info[3])
+
+        # Try getForger on a non-registered forger
+        forger_2_sign_key_to_bytes = hex_str_to_bytes(block_sign_pub_key_2)
+        forger_2_vrf_pub_key_to_bytes = hex_str_to_bytes(vrf_pub_key_2)
+        forger_2_keys_to_bytes = (forger_2_sign_key_to_bytes, forger_2_vrf_pub_key_to_bytes[:32],
+                                  forger_2_vrf_pub_key_to_bytes[32:])
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, *forger_2_keys_to_bytes)
+            fail("getForger call should fail if forger is not registered yet")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger doesn't exist." in str(err))
 
         ################################
         # Delegate
@@ -663,6 +743,33 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(-1, next_pos)
         assert_equal(0, len(list_of_stakes))
 
+
+def decode_paged_list_of_forgers(result):
+    next_pos = decode(['int32'], result[0:32])[0]
+    res = result[32:]
+    res = res[32:]  # cut offset, don't care in this case
+    num_of_stakes = int(bytes_to_hex_str(res[0:32]), 16)
+
+    res = res[32:]  # cut the array length
+
+    elem_size = 160  # 32 * 5
+    list_of_elems = [res[i:i + elem_size] for i in range(0, num_of_stakes * elem_size, elem_size)]
+
+    list_of_forgers = []
+    for p in list_of_elems:
+        forger_info = decode_forger_info(p)
+        list_of_forgers.append(forger_info)
+
+    return next_pos, list_of_forgers
+
+
+def decode_forger_info(result):
+    raw_stake = decode(['(bytes32,bytes32,bytes1,uint32,address)'], result)[0]
+    forger_info = (bytes_to_hex_str(raw_stake[0]),
+                   bytes_to_hex_str(raw_stake[1]) + bytes_to_hex_str(raw_stake[2]),
+                   raw_stake[3], raw_stake[4])
+
+    return forger_info
 
 def sum_stakes(exp_stake_own):
     return sum(map(lambda stake: stake['forgerStakeData']['stakedAmount'], exp_stake_own))
