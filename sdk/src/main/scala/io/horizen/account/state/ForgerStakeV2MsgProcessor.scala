@@ -9,6 +9,7 @@ import io.horizen.consensus.ForgingStakeInfo
 import io.horizen.evm.Address
 import io.horizen.utils.BytesUtils
 import sparkz.crypto.hash.Keccak256
+
 import java.math.BigInteger
 
 trait ForgerStakesV2Provider {
@@ -43,6 +44,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
         doPagedForgersStakesByForgerCmd(invocation, gasView, context.msg)
       case GetPagedForgersStakesByDelegatorCmd =>
         doPagedForgersStakesByDelegatorCmd(invocation, gasView, context.msg)
+      case GetCurrentConsensusEpochCmd =>
+        doGetCurrentConsensusEpochCmd(invocation, gasView, context)
       case ActivateCmd =>
         doActivateCmd(invocation, view, context) // That shouldn't consume gas, so it doesn't use gasView
       case opCodeHex => throw new ExecutionRevertedException(s"op code not supported: $opCodeHex")
@@ -122,6 +125,18 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
   }
 
+  def doGetCurrentConsensusEpochCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 has not been activated yet"
+      log.debug(msgStr)
+      throw new ExecutionRevertedException(msgStr)
+    }
+
+    requireIsNotPayable(invocation)
+    checkInputDoesntContainParams(invocation)
+    
+    ConsensusEpochCmdOutput(context.blockContext.consensusEpochNumber).encode()
+  }
 
   def doActivateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
@@ -188,9 +203,10 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
   val StakeTotalCmd: String = getABIMethodId("stakeTotal(bytes32,bytes32,bytes1,address,uint32,uint32)")
-  val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)");
-  val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)");
-  val ActivateCmd: String = getABIMethodId("activate()");
+  val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)")
+  val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)")
+  val ActivateCmd: String = getABIMethodId("activate()")
+  val GetCurrentConsensusEpochCmd: String = getABIMethodId("getCurrentConsensusEpoch()")
 
   // ensure we have strings consistent with size of opcode
   require(
@@ -199,7 +215,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     StakeTotalCmd.length == 2 * METHOD_ID_LENGTH &&
     ActivateCmd.length == 2 * METHOD_ID_LENGTH &&
     GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
-    GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH
+    GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH &&
+    GetCurrentConsensusEpochCmd.length == 2 * METHOD_ID_LENGTH
   )
 
   override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
