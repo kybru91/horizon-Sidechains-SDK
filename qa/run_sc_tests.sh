@@ -150,6 +150,7 @@ testScriptsEvm=(
     'sc_evm_shanghai.py'
     'sc_evm_pause_forging.py'
     'sc_evm_forger_reward_address.py'
+    'sc_evm_native_forger_v2.py'
 );
 
 testScriptsUtxo=(
