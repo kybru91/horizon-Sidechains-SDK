@@ -3,19 +3,22 @@ import time
 from decimal import Decimal
 
 from eth_abi import decode
-from eth_utils import encode_hex, event_signature_to_log_topic, remove_0x_prefix
+from eth_utils import encode_hex, event_signature_to_log_topic, remove_0x_prefix, add_0x_prefix
 
 from SidechainTestFramework.account.ac_chain_setup import AccountChainSetup
 from SidechainTestFramework.account.ac_use_smart_contract import SmartContract
 from SidechainTestFramework.account.ac_utils import ac_makeForgerStake, \
-    generate_block_and_get_tx_receipt, contract_function_static_call, contract_function_call, format_eoa, format_evm
+    generate_block_and_get_tx_receipt, contract_function_static_call, contract_function_call, format_eoa, \
+    rpc_get_balance
+from SidechainTestFramework.account.httpCalls.transaction.createEIP1559Transaction import createEIP1559Transaction
+from SidechainTestFramework.account.simple_proxy_contract import SimpleProxyContract
 from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STAKE_SMART_CONTRACT_ADDRESS, \
     VERSION_1_3_FORK_EPOCH, \
-    VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
+    VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, convertZenToWei, computeForgedTxFee
 from SidechainTestFramework.scutil import generate_next_block, EVM_APP_SLOT_TIME
-from sc_evm_forger import print_current_epoch_and_slot, decode_list_of_forger_stakes
+from sc_evm_forger import print_current_epoch_and_slot
 from test_framework.util import (
-    assert_equal, assert_true, fail, forward_transfer_to_sidechain, bytes_to_hex_str, )
+    assert_equal, assert_true, fail, forward_transfer_to_sidechain, hex_str_to_bytes, bytes_to_hex_str, assert_false, )
 
 """
 If it is run with --allforks, all the existing forks are enabled at epoch 2, so it will use Shanghai EVM.
@@ -158,13 +161,13 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         old_forger_native_contract = SmartContract("ForgerStakes")
         method = 'upgrade()'
         # Execute upgrade
-        tx_hash = contract_function_call(sc_node_1, old_forger_native_contract, FORGER_STAKE_SMART_CONTRACT_ADDRESS,
-                                         evm_address_sc_node_1, method)
+        contract_function_call(sc_node_1, old_forger_native_contract, FORGER_STAKE_SMART_CONTRACT_ADDRESS,
+                               evm_address_sc_node_1, method)
 
         generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
         self.sc_sync_all()
 
-        forger_stake_balance = int(sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16)
+        forger_stake_balance = rpc_get_balance(sc_node_1, FORGER_STAKE_SMART_CONTRACT_ADDRESS)
 
         # Check that disable on old smart contract cannot be called before fork 1.4
         method = 'disableAndMigrate()'
@@ -195,7 +198,8 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
             self.sc_sync_all()
 
-        # Check that disable on old smart contract cannot be called from an account that is not FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
+        # Check that disable on old smart contract cannot be called from an account that is not
+        # FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
         method = 'disableAndMigrate()'
         try:
             contract_function_static_call(sc_node_1, old_forger_native_contract, FORGER_STAKE_SMART_CONTRACT_ADDRESS,
@@ -205,9 +209,37 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             print("Expected exception thrown: {}".format(err))
             assert_true("Authorization failed" in str(err))
 
+        # Check that delegate cannot be called before activate
+        delegate_method = 'delegate(bytes32,bytes32,bytes1)'
+        forger_1_vrf_pub_key_to_bytes = hex_str_to_bytes(vrf_pub_key_1)
+        forger_1_sign_key_to_bytes = hex_str_to_bytes(block_sign_pub_key_1)
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, delegate_method,
+                                          forger_1_sign_key_to_bytes, forger_1_vrf_pub_key_to_bytes[0:32],
+                                          forger_1_vrf_pub_key_to_bytes[32:])
+            fail("delegate call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
+        # Check that withdraw cannot be called before activate
+        method = 'withdraw(bytes32,bytes32,bytes1,uint256)'
+        forger_1_vrf_pub_key_to_bytes = hex_str_to_bytes(vrf_pub_key_1)
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, forger_1_sign_key_to_bytes,
+                                          forger_1_vrf_pub_key_to_bytes[0:32], forger_1_vrf_pub_key_to_bytes[32:],
+                                          convertZenToWei(1))
+            fail("withdraw call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
         # Execute activate.
-        forger_stake_v2_balance =  int(
-            sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16)
+        forger_stake_v2_balance = rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
         method = 'activate()'
         tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
                                          evm_address_sc_node_1, method)
@@ -256,15 +288,17 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                 assert_equal(genesis_stake, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
 
         # Check the balance of the 2 smart contracts
-        assert_equal(0, int(sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16))
-        assert_equal(forger_stake_balance + forger_stake_v2_balance, int(sc_node_1.rpc_eth_getBalance(format_evm(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS), 'latest')['result'], 16))
+        assert_equal(0, rpc_get_balance(sc_node_1, FORGER_STAKE_SMART_CONTRACT_ADDRESS))
+        assert_equal(forger_stake_balance + forger_stake_v2_balance,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_stake_v2_balance += forger_stake_balance
 
         # Check that activate cannot be called twice
 
         try:
-            tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract,
-                                             FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
-                                             evm_address_sc_node_1, method)
+            contract_function_call(sc_node_1, forger_v2_native_contract,
+                                   FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                   evm_address_sc_node_1, method)
             fail("activate call should fail")
         except RuntimeError as err:
             pass
@@ -272,7 +306,8 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         # Check that old native smart contract is disabled
         method = "getAllForgersStakes()"
         try:
-            old_forger_native_contract.static_call(sc_node_1, method, fromAddress=evm_address_sc_node_1, toAddress= FORGER_STAKE_SMART_CONTRACT_ADDRESS)
+            old_forger_native_contract.static_call(sc_node_1, method, fromAddress=evm_address_sc_node_1,
+                                                   toAddress=FORGER_STAKE_SMART_CONTRACT_ADDRESS)
             fail("call should fail after activate of Forger Stake v2")
         except RuntimeError as err:
             print("Expected exception thrown: {}".format(err))
@@ -280,6 +315,439 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             assert_true("Method is disabled" in str(err))
 
         generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
+
+        ################################
+        # Delegate
+        ################################
+        evm_address_sc_node_1_balance = rpc_get_balance(sc_node_1, evm_address_sc_node_1)
+
+        staked_amount = convertZenToWei(1)
+
+        delegate_method = 'delegate(bytes32,bytes32,bytes1)'
+
+        tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                         evm_address_sc_node_1, delegate_method, forger_1_sign_key_to_bytes,
+                                         forger_1_vrf_pub_key_to_bytes[0:32], forger_1_vrf_pub_key_to_bytes[32:],
+                                         value=staked_amount)
+
+        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
+        self.sc_sync_all()
+
+        # Check the receipt and the event log
+        tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
+        assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
+        assert_equal(41403, int(tx_receipt['gasUsed'], 16), "wrong used gas")
+        assert_equal(1, len(tx_receipt['logs']), 'Wrong number of logs')
+        delegate_event = tx_receipt['logs'][0]
+        check_delegate_event(delegate_event, evm_address_sc_node_1, forger_1_vrf_pub_key_to_bytes, block_sign_pub_key_1,
+                             staked_amount)
+
+        # Check the balance after delegate
+        gas_fee_paid, _, _ = computeForgedTxFee(sc_node_1, tx_hash)
+        assert_equal(evm_address_sc_node_1_balance - staked_amount - gas_fee_paid,
+                     rpc_get_balance(sc_node_1, evm_address_sc_node_1))
+        assert_equal(staked_amount + forger_stake_v2_balance,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_stake_v2_balance += staked_amount
+
+        # Check stakes by forger
+        method_paged_stakes_by_forger = "getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)"
+
+        paged_stakes_by_forger_1_data_input = (forger_v2_native_contract.
+                                               raw_encode_call(method_paged_stakes_by_forger,
+                                                               forger_1_sign_key_to_bytes,
+                                                               forger_1_vrf_pub_key_to_bytes[0:32],
+                                                               forger_1_vrf_pub_key_to_bytes[32:], 0, 100))
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": paged_stakes_by_forger_1_data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_forger_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(6, len(list_of_stakes))
+
+        exp_stake_own_1 += staked_amount
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_equal(exp_stake_own_2, list_of_stakes["0x" + evm_address_sc_node_2])
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
+
+        # Check stakes by delegator
+        method_paged_stakes_by_delegator = "getPagedForgersStakesByDelegator(address,int32,int32)"
+
+        data_input = forger_v2_native_contract.raw_encode_call(method_paged_stakes_by_delegator,
+                                                               "0x" + evm_address_sc_node_1,
+                                                               0, 100)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_delegator_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(1, len(list_of_stakes))
+        assert_equal(block_sign_pub_key_1, list_of_stakes[0][0])
+        assert_equal(vrf_pub_key_1, list_of_stakes[0][1])
+        assert_equal(exp_stake_own_1, list_of_stakes[0][2])
+
+        # Try delegate to a non-registered forger
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, delegate_method,
+                                          hex_str_to_bytes(block_sign_pub_key_2),
+                                          forger_1_vrf_pub_key_to_bytes[0:32], forger_1_vrf_pub_key_to_bytes[32:],
+                                          value=convertZenToWei(1))
+            fail("delegate call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger doesn't exist" in str(err))
+
+        ################################
+        # Withdrawal
+        ################################
+        evm_address_sc_node_2_balance = rpc_get_balance(sc_node_1, evm_address_sc_node_2)
+
+        staked_amount_withdrawn = exp_stake_own_2
+        withdraw_method = "withdraw(bytes32,bytes32,bytes1,uint256)"
+
+        tx_hash = contract_function_call(sc_node_2, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                         evm_address_sc_node_2, withdraw_method, forger_1_sign_key_to_bytes,
+                                         forger_1_vrf_pub_key_to_bytes[0:32], forger_1_vrf_pub_key_to_bytes[32:],
+                                         staked_amount_withdrawn)
+
+        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
+        self.sc_sync_all()
+
+        # Check the receipt and the event log
+        tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
+        assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
+        assert_equal(41503, int(tx_receipt['gasUsed'], 16), "wrong used gas")
+        assert_equal(1, len(tx_receipt['logs']), 'Wrong number of logs')
+        withdraw_event = tx_receipt['logs'][0]
+        check_withdraw_event(withdraw_event, evm_address_sc_node_2, forger_1_vrf_pub_key_to_bytes, block_sign_pub_key_1,
+                             staked_amount_withdrawn)
+
+        # Check the balance after withdrawal
+        gas_fee_paid, _, _ = computeForgedTxFee(sc_node_1, tx_hash)
+        assert_equal(evm_address_sc_node_2_balance + staked_amount_withdrawn - gas_fee_paid,
+                     rpc_get_balance(sc_node_1, evm_address_sc_node_2))
+        assert_equal(forger_stake_v2_balance - staked_amount_withdrawn,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_stake_v2_balance -= staked_amount_withdrawn
+
+        # Check stakes by forger
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": paged_stakes_by_forger_1_data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_forger_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(5, len(list_of_stakes))
+
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
+
+        assert_false(("0x" + evm_address_sc_node_2) in list_of_stakes)
+
+        # Check stakes by delegator
+        method_paged_stakes_by_delegator = "getPagedForgersStakesByDelegator(address,int32,int32)"
+
+        data_input = forger_v2_native_contract.raw_encode_call(method_paged_stakes_by_delegator,
+                                                               "0x" + evm_address_sc_node_2, 0, 100)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_delegator_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(0, len(list_of_stakes))
+
+        # Try withdrawal without enough funds
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_2, withdraw_method,
+                                          forger_1_sign_key_to_bytes,
+                                          forger_1_vrf_pub_key_to_bytes[0:32], forger_1_vrf_pub_key_to_bytes[32:],
+                                          staked_amount_withdrawn)
+            fail("withdrawal call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Not enough stake" in str(err))
+
+        #######################################################################################################
+        # Interoperability test with an EVM smart contract calling forger stakes V2 native contract
+        #######################################################################################################
+
+        # Create and deploy evm proxy contract
+        # Create a new sc address to be used for the interoperability tests
+        evm_address_interop = sc_node_1.wallet_createPrivateKeySecp256k1()["result"]["proposition"]["address"]
+
+        new_ft_amount_in_zen = Decimal('50.0')
+
+        forward_transfer_to_sidechain(self.sc_nodes_bootstrap_info.sidechain_id,
+                                      mc_node,
+                                      evm_address_interop,
+                                      new_ft_amount_in_zen,
+                                      mc_return_address=mc_node.getnewaddress(),
+                                      generate_block=True)
+
+        generate_next_block(sc_node_1, "first node")
+
+        # Deploy proxy contract
+        proxy_contract = SimpleProxyContract(sc_node_1, evm_address_interop, self.options.all_forks)
+
+        # Send some funds to the proxy smart contract. Note that nonce=1 because evm_address_interop has deployed the proxy contract.
+        contract_funds_in_zen = 10
+        createEIP1559Transaction(sc_node_1, fromAddress=evm_address_interop,
+                                 toAddress=format_eoa(proxy_contract.contract_address),
+                                 nonce=1, gasLimit=230000, maxPriorityFeePerGas=900000000,
+                                 maxFeePerGas=900000000, value=convertZenToWei(contract_funds_in_zen))
+        generate_next_block(sc_node_1, "first node")
+
+        # Call delegate using the proxy
+        evm_address_interop_balance = rpc_get_balance(sc_node_1, evm_address_interop)
+
+        proxy_contract_balance = rpc_get_balance(sc_node_1, proxy_contract.contract_address)
+
+        native_input = format_eoa(
+            forger_v2_native_contract.raw_encode_call(delegate_method, forger_1_sign_key_to_bytes,
+                                                      forger_1_vrf_pub_key_to_bytes[0:32],
+                                                      forger_1_vrf_pub_key_to_bytes[32:]))
+
+        tx_hash = proxy_contract.call_transaction(evm_address_interop, 2, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                                  staked_amount, native_input)
+        tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
+        assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
+        assert_equal(161741, int(tx_receipt['gasUsed'], 16), "wrong used gas")
+        assert_equal(1, len(tx_receipt['logs']), 'Wrong number of logs')
+        delegate_event = tx_receipt['logs'][0]
+        check_delegate_event(delegate_event, format_eoa(proxy_contract.contract_address), forger_1_vrf_pub_key_to_bytes,
+                             block_sign_pub_key_1, staked_amount)
+
+        # Check the balance after delegate
+        gas_fee_paid, _, _ = computeForgedTxFee(sc_node_1, tx_hash)
+        assert_equal(evm_address_interop_balance - gas_fee_paid, rpc_get_balance(sc_node_1, evm_address_interop))
+        evm_address_interop_balance -= gas_fee_paid
+
+        assert_equal(proxy_contract_balance - staked_amount,
+                     rpc_get_balance(sc_node_1, proxy_contract.contract_address))
+        proxy_contract_balance -= staked_amount
+
+        assert_equal(staked_amount + forger_stake_v2_balance,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_stake_v2_balance += staked_amount
+
+        # Check stakes by forger
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": paged_stakes_by_forger_1_data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_forger_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(6, len(list_of_stakes))
+
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_false(("0x" + evm_address_sc_node_2) in list_of_stakes)
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
+        assert_equal(staked_amount, list_of_stakes[proxy_contract.contract_address.lower()])
+
+        # Check stakes by delegator
+        data_input = forger_v2_native_contract.raw_encode_call(method_paged_stakes_by_delegator,
+                                                               proxy_contract.contract_address,
+                                                               0, 100)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_delegator_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(1, len(list_of_stakes))
+        assert_equal(block_sign_pub_key_1, list_of_stakes[0][0])
+        assert_equal(vrf_pub_key_1, list_of_stakes[0][1])
+        assert_equal(staked_amount, list_of_stakes[0][2])
+
+        # Call withdraw using the proxy
+
+        native_input = format_eoa(
+            forger_v2_native_contract.raw_encode_call(withdraw_method, forger_1_sign_key_to_bytes,
+                                                      forger_1_vrf_pub_key_to_bytes[0:32],
+                                                      forger_1_vrf_pub_key_to_bytes[32:], staked_amount))
+
+        tx_hash = proxy_contract.call_transaction(evm_address_interop, 3, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                                  0, native_input)
+        tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
+
+        assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
+        assert_equal(46675, int(tx_receipt['gasUsed'], 16), "wrong used gas")
+        assert_equal(1, len(tx_receipt['logs']), 'Wrong number of logs')
+        withdraw_event = tx_receipt['logs'][0]
+        check_withdraw_event(withdraw_event, format_eoa(proxy_contract.contract_address), forger_1_vrf_pub_key_to_bytes,
+                             block_sign_pub_key_1, staked_amount)
+
+        # Check the balance after withdrawal
+        gas_fee_paid, _, _ = computeForgedTxFee(sc_node_1, tx_hash)
+        assert_equal(evm_address_interop_balance - gas_fee_paid, rpc_get_balance(sc_node_1, evm_address_interop))
+        evm_address_interop_balance -= gas_fee_paid
+
+        assert_equal(proxy_contract_balance + staked_amount,
+                     rpc_get_balance(sc_node_1, proxy_contract.contract_address))
+        proxy_contract_balance += staked_amount
+
+        assert_equal(forger_stake_v2_balance - staked_amount,
+                     rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS))
+        forger_stake_v2_balance -= staked_amount_withdrawn
+
+        # Check stakes by forger
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": paged_stakes_by_forger_1_data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_forger_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(5, len(list_of_stakes))
+
+        assert_equal(exp_stake_own_1, list_of_stakes["0x" + evm_address_sc_node_1])
+        assert_false(("0x" + evm_address_sc_node_2) in list_of_stakes)
+        assert_equal(exp_stake_own_3, list_of_stakes["0x" + evm_address_3])
+        assert_equal(exp_stake_own_4, list_of_stakes["0x" + evm_address_4])
+        assert_equal(exp_stake_own_5, list_of_stakes["0x" + evm_address_5])
+        assert_false((proxy_contract.contract_address.lower()) in list_of_stakes)
+
+        # Check stakes by delegator
+        data_input = forger_v2_native_contract.raw_encode_call(method_paged_stakes_by_delegator,
+                                                               proxy_contract.contract_address,
+                                                               0, 100)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, "latest"
+        )
+
+        (next_pos, list_of_stakes) = decode_paged_list_of_delegator_stakes(hex_str_to_bytes(result['result'][2:]))
+        assert_equal(-1, next_pos)
+        assert_equal(0, len(list_of_stakes))
+
+
+def sum_stakes(exp_stake_own):
+    return sum(map(lambda stake: stake['forgerStakeData']['stakedAmount'], exp_stake_own))
+
+
+def check_delegate_event(delegate_event, sender, vrf_pub_key, block_sign_pub_key, staked_amount):
+    assert_equal(4, len(delegate_event['topics']), "Wrong number of topics in delegate_event")
+    event_id = remove_0x_prefix(delegate_event['topics'][0])
+    event_signature = remove_0x_prefix(
+        encode_hex(event_signature_to_log_topic('DelegateForgerStake(address,bytes32,bytes32,bytes1,uint256)')))
+    assert_equal(event_signature, event_id, "Wrong event signature in topics")
+
+    from_addr = decode(['address'], hex_str_to_bytes(delegate_event['topics'][1][2:]))[0][2:]
+    assert_equal(sender.lower(), from_addr.lower(), "Wrong from address in topics")
+
+    vrf1 = decode(['bytes32'], hex_str_to_bytes(delegate_event['topics'][2][2:]))[0]
+    vrf2 = decode(['bytes1'], hex_str_to_bytes(delegate_event['topics'][3][2:]))[0]
+
+    assert_equal(bytes_to_hex_str(vrf_pub_key),
+                 bytes_to_hex_str(vrf1) + bytes_to_hex_str(vrf2), "wrong vrfPublicKey")
+
+    (sign_pub_key, value) = decode(['bytes32', 'uint256'], hex_str_to_bytes(delegate_event['data'][2:]))
+    assert_equal(block_sign_pub_key, bytes_to_hex_str(sign_pub_key), "Wrong sign_pub_key in event")
+    assert_equal(staked_amount, value, "Wrong amount in event")
+
+
+def check_withdraw_event(event, sender, vrf_pub_key, block_sign_pub_key, staked_amount):
+    assert_equal(4, len(event['topics']), "Wrong number of topics in withdraw_event")
+    event_id = remove_0x_prefix(event['topics'][0])
+    event_signature = remove_0x_prefix(
+        encode_hex(event_signature_to_log_topic('WithdrawForgerStake(address,bytes32,bytes32,bytes1,uint256)')))
+    assert_equal(event_signature, event_id, "Wrong event signature in topics")
+
+    from_addr = decode(['address'], hex_str_to_bytes(event['topics'][1][2:]))[0][2:]
+    assert_equal(sender.lower(), from_addr.lower(), "Wrong from address in topics")
+
+    vrf1 = decode(['bytes32'], hex_str_to_bytes(event['topics'][2][2:]))[0]
+    vrf2 = decode(['bytes1'], hex_str_to_bytes(event['topics'][3][2:]))[0]
+
+    assert_equal(bytes_to_hex_str(vrf_pub_key),
+                 bytes_to_hex_str(vrf1) + bytes_to_hex_str(vrf2), "wrong vrfPublicKey")
+
+    (sign_pub_key, value) = decode(['bytes32', 'uint256'], hex_str_to_bytes(event['data'][2:]))
+    assert_equal(block_sign_pub_key, bytes_to_hex_str(sign_pub_key), "Wrong sign_pub_key in event")
+    assert_equal(staked_amount, value, "Wrong amount in event")
+
+
+def decode_paged_list_of_forger_stakes(result):
+    next_pos = decode(['int32'], result[0:32])[0]
+    res = result[32:]
+    res = res[32:]  # cut offset, don't care in this case
+    num_of_stakes = int(bytes_to_hex_str(res[0:32]), 16)
+
+    res = res[32:]  # cut the array length
+
+    elem_size = 64  # 32 * 2
+    list_of_elems = [res[i:i + elem_size] for i in range(0, num_of_stakes * elem_size, elem_size)]
+
+    list_of_stakes = []
+    for p in list_of_elems:
+        list_of_stakes.append(decode(['(address,uint256)'], p)[0])
+
+    return next_pos, dict(list_of_stakes)
+
+
+def decode_paged_list_of_delegator_stakes(result):
+    next_pos = decode(['int32'], result[0:32])[0]
+    res = result[32:]
+    res = res[32:]  # cut offset, don't care in this case
+    num_of_stakes = int(bytes_to_hex_str(res[0:32]), 16)
+
+    res = res[32:]  # cut the array length
+
+    elem_size = 128  # 32 * 4
+    list_of_elems = [res[i:i + elem_size] for i in range(0, num_of_stakes * elem_size, elem_size)]
+
+    list_of_stakes = []
+    for p in list_of_elems:
+        raw_stake = decode(['(bytes32,bytes32,bytes1,uint256)'], p)[0]
+        stake = (bytes_to_hex_str(raw_stake[0]),
+                 bytes_to_hex_str(raw_stake[1]) + bytes_to_hex_str(raw_stake[2]),
+                 raw_stake[3])
+        list_of_stakes.append(stake)
+
+    return next_pos, list_of_stakes
 
 
 if __name__ == "__main__":

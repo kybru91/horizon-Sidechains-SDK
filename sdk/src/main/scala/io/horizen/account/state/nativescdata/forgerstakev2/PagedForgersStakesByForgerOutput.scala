@@ -54,8 +54,8 @@ case class StakeDataDelegator(val delegator: AddressProposition,
 
   private[horizen] def asABIType(): StaticStruct = {
     val listOfParams = new util.ArrayList[Type[_]]()
-    listOfParams.add(new Uint256(stakedAmount))
     listOfParams.add(new AbiAddress(delegator.address().toString))
+    listOfParams.add(new Uint256(stakedAmount))
     new StaticStruct(listOfParams)
   }
 }
