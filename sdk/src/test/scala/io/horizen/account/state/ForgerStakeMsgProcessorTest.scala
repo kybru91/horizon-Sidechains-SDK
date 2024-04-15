@@ -2473,8 +2473,8 @@ class ForgerStakeMsgProcessorTest
       TypeReference.makeTypeReference(expectedEvent.value.getTypeAsString))
       .asInstanceOf[util.List[TypeReference[Type[_]]]]
     val listOfDecodedData = FunctionReturnDecoder.decode(BytesUtils.toHexString(actualEvent.data), listOfRefs)
-    assertEquals("Wrong amount in data", expectedEvent.stakeId, listOfDecodedData.get(0))
-    assertEquals("Wrong stakeId in data", expectedEvent.value, listOfDecodedData.get(1))
+    assertEquals("Wrong stakeId in data", expectedEvent.stakeId, listOfDecodedData.get(0))
+    assertEquals("Wrong value in data", expectedEvent.value, listOfDecodedData.get(1))
   }
 
   def checkRemoveForgerStakeEvent(expectedEvent: WithdrawForgerStake, actualEvent: EthereumConsensusDataLog): Unit = {

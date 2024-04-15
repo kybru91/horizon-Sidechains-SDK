@@ -10,6 +10,7 @@ import io.horizen.account.state.ForgerStakeMsgProcessor.{AddNewStakeCmd => AddNe
 import io.horizen.account.state.ForgerStakeV2MsgProcessor._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage._
 import io.horizen.account.state.nativescdata.forgerstakev2._
+import io.horizen.account.state.nativescdata.forgerstakev2.events.{DelegateForgerStake, WithdrawForgerStake}
 import io.horizen.account.state.receipt.EthereumConsensusDataLog
 import io.horizen.account.utils.ZenWeiConverter
 import io.horizen.consensus.intToConsensusEpochNumber
@@ -24,6 +25,8 @@ import org.junit._
 import org.mockito._
 import org.scalatestplus.junit.JUnitSuite
 import org.scalatestplus.mockito._
+import org.web3j.abi.datatypes.Type
+import org.web3j.abi.{FunctionReturnDecoder, TypeReference}
 import sparkz.core.bytesToVersion
 import sparkz.crypto.hash.Keccak256
 
@@ -58,9 +61,9 @@ class ForgerStakeV2MsgProcessorTest
   val privateKey: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest".getBytes(StandardCharsets.UTF_8))
   val ownerAddressProposition: AddressProposition = privateKey.publicImage()
 
-  val AddNewForgerStakeEventSig: Array[Byte] = getEventSignature("DelegateForgerStake(address,address,bytes32,uint256)")
-  val NumOfIndexedAddNewStakeEvtParams = 2
-  val RemoveForgerStakeEventSig: Array[Byte] = getEventSignature("WithdrawForgerStake(address,bytes32)")
+  val DelegateForgerStakeEventSig: Array[Byte] = getEventSignature("DelegateForgerStake(address,bytes32,bytes32,bytes1,uint256)")
+  val NumOfIndexedDelegateStakeEvtParams = 3
+  val WithdrawForgerStakeEventSig: Array[Byte] = getEventSignature("WithdrawForgerStake(address,bytes32,bytes32,bytes1,uint256)")
   val NumOfIndexedRemoveForgerStakeEvtParams = 1
   val OpenForgerStakeListEventSig: Array[Byte] = getEventSignature("OpenForgerList(uint32,address,bytes32)")
   val NumOfIndexedOpenForgerStakeListEvtParams = 1
@@ -473,106 +476,562 @@ class ForgerStakeV2MsgProcessorTest
     }
   }
 
+  def getBlockContextForEpoch(epochNum: Int): BlockContext = new BlockContext(
+    Address.ZERO,
+    0,
+    0,
+    DefaultGasFeeFork.blockGasLimit,
+    0,
+    epochNum,
+    0,
+    1,
+    MockedHistoryBlockHashProvider,
+    Hash.ZERO
+  )
+
   @Test
   def testAddAndRemoveStake(): Unit = {
 
-    val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
-    val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+    val processors = Seq(forgerStakeV2MessageProcessor, forgerStakeMessageProcessor)
 
-    usingView(forgerStakeV2MessageProcessor) { view =>
-
+    usingView(processors) { view =>
+      forgerStakeMessageProcessor.init(view, V1_3_MOCK_FORK_POINT)
       forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
 
       // create sender account with some fund in it
       val initialAmount = BigInteger.valueOf(100).multiply(validWeiAmount)
       createSenderAccount(view, initialAmount)
 
-      Mockito.when(mockNetworkParams.restrictForgers).thenReturn(true)
-      Mockito.when(mockNetworkParams.allowedForgersList).thenReturn(Seq((blockSignerProposition, vrfPublicKey)))
-
       //Setting the context
-      val txHash1 = Keccak256.hash("first tx")
-      view.setupTxContext(txHash1, 10)
+
+      val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
+      val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Before activate tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
 
       val delegateCmdInput = DelegateCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
       )
 
-      val data: Array[Byte] = delegateCmdInput.encode()
-      val msg = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(DelegateCmd) ++ data, randomNonce)
+      val delegateData: Array[Byte] = BytesUtils.fromHexString(DelegateCmd) ++ delegateCmdInput.encode()
+      var msg = getMessage(contractAddress, validWeiAmount,  delegateData, randomNonce)
 
-      // positive case, verify we can add the stake to view
-      val returnData = assertGas(0, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
-      assertNotNull(returnData)
-      println("This is the returned value: " + BytesUtils.toHexString(returnData))
+      // Check that delegate and withdraw cannot be called before activate
 
-      //TODO: add checks...
+      var exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      var expectedErr = "Forger stake V2 has not been activated yet"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
-      //withdrwaw
-      val withdrawInput = WithdrawCmdInput(
-        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), 10
-      )
-
-      val data2: Array[Byte] = withdrawInput.encode()
-      val msg2 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(WithdrawCmd) ++ data2, randomNonce)
-
-      val returnData2 = assertGas(0, msg2, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
-      assertNotNull(returnData2)
-      println("This is the returned value: " + BytesUtils.toHexString(returnData2))
-
-      //TODO: add checks...
-
-      //stake total
-
-      val stakeTotalInput = StakeTotalCmdInput(
-        Some(ForgerPublicKeys(blockSignerProposition, vrfPublicKey)),
-        Some(scAddressObj1),
-        Some(5),
-        Some(5)
-      )
-
-      /*
-      val data3: Array[Byte] = stakeTotalInput.encode()
-      val msg3 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data3, randomNonce)
-      val returnData3 = assertGas(2100, msg3, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
-      assertNotNull(returnData3)
-      println("This is the returned value: " + BytesUtils.toHexString(returnData2))
-
-      //TODO: commented part works when the stake v2 will be activated. add checks...
-       */
-
-
-      //GetPagedForgersStakesByForger
-
-      val pagedForgersStakesByForgerCmd = PagedForgersStakesByForgerCmdInput(
+      val withdrawCmdInput = WithdrawCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey),
-        0,
-        5
+        BigInteger.ONE
       )
 
-      val data4: Array[Byte] = pagedForgersStakesByForgerCmd.encode()
-      val msg4 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByForgerCmd) ++ data4, randomNonce)
-      val returnData4 = assertGas(2100, msg4, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
-      assertNotNull(returnData4)
-      println("This is the returned value: " + BytesUtils.toHexString(returnData2))
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(WithdrawCmd) ++ withdrawCmdInput.encode(), randomNonce)
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      assertTrue(exc.getMessage.contains("Forger stake V2 has not been activated yet"))
 
-      //TODO: add checks...
+      // Call activate
 
-      //GetPagedForgersStakesByDelegator
+      val initialOwnerBalance = BigInteger.valueOf(200).multiply(validWeiAmount)
+      createSenderAccount(view, initialOwnerBalance, ownerAddressProposition.address())
 
-      val pagedForgersStakesByDelegatorCmd = PagedForgersStakesByDelegatorCmdInput(
-        scAddressObj1,
-        0,
-        5
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(ActivateCmd), randomNonce, ownerAddressProposition.address())
+
+      assertGasInterop(0, msg, view, processors, blockContextForkV1_4)
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Delegate tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      // Try delegate to a non-existing forger. It should fail.
+      msg = getMessage(contractAddress, validWeiAmount, delegateData, randomNonce)
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "Forger doesn't exist."
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Register the forger
+      val initialStake = new BigInteger("1000000000000")
+      StakeStorage.addForger(view, delegateCmdInput.forgerPublicKeys.blockSignPublicKey, delegateCmdInput.forgerPublicKeys.vrfPublicKey,
+        0, Address.ZERO, blockContextForkV1_4.consensusEpochNumber, ownerAddressProposition.address(), initialStake)
+
+      //TODO we're using directly StakeStorage.addForger here because registerForger is not implemented yet. So we need
+      // to update the contract balance by hand with the initial stake
+      view.addBalance(contractAddress, initialStake)
+
+      // Add the first stake by the same delegator
+      val txHash1 = Keccak256.hash("first tx")
+      view.setupTxContext(txHash1, 10)
+
+      var stakeAmount = validWeiAmount
+      msg = getMessage(contractAddress, stakeAmount, delegateData, randomNonce, ownerAddressProposition.address())
+      assertGas(13587, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+
+      var listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(1, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(ownerAddressProposition, listOfStakes.head.ownerPublicKey)
+      var expectedOwnerStakeAmount = initialStake.add(stakeAmount)
+      assertEquals(expectedOwnerStakeAmount, listOfStakes.head.stakedAmount)
+
+      // Check that the balances of the delegator and of the forger smart contract have changed
+      var expectedOwnerBalance = initialOwnerBalance.subtract(stakeAmount)
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+      var expectedForgerContractBalance = initialStake.add(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+
+      // Check log event
+      var listOfLogs = view.getLogs(txHash1)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      var expectedDelegateEvent = DelegateForgerStake(ownerAddressProposition.address(), delegateCmdInput.forgerPublicKeys.blockSignPublicKey,
+        delegateCmdInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+
+      checkDelegateForgerStakeEvent(expectedDelegateEvent, listOfLogs(0))
+
+      // Add with same delegator but different epoch
+      val txHash2 = Keccak256.hash("tx2")
+      view.setupTxContext(txHash2, 10)
+      stakeAmount = validWeiAmount.multiply(2)
+
+      var blockContext = getBlockContextForEpoch(V1_4_MOCK_FORK_POINT + 1)
+
+
+      msg = getMessage(contractAddress, stakeAmount, delegateData, randomNonce, ownerAddressProposition.address())
+      assertGas(57787, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(1, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(ownerAddressProposition, listOfStakes.head.ownerPublicKey)
+      expectedOwnerStakeAmount = expectedOwnerStakeAmount.add(stakeAmount)
+      assertEquals(expectedOwnerStakeAmount, listOfStakes.head.stakedAmount)
+
+      // Check that the balances of the delegator and of the forger smart contract have changed
+      expectedOwnerBalance = expectedOwnerBalance.subtract(stakeAmount)
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+
+      expectedForgerContractBalance = expectedForgerContractBalance.add(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash2)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedDelegateEvent = DelegateForgerStake(ownerAddressProposition.address(), delegateCmdInput.forgerPublicKeys.blockSignPublicKey,
+        delegateCmdInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+
+      checkDelegateForgerStakeEvent(expectedDelegateEvent, listOfLogs(0))
+
+      // Add with different delegator but same epoch
+      val privateKey1: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8))
+      val owner1: AddressProposition = privateKey1.publicImage()
+
+      val initialOwner1Balance = BigInteger.valueOf(200).multiply(validWeiAmount)
+      createSenderAccount(view, initialOwner1Balance, owner1.address())
+
+      val txHash3 = Keccak256.hash("tx3")
+      view.setupTxContext(txHash3, 10)
+      stakeAmount = validWeiAmount.multiply(3)
+
+      msg = getMessage(contractAddress, stakeAmount, delegateData, randomNonce, owner1.address())
+      assertGas(124087, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(2, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(ownerAddressProposition, listOfStakes.head.ownerPublicKey)
+      assertEquals(expectedOwnerStakeAmount, listOfStakes.head.stakedAmount)
+      assertEquals(owner1, listOfStakes(1).ownerPublicKey)
+      val expectedOwner1StakeAmount = stakeAmount
+      assertEquals(expectedOwner1StakeAmount, listOfStakes(1).stakedAmount)
+
+      // Check that the balances of the delegator and of the forger smart contract have changed
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+      expectedForgerContractBalance = expectedForgerContractBalance.add(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+
+      var expectedOwner1Balance = initialOwner1Balance.subtract(stakeAmount)
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash3)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedDelegateEvent = DelegateForgerStake(owner1.address(), delegateCmdInput.forgerPublicKeys.blockSignPublicKey,
+        delegateCmdInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+      checkDelegateForgerStakeEvent(expectedDelegateEvent, listOfLogs(0))
+
+
+      // Add with different delegator and different epoch
+      val txHash4 = Keccak256.hash("tx4")
+      view.setupTxContext(txHash4, 10)
+      stakeAmount = validWeiAmount
+
+      val privateKey2: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest2".getBytes(StandardCharsets.UTF_8))
+      val owner2: AddressProposition = privateKey2.publicImage()
+
+      blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber + 1)
+      val initialOwner2Balance = BigInteger.valueOf(300).multiply(validWeiAmount)
+      createSenderAccount(view, initialOwner2Balance, owner2.address())
+
+      msg = getMessage(contractAddress, stakeAmount, delegateData, randomNonce, owner2.address())
+      assertGas(144087, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(3, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(ownerAddressProposition, listOfStakes.head.ownerPublicKey)
+      assertEquals(expectedOwnerStakeAmount, listOfStakes.head.stakedAmount)
+      assertEquals(owner1, listOfStakes(1).ownerPublicKey)
+      assertEquals(expectedOwner1StakeAmount, listOfStakes(1).stakedAmount)
+      assertEquals(owner2, listOfStakes(2).ownerPublicKey)
+      val expectedOwner2StakeAmount = stakeAmount
+      assertEquals(expectedOwner2StakeAmount, listOfStakes(2).stakedAmount)
+
+      // Check that the balances of the delegators and of the forger smart contract have changed
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+      expectedForgerContractBalance = expectedForgerContractBalance.add(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+      var expectedOwner2Balance = initialOwner2Balance.subtract(stakeAmount)
+      assertEquals(expectedOwner2Balance, view.getBalance(owner2.address()))
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash4)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedDelegateEvent = DelegateForgerStake(owner2.address(), delegateCmdInput.forgerPublicKeys.blockSignPublicKey,
+        delegateCmdInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+      checkDelegateForgerStakeEvent(expectedDelegateEvent, listOfLogs(0))
+
+      //////////////////////////////////////////////////////////
+      // Negative tests
+      //////////////////////////////////////////////////////////
+
+      // Add stake without enough balance
+
+      val privateKey3: PrivateKeySecp256k1 = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest3".getBytes(StandardCharsets.UTF_8))
+      val owner3: AddressProposition = privateKey3.publicImage()
+      assertEquals(BigInteger.ZERO, view.getBalance(owner3.address()))
+
+      msg = getMessage(contractAddress, validWeiAmount, delegateData, randomNonce, owner3.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(2300, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Insufficient funds."
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Add Stake with value 0.
+
+      msg = getMessage(contractAddress, BigInteger.ZERO, delegateData, randomNonce, owner2.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Value must not be zero"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Add Stake with invalid zen amount.
+
+      msg = getMessage(contractAddress, invalidWeiAmount, delegateData, randomNonce, owner2.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Value is not a legal wei amount"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Add Stake in a epoch in the past.
+
+      blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber - 1)
+      msg = getMessage(contractAddress, validWeiAmount, delegateData, randomNonce, owner2.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(6400, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Epoch is in the past"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // try processing a msg with a trailing byte in the arguments
+      val badData = Bytes.concat(delegateData, new Array[Byte](1))
+      val msgBad = getMessage(contractAddress, stakeAmount, badData, randomNonce)
+
+      // should fail because input has a trailing byte
+      blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber + 10)
+      val ex = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContext, _))
+      }
+      assertTrue(ex.getMessage.contains("Wrong message data field length"))
+
+      //////////////////////////////////////////////////////////
+      // Withdrawal tests
+      //////////////////////////////////////////////////////////
+
+      // remove all the stakes for owner2
+      stakeAmount = expectedOwner2StakeAmount
+      val withdrawCmdBytes: Array[Byte] = BytesUtils.fromHexString(WithdrawCmd)
+      var withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), stakeAmount
+      )
+      val txHash5 = Keccak256.hash("tx5")
+      view.setupTxContext(txHash5, 10)
+
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner2.address())
+      assertGas(57687, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(2, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(ownerAddressProposition, listOfStakes.head.ownerPublicKey)
+      assertEquals(expectedOwnerStakeAmount, listOfStakes.head.stakedAmount)
+      assertEquals(owner1, listOfStakes(1).ownerPublicKey)
+      assertEquals(expectedOwner1StakeAmount, listOfStakes(1).stakedAmount)
+
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+      expectedForgerContractBalance = expectedForgerContractBalance.subtract(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+      expectedOwner2Balance = expectedOwner2Balance.add(stakeAmount)
+      assertEquals(expectedOwner2Balance, view.getBalance(owner2.address()))
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash5)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      var expectedWithdrawEvent = WithdrawForgerStake(owner2.address(), withdrawInput.forgerPublicKeys.blockSignPublicKey,
+        withdrawInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+      checkWithdrawForgerStakeEvent(expectedWithdrawEvent, listOfLogs(0))
+
+      // remove all the stakes for ownerAddressProposition in 2 different epochs
+      stakeAmount = initialStake
+
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), stakeAmount
+      )
+      val txHash6 = Keccak256.hash("tx6")
+      view.setupTxContext(txHash6, 10)
+
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, ownerAddressProposition.address())
+      assertGas(37687, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(2, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(ownerAddressProposition, listOfStakes.head.ownerPublicKey)
+      expectedOwnerStakeAmount = expectedOwnerStakeAmount.subtract(stakeAmount)
+      assertEquals(expectedOwnerStakeAmount, listOfStakes.head.stakedAmount)
+
+      assertEquals(owner1, listOfStakes(1).ownerPublicKey)
+      assertEquals(expectedOwner1StakeAmount, listOfStakes(1).stakedAmount)
+
+      expectedOwnerBalance = expectedOwnerBalance.add(stakeAmount)
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+      expectedForgerContractBalance = expectedForgerContractBalance.subtract(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash6)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedWithdrawEvent = WithdrawForgerStake(ownerAddressProposition.address(), withdrawInput.forgerPublicKeys.blockSignPublicKey,
+        withdrawInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+      checkWithdrawForgerStakeEvent(expectedWithdrawEvent, listOfLogs(0))
+
+      blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber + 1)
+
+      stakeAmount = expectedOwnerStakeAmount
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), stakeAmount
+      )
+      val txHash7 = Keccak256.hash("tx7")
+      view.setupTxContext(txHash7, 10)
+
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, ownerAddressProposition.address())
+      assertGas(57687, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(1, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+
+      assertEquals(owner1, listOfStakes.head.ownerPublicKey)
+      assertEquals(expectedOwner1StakeAmount, listOfStakes.head.stakedAmount)
+
+      expectedOwnerBalance = expectedOwnerBalance.add(stakeAmount)
+      assertEquals(expectedOwnerBalance, view.getBalance(ownerAddressProposition.address()))
+      expectedForgerContractBalance = expectedForgerContractBalance.subtract(stakeAmount)
+      assertEquals(expectedForgerContractBalance, view.getBalance(contractAddress))
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash7)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedWithdrawEvent = WithdrawForgerStake(ownerAddressProposition.address(), withdrawInput.forgerPublicKeys.blockSignPublicKey,
+        withdrawInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+      checkWithdrawForgerStakeEvent(expectedWithdrawEvent, listOfLogs(0))
+
+
+      //////////////////////////////////////////////////////////
+      // Negative tests
+      //////////////////////////////////////////////////////////
+
+      // Check that it is not payable
+      msg = getMessage(contractAddress, stakeAmount, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner1.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(0, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Call value must be zero"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Invalid withdrawal amount: 0, invalid wei amount
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), BigInteger.ZERO
+      )
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner1.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Withdrawal amount must be greater than zero"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), invalidWeiAmount
+      )
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner1.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Value is not a legal wei amount"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Wrong input: try processing a msg with a trailing byte in the arguments
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), stakeAmount
+      )
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode() ++ new Array[Byte](1), randomNonce, owner1.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Wrong message data field length"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Remove stake without any stake. 3 tests: delegator that hasn't ever delegate something to the forger, delegator
+      // who withdrew all its stakes and delegator who tries to withdraw an amount greater than its stakes.
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), stakeAmount
       )
 
-      val data5: Array[Byte] = pagedForgersStakesByDelegatorCmd.encode()
-      val msg5 = getMessage(contractAddress, validWeiAmount, BytesUtils.fromHexString(GetPagedForgersStakesByDelegatorCmd) ++ data5, randomNonce)
-      val returnData5 = assertGas(2100, msg5, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
-      assertNotNull(returnData5)
-      println("This is the returned value: " + BytesUtils.toHexString(returnData2))
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner3.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(6300, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "doesn't have stake with the forger"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
-      //TODO: add checks...
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, ownerAddressProposition.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(8400, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Not enough stake"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), expectedOwner1StakeAmount.add(stakeAmount)
+      )
+
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner1.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(8400, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Not enough stake"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Remove stake from a non-existing forger.
+      val vrfPublicKey2 = new VrfPublicKey(BytesUtils.fromHexString("22222222222222446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey2), stakeAmount
+      )
+
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner1.address())
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(4200, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Forger doesn't exist."
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Remove stakes in the past
+      var revert = view.snapshot
+      withdrawInput = WithdrawCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), expectedOwner1StakeAmount
+      )
+      msg = getMessage(contractAddress, BigInteger.ZERO, withdrawCmdBytes ++ withdrawInput.encode(), randomNonce, owner1.address())
+      blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber - 1)
+
+      exc = intercept[ExecutionRevertedException] {
+        assertGas(32800, msg, view, forgerStakeV2MessageProcessor, blockContext)
+      }
+      expectedErr = "Epoch is in the past"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+      view.revertToSnapshot(revert)
+
+      ///////////////////////////////////////////////////////////////////////////////////
+      // Remove all the remaining stakes
+      ///////////////////////////////////////////////////////////////////////////////////
+      val txHash8 = Keccak256.hash("tx8")
+      view.setupTxContext(txHash8, 10)
+      blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber + 10)
+      assertGas(57687, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(0, listOfStakes.size)
+
+      assertEquals(BigInteger.ZERO, view.getBalance(contractAddress))
+      expectedOwner1Balance = expectedOwner1Balance.add(withdrawInput.value)
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash8)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedWithdrawEvent = WithdrawForgerStake(owner1.address(), withdrawInput.forgerPublicKeys.blockSignPublicKey,
+        withdrawInput.forgerPublicKeys.vrfPublicKey, withdrawInput.value)
+      checkWithdrawForgerStakeEvent(expectedWithdrawEvent, listOfLogs(0))
+
+      ///////////////////////////////////////////////////////////////////////////////////
+      // Add again some stakes
+      ///////////////////////////////////////////////////////////////////////////////////
+      val txHash9 = Keccak256.hash("tx9")
+      view.setupTxContext(txHash9, 10)
+      stakeAmount = validWeiAmount
+
+      msg = getMessage(contractAddress, stakeAmount, delegateData, randomNonce, owner1.address())
+      assertGas(17787, msg, view, forgerStakeV2MessageProcessor, blockContext)
+
+      listOfStakes = StakeStorage.getAllForgerStakes(view)
+      assertEquals(1, listOfStakes.size)
+      assertEquals(delegateCmdInput.forgerPublicKeys, listOfStakes.head.forgerPublicKeys)
+      assertEquals(owner1, listOfStakes.head.ownerPublicKey)
+      assertEquals(stakeAmount, listOfStakes.head.stakedAmount)
+
+      // Check that the balances of the delegator and of the forger smart contract have changed
+      assertEquals(stakeAmount, view.getBalance(contractAddress))
+
+      expectedOwner1Balance = expectedOwner1Balance.subtract(stakeAmount)
+      assertEquals(expectedOwner1Balance, view.getBalance(owner1.address()))
+
+      // Check log event
+      listOfLogs = view.getLogs(txHash9)
+      assertEquals("Wrong number of logs", 1, listOfLogs.length)
+      expectedDelegateEvent = DelegateForgerStake(owner1.address(), delegateCmdInput.forgerPublicKeys.blockSignPublicKey,
+        delegateCmdInput.forgerPublicKeys.vrfPublicKey, stakeAmount)
+      checkDelegateForgerStakeEvent(expectedDelegateEvent, listOfLogs(0))
+
+
     }
   }
 
@@ -997,6 +1456,40 @@ class ForgerStakeV2MsgProcessorTest
 
   }
 
+
+  def checkDelegateForgerStakeEvent(expectedEvent: DelegateForgerStake, actualEvent: EthereumConsensusDataLog): Unit = {
+    assertEquals("Wrong address", contractAddress, actualEvent.address)
+    assertEquals("Wrong number of topics", NumOfIndexedDelegateStakeEvtParams + 1, actualEvent.topics.length) //The first topic is the hash of the signature of the event
+    assertArrayEquals("Wrong event signature", DelegateForgerStakeEventSig, actualEvent.topics(0).toBytes)
+    assertEquals("Wrong sender address in topic", expectedEvent.sender, decodeEventTopic(actualEvent.topics(1), TypeReference.makeTypeReference(expectedEvent.sender.getTypeAsString)))
+    assertEquals("Wrong vrfKey1 in topic", expectedEvent.vrf1, decodeEventTopic(actualEvent.topics(2), TypeReference.makeTypeReference(expectedEvent.vrf1.getTypeAsString)))
+    assertEquals("Wrong vrfKey2 in topic", expectedEvent.vrf2, decodeEventTopic(actualEvent.topics(3), TypeReference.makeTypeReference(expectedEvent.vrf2.getTypeAsString)))
+
+    val listOfRefs = util.Arrays.asList(
+        TypeReference.makeTypeReference(expectedEvent.signPubKey.getTypeAsString),
+        TypeReference.makeTypeReference(expectedEvent.value.getTypeAsString))
+      .asInstanceOf[util.List[TypeReference[Type[_]]]]
+    val listOfDecodedData = FunctionReturnDecoder.decode(BytesUtils.toHexString(actualEvent.data), listOfRefs)
+    assertEquals("Wrong signPubKey in data", expectedEvent.signPubKey, listOfDecodedData.get(0))
+    assertEquals("Wrong amount in data", expectedEvent.value.getValue, listOfDecodedData.get(1).getValue)
+  }
+
+  def checkWithdrawForgerStakeEvent(expectedEvent: WithdrawForgerStake, actualEvent: EthereumConsensusDataLog): Unit = {
+    assertEquals("Wrong address", contractAddress, actualEvent.address)
+    assertEquals("Wrong number of topics", NumOfIndexedDelegateStakeEvtParams + 1, actualEvent.topics.length) //The first topic is the hash of the signature of the event
+    assertArrayEquals("Wrong event signature", WithdrawForgerStakeEventSig, actualEvent.topics(0).toBytes)
+    assertEquals("Wrong sender address in topic", expectedEvent.sender, decodeEventTopic(actualEvent.topics(1), TypeReference.makeTypeReference(expectedEvent.sender.getTypeAsString)))
+    assertEquals("Wrong vrfKey1 in topic", expectedEvent.vrf1, decodeEventTopic(actualEvent.topics(2), TypeReference.makeTypeReference(expectedEvent.vrf1.getTypeAsString)))
+    assertEquals("Wrong vrfKey2 in topic", expectedEvent.vrf2, decodeEventTopic(actualEvent.topics(3), TypeReference.makeTypeReference(expectedEvent.vrf2.getTypeAsString)))
+
+    val listOfRefs = util.Arrays.asList(
+        TypeReference.makeTypeReference(expectedEvent.signPubKey.getTypeAsString),
+        TypeReference.makeTypeReference(expectedEvent.value.getTypeAsString))
+      .asInstanceOf[util.List[TypeReference[Type[_]]]]
+    val listOfDecodedData = FunctionReturnDecoder.decode(BytesUtils.toHexString(actualEvent.data), listOfRefs)
+    assertEquals("Wrong signPubKey in data", expectedEvent.signPubKey, listOfDecodedData.get(0))
+    assertEquals("Wrong amount in data", expectedEvent.value.getValue, listOfDecodedData.get(1).getValue)
+  }
 
   private def addStakesV2(view: AccountStateView,
                         blockSignerProposition: PublicKey25519Proposition,
