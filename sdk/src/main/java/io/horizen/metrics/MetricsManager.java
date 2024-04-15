@@ -16,7 +16,7 @@ public class MetricsManager {
 
     private TimeProvider timeProvider;
     private static MetricsManager me;
-    private Counter blocksAppliedSuccesfully;
+    private Counter blocksAppliedSuccessfully;
     private Counter blocksNotApplied;
     private Gauge blockApplyTime;
     private Gauge blockApplyTimeAbsolute;
@@ -51,10 +51,10 @@ public class MetricsManager {
         helps.add(new MetricsHelp(blockApplyTime.getPrometheusName(), "Time to apply block to node wallet and state (milliseconds)"));
 
         blockApplyTimeAbsolute =  Gauge.builder().name("block_apply_time_fromslotstart").register();
-        helps.add(new MetricsHelp(blockApplyTimeAbsolute.getPrometheusName(), "Delta between timestamp when block has been applied succesfully on this node and start timestamp of the slot it belongs to (milliseconds)"));
+        helps.add(new MetricsHelp(blockApplyTimeAbsolute.getPrometheusName(), "Delta between timestamp when block has been applied successfully on this node and start timestamp of the slot it belongs to (milliseconds)"));
 
-        blocksAppliedSuccesfully =   Counter.builder().name("block_applied_ok").register();
-        helps.add(new MetricsHelp(blocksAppliedSuccesfully.getPrometheusName(),"Number of received blocks applied succesfully (absolute value since start of the node)"));
+        blocksAppliedSuccessfully =   Counter.builder().name("block_applied_ok").register();
+        helps.add(new MetricsHelp(blocksAppliedSuccessfully.getPrometheusName(),"Number of received blocks applied successfully (absolute value since start of the node)"));
 
         blocksNotApplied =  Counter.builder().name("block_applied_ko").register();
         helps.add(new MetricsHelp(blocksNotApplied.getPrometheusName(), "Number of received blocks not applied (absolute value since start of the node)"));
@@ -80,7 +80,7 @@ public class MetricsManager {
     public void appliedBlockOk(long millis, long millisFromBlockStamp){
         blockApplyTime.set(millis);
         blockApplyTimeAbsolute.set(millisFromBlockStamp);
-        blocksAppliedSuccesfully.inc();
+        blocksAppliedSuccessfully.inc();
     }
 
     public void forgedBlock(long millis){

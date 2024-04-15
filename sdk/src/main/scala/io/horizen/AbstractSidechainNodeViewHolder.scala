@@ -303,7 +303,7 @@ abstract class AbstractSidechainNodeViewHolder[
                 log.info(s"Persistent modifier ${pmod.encodedId} applied successfully and node view updated!")
                 log.debug(s"Current mempool size: ${newMemPool.size} transactions")
 
-                var endTime = metricsManager.currentMillis()
+                val endTime = metricsManager.currentMillis()
                 metricsManager.mempoolSize(newMemPool.size)
                 metricsManager.appliedBlockOk(
                   endTime- startTime,
