@@ -115,14 +115,14 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
 
     val allAccounts25519 = wallet.secretsOfType(classOf[PrivateKey25519])
     val signature25519 = allAccounts25519.find(_.asInstanceOf[PrivateKey25519].publicImage.equals(blockSignPubKey)) match {
-      case None => throw new IllegalArgumentException("No matching secrte for input blockSignPubKey")
+      case None => throw new IllegalArgumentException("No matching secrete for input blockSignPubKey")
       case secret =>
         secret.get.asInstanceOf[PrivateKey25519].sign(messageToSign)
     }
 
     val allAccountsVrf = wallet.secretsOfType(classOf[VrfSecretKey])
     val signatureVrf = allAccountsVrf.find(_.asInstanceOf[VrfSecretKey].publicImage.equals(vrfPublicKey)) match {
-      case None => throw new IllegalArgumentException("No matching secrte for input vrfPublicKey")
+      case None => throw new IllegalArgumentException("No matching secrete for input vrfPublicKey")
       case secret =>
         secret.get.asInstanceOf[VrfSecretKey].sign(messageToSign)
     }
