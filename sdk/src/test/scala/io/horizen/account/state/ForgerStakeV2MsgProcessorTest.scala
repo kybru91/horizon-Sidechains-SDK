@@ -1515,7 +1515,7 @@ class ForgerStakeV2MsgProcessorTest
       var epoch = ConsensusEpochCmdOutputDecoder.decode(res).epoch
       assertEquals(blockContextForkV1_4.consensusEpochNumber, epoch)
 
-      var expectedEpoch = blockContextForkV1_4.consensusEpochNumber + 345
+      val expectedEpoch = blockContextForkV1_4.consensusEpochNumber + 345
       res = assertGas(2100, msg, view, forgerStakeV2MessageProcessor, getBlockContextForEpoch(expectedEpoch))
       epoch = ConsensusEpochCmdOutputDecoder.decode(res).epoch
       assertEquals(expectedEpoch, epoch)

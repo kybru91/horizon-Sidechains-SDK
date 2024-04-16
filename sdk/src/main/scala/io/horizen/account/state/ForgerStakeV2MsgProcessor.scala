@@ -200,10 +200,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doGetForgerCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 has not been activated yet"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
 
     val inputParams = getArgumentsFromData(invocation.input)
@@ -218,10 +215,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def doGetPagedForgersCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
 
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 has not been activated yet"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
 
     val inputParams = getArgumentsFromData(invocation.input)
@@ -232,12 +226,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doGetCurrentConsensusEpochCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 has not been activated yet"
-      log.debug(msgStr)
-      throw new ExecutionRevertedException(msgStr)
-    }
-
+    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
     checkInputDoesntContainParams(invocation)
 
