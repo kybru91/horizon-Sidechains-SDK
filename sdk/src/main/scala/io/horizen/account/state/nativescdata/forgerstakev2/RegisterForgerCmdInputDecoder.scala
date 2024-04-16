@@ -2,6 +2,7 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.state.ForgerPublicKeys
+import io.horizen.account.state.ForgerStakeV2MsgProcessor.MAX_REWARD_SHARE
 import io.horizen.account.state.nativescdata.forgerstakev2.DelegateCmdInputDecoder.vrfPublicKeyToAbi
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
@@ -54,8 +55,11 @@ object RegisterForgerCmdInputDecoder
 case class RegisterForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, rewardShare: Int,
                                   smartContractAddress: Address,
                                   signature25519: Signature25519, signatureVrf: VrfProof) extends ABIEncodable[StaticStruct] {
+  require(rewardShare >= 0, "reward share expected to be non negative.")
+  require(rewardShare <= MAX_REWARD_SHARE, s"reward share expected to be $MAX_REWARD_SHARE at most")
 
   override def asABIType(): StaticStruct = {
+
     val listOfParams: util.List[Type[_]] = new util.ArrayList()
 
     val vrfPublicKeyBytes = vrfPublicKeyToAbi(forgerPublicKeys.vrfPublicKey.pubKeyBytes())

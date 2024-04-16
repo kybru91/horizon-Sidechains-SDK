@@ -42,17 +42,24 @@ interface ForgerStakesV2 {
 
     /*
       Register a new forger.
-      Vrf key is split in two separate parameters, being longer than 32 bytes.
-      The method accepts ZEN value: the sent value will be converted to the initial stake assigned to the forger.
+      rewardShare can range in [0..1000] and can be 0 if and only if rewardAddress == 0x000..00.
+      Vrf key and signatures are split in two or more separate parameters, being longer than 32 bytes.
+      sign1_x are the 25519 signature chunks and sign2_x are the Vfr signature chunks.
+      The message to sign is a string concatenation of signPubKey+vrfKey+rewardShare+rewardAddress
+      The method accepts WEI value: the sent value will be converted to the initial stake assigned to the forger.
+      The initial stake amount must be >= min threshold (10 Zen)
     */
-    function registerForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare, address reward_address) external payable;
+    function registerForger(bytes32 signPubKey, bytes32 vrfKey1, bytes1 vrfKey2, uint32 rewardShare,
+        address rewardAddress, bytes32 sign1_1, bytes32 sign1_2,
+        bytes32 sign2_1, bytes32 sign2_2, bytes32 sign2_3, bytes1 sign2_4) external payable;
+
 
      /*
       Updates an existing forger.
-      A forger can be updated just once and only if reward_address == null and rewardShare == 0.
+      A forger can be updated just once and only if rewardAddress == 0x000..00 and rewardShare == 0.
       Vrf key is split in two separate parameters, being longer than 32 bytes.
     */
-    function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare, address reward_address, bytes32 signature1, bytes32 signature2) external;
+    function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare, address rewardAddress, bytes32 signature1, bytes32 signature2) external;
 
     /*
       Delegate a stake to a previously registered forger.
