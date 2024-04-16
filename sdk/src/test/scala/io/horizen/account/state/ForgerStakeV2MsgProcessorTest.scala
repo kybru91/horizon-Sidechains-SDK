@@ -8,6 +8,7 @@ import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.{PrivateKeySecp256k1, PrivateKeySecp256k1Creator}
 import io.horizen.account.state.ForgerStakeMsgProcessor.{AddNewStakeCmd => AddNewStakeCmdV1, GetListOfForgersCmd => GetListOfForgersCmdV1}
 import io.horizen.account.state.ForgerStakeV2MsgProcessor._
+import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage._
 import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.state.nativescdata.forgerstakev2.events.{DelegateForgerStake, WithdrawForgerStake}
@@ -18,6 +19,7 @@ import io.horizen.evm.{Address, Hash}
 import io.horizen.fixtures.StoreFixture
 import io.horizen.fork.{ForkConfigurator, ForkManagerUtil, OptionalSidechainFork, SidechainForkConsensusEpoch}
 import io.horizen.params.NetworkParams
+import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.{BytesUtils, Pair, ZenCoinsUtils}
 import org.junit.Assert._
@@ -27,6 +29,7 @@ import org.scalatestplus.junit.JUnitSuite
 import org.scalatestplus.mockito._
 import org.web3j.abi.datatypes.Type
 import org.web3j.abi.{FunctionReturnDecoder, TypeReference}
+import org.web3j.utils.Numeric.hexStringToByteArray
 import sparkz.core.bytesToVersion
 import sparkz.crypto.hash.Keccak256
 
@@ -167,10 +170,13 @@ class ForgerStakeV2MsgProcessorTest
   @Test
   def testMethodIds(): Unit = {
     //The expected methodIds were calculated using this site: https://emn178.github.io/online-tools/keccak_256.html
-    assertEquals("Wrong MethodId for activate", "0f15f4c0", ForgerStakeV2MsgProcessor.ActivateCmd)
+    assertEquals("Wrong MethodId for RegisterForgerCmd", "408abed9", ForgerStakeV2MsgProcessor.RegisterForgerCmd)
+    assertEquals("Wrong MethodId for Delegatemd", "431abc18", ForgerStakeV2MsgProcessor.DelegateCmd)
+    assertEquals("Wrong MethodId for WithdrawCmd", "5639b873", ForgerStakeV2MsgProcessor.WithdrawCmd)
     assertEquals("Wrong MethodId for StakeTotalCmd", "895117b1", ForgerStakeV2MsgProcessor.StakeTotalCmd)
-    assertEquals("Wrong MethodId for GetPagedForgersStakesByDelegatorCmd", "e99e75ac", ForgerStakeV2MsgProcessor.GetPagedForgersStakesByDelegatorCmd)
     assertEquals("Wrong MethodId for GetPagedForgersStakesByForgerCmd", "23359a85", ForgerStakeV2MsgProcessor.GetPagedForgersStakesByForgerCmd)
+    assertEquals("Wrong MethodId for GetPagedForgersStakesByDelegatorCmd", "e99e75ac", ForgerStakeV2MsgProcessor.GetPagedForgersStakesByDelegatorCmd)
+    assertEquals("Wrong MethodId for ActivateCmd", "0f15f4c0", ForgerStakeV2MsgProcessor.ActivateCmd)
     assertEquals("Wrong MethodId for GetForgerCmd", "7d8589fd", ForgerStakeV2MsgProcessor.GetForgerCmd)
     assertEquals("Wrong MethodId for GetPagedForgersCmd", "c1bf3d56", ForgerStakeV2MsgProcessor.GetPagedForgersCmd)
   }
@@ -488,6 +494,59 @@ class ForgerStakeV2MsgProcessorTest
     MockedHistoryBlockHashProvider,
     Hash.ZERO
   )
+
+
+  @Test
+  def testRegisterForger(): Unit = {
+
+    val processors = Seq(forgerStakeV2MessageProcessor, forgerStakeMessageProcessor)
+
+    usingView(processors) { view =>
+      forgerStakeMessageProcessor.init(view, V1_3_MOCK_FORK_POINT)
+      forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
+
+      // create sender account with some fund in it
+      val initialAmount = BigInteger.valueOf(100).multiply(validWeiAmount)
+      createSenderAccount(view, initialAmount)
+
+      //Setting the context
+      //016e3bda4dfddf67e293362514c36142f70862dab22cd3609face526aec9b1c809f3b707b6
+      //  6e3bda4dfddf67e293362514c36142f70862dab22cd3609face526aec9b1c809
+      //VrfPublicKey{publicBytes=dbfb30791dbc1b1d0140fea9c49cd2ca0d6aade8139ee919cc4795e11ae9c10400}
+      //Signature25519{signatureBytes=174c8f9c17a54ffc661376b5cd8baf7fbcdfc009f5b8106c14bcf022214ad0db164e5fbbb6e1f6d5b44945c81ed6d113fcf58caec47adc7e4cf84a2070416c09}
+      //VrfProof{proofBytes=53380183fea2c1d43a064cfeda6e4bc92ae5ab855a2388606b3b9d9f4dc9b90d8014eb09085d22f03c0c7fdd7b9864fcb5c3b31b187281a9eefccc98ce4b0c69008222de8501b929dc1d08f67c29033ac352671e11d4e8037cf192f05cbe584d24}
+
+      val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString("6e3bda4dfddf67e293362514c36142f70862dab22cd3609face526aec9b1c809")) // 32 bytes
+      val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString("dbfb30791dbc1b1d0140fea9c49cd2ca0d6aade8139ee919cc4795e11ae9c10400")) // 33 bytes
+      val rewardShare: Int = 0
+      val smartContractAddress = new AddressProposition(hexStringToByteArray(NULL_ADDRESS_WITH_PREFIX_HEX_STRING))
+      val signature25519: Signature25519 = new Signature25519(BytesUtils.fromHexString("174c8f9c17a54ffc661376b5cd8baf7fbcdfc009f5b8106c14bcf022214ad0db164e5fbbb6e1f6d5b44945c81ed6d113fcf58caec47adc7e4cf84a2070416c09"))
+      val signatureVrf: VrfProof = new VrfProof(BytesUtils.fromHexString("53380183fea2c1d43a064cfeda6e4bc92ae5ab855a2388606b3b9d9f4dc9b90d8014eb09085d22f03c0c7fdd7b9864fcb5c3b31b187281a9eefccc98ce4b0c69008222de8501b929dc1d08f67c29033ac352671e11d4e8037cf192f05cbe584d24"))
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Before activate tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      val regCmdInput = RegisterForgerCmdInput(
+        ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519, signatureVrf
+      )
+
+      val registerForgerData: Array[Byte] = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
+      var msg = getMessage(contractAddress, validWeiAmount, registerForgerData, randomNonce)
+
+      // Check that register forger cannot be called before activate
+
+      var exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      var expectedErr = "Forger stake V2 has not been activated yet"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+
+    }
+
+
+  }
 
   @Test
   def testAddAndRemoveStake(): Unit = {
@@ -967,7 +1026,7 @@ class ForgerStakeV2MsgProcessorTest
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
       // Remove stakes in the past
-      var revert = view.snapshot
+      val revert = view.snapshot
       withdrawInput = WithdrawCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), expectedOwner1StakeAmount
       )

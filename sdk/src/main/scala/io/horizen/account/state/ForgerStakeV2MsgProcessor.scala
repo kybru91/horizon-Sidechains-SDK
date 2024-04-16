@@ -52,9 +52,9 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       case StakeTotalCmd =>
         doStakeTotalCmd(invocation, gasView, context.blockContext.consensusEpochNumber)
       case GetPagedForgersStakesByForgerCmd =>
-        doPagedForgersStakesByForgerCmd(invocation, gasView, context.msg)
+        doPagedForgersStakesByForgerCmd(invocation, gasView)
       case GetPagedForgersStakesByDelegatorCmd =>
-        doPagedForgersStakesByDelegatorCmd(invocation, gasView, context.msg)
+        doPagedForgersStakesByDelegatorCmd(invocation, gasView)
       case ActivateCmd =>
         doActivateCmd(invocation, view, context) // That shouldn't consume gas, so it doesn't use gasView
       case GetPagedForgersCmd =>
@@ -82,11 +82,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def doRegisterForger(invocation: Invocation, gasView: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
 
-    log.info(s"register forger called")
-    if (!StakeStorage.isActive(gasView)) {
-      val msgStr = s"Forger stake V2 is not activated"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(gasView)
 
     val stakedAmount = invocation.value
 
@@ -103,15 +99,6 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       throw new ExecutionRevertedException(errMsg)
     }
 
-    val delegatorAddress = invocation.caller
-
-    // check that sender account exists
-    if (!gasView.accountExists(delegatorAddress)) {
-      val errMsg = s"Sender account does not exist: msg = ${context.msg}"
-      log.warn(errMsg)
-      throw new ExecutionRevertedException(errMsg)
-    }
-
     val inputParams = getArgumentsFromData(invocation.input)
 
     val cmdInput = RegisterForgerCmdInputDecoder.decode(inputParams)
@@ -123,7 +110,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val signVrf = cmdInput.signatureVrf
 
     // check that rewardShare is in legal range
-    if (rewardShare < 0 || rewardShare > 1000) {
+    if (rewardShare < 0 || rewardShare > MAX_REWARD_SHARE) {
       val errMsg = s"Illegal reward share value: = $rewardShare"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
@@ -155,10 +142,11 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       rewardShare,
       BytesUtils.toHexString(smartContractAddr.toBytes))
 
-    // verify the signatures (trows exceptions)
+    // verify the signatures (throws exceptions)
     verifySignatures(messageToSign, blockSignPubKey, vrfPubKey, sign25519, signVrf)
 
     // add new forger to the db
+    val delegatorAddress = invocation.caller
     addForger(gasView, blockSignPubKey, vrfPubKey, rewardShare, smartContractAddr,
       context.blockContext.consensusEpochNumber, delegatorAddress, stakedAmount)
 
@@ -286,7 +274,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     response.encode()
   }
 
-  def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
     requireIsNotPayable(invocation)
     if (!StakeStorage.isActive(view)) {
       val msgStr = s"Forger stake V2 is not activated"
@@ -300,7 +288,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     PagedForgersStakesByDelegatorOutput(result.nextStartPos, result.stakesData).encode()
   }
 
-  def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView, msg: Message): Array[Byte] = {
+  def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
     requireIsNotPayable(invocation)
     if (!StakeStorage.isActive(view)) {
       val msgStr = s"Forger stake V2 is not activated"

@@ -1642,6 +1642,7 @@ object AccountTransactionRestScheme {
                                                  smartcontractAddress: Option[String],
                                                  gasInfo: Option[EIP1559GasInfo]) {
     require(rewardShare >= 0 && rewardShare <= MAX_REWARD_SHARE, s"Reward share must be in the range [0, $MAX_REWARD_SHARE")
+    // TODO check consistency
   }
 
   @JsonView(Array(classOf[Views.Default]))
