@@ -3,7 +3,7 @@ package io.horizen.account.state
 import com.horizen.certnative.BackwardTransfer
 import io.horizen.SidechainTypes
 import io.horizen.account.block.AccountBlock
-import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork}
+import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork, Version1_4_0Fork}
 import io.horizen.account.history.validation.InvalidTransactionChainIdException
 import io.horizen.account.node.NodeAccountState
 import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
@@ -11,6 +11,7 @@ import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumRecei
 import io.horizen.account.storage.AccountStateMetadataStorage
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.Secp256k1.generateContractAddress
+import io.horizen.account.utils.ZenWeiConverter.MAX_MONEY_IN_WEI
 import io.horizen.account.utils.{AccountBlockFeeInfo, AccountFeePaymentsUtils, AccountPayment, FeeUtils}
 import io.horizen.block.WithdrawalEpochCertificate
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof}
@@ -252,7 +253,11 @@ class AccountState(
     val isWithdrawalEpochFinished: Boolean = WithdrawalEpochUtils.isEpochLastIndex(modWithdrawalEpochInfo, params)
     if (isWithdrawalEpochFinished) {
       // current block fee info is already in the view therefore we pass None as third param
-      val feePayments = stateView.getFeePaymentsInfo(modWithdrawalEpochInfo.epoch, consensusEpochNumber, None)
+      val distributionCap = if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+        val mcLastBlockHeight = params.mainchainCreationBlockHeight + (modWithdrawalEpochInfo.epoch * params.withdrawalEpochLength) - 1
+        AccountFeePaymentsUtils.getMainchainWithdrawalEpochDistributionCap(mcLastBlockHeight, params)
+      } else MAX_MONEY_IN_WEI
+      val (feePayments, poolBalanceDistributed) = stateView.getFeePaymentsInfo(modWithdrawalEpochInfo.epoch, consensusEpochNumber, distributionCap, None)
 
       log.info(s"End of Withdrawal Epoch ${modWithdrawalEpochInfo.epoch} reached, added ${feePayments.length} rewards with block ${mod.header.id}")
 
@@ -266,7 +271,7 @@ class AccountState(
       }
 
       // reset forger pool balance and block counters
-      stateView.resetForgerPoolAndBlockCounters(consensusEpochNumber)
+      stateView.subtractForgerPoolBalanceAndResetBlockCounters(consensusEpochNumber, poolBalanceDistributed)
 
       // add rewards to forgers balance
       feePayments.foreach(
@@ -386,11 +391,17 @@ class AccountState(
 
   override def hasCeased: Boolean = stateMetadataStorage.hasCeased
 
-  override def getFeePaymentsInfo(withdrawalEpoch: Int, consensusEpochNumber: ConsensusEpochNumber, blockToAppendFeeInfo: Option[AccountBlockFeeInfo] = None): Seq[AccountPayment] = {
+  override def getFeePaymentsInfo(
+    withdrawalEpoch: Int,
+    consensusEpochNumber: ConsensusEpochNumber,
+    distributionCap: BigInteger = MAX_MONEY_IN_WEI,
+    blockToAppendFeeInfo: Option[AccountBlockFeeInfo] = None): (Seq[AccountPayment], BigInteger) =
+  {
     val feePaymentInfoSeq = stateMetadataStorage.getFeePayments(withdrawalEpoch)
     val mcForgerPoolRewards = stateMetadataStorage.getMcForgerPoolRewards
+    val poolBalanceDistributed = mcForgerPoolRewards.values.foldLeft(BigInteger.ZERO)((a, b) => a.add(b))
 
-    AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards)
+    (AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards), poolBalanceDistributed)
   }
 
   override def getWithdrawalEpochInfo: WithdrawalEpochInfo = stateMetadataStorage.getWithdrawalEpochInfo
