@@ -17,18 +17,19 @@ import io.horizen.utils.ClosableResourceHandler
 import io.prometheus.metrics.expositionformats.ExpositionFormats
 import io.prometheus.metrics.model.registry.PrometheusRegistry
 import sparkz.core.api.http.ApiDirectives
-import sparkz.core.settings.RESTApiSettings
+import io.horizen.MetricsApiSettings
 import sparkz.util.SparkzLogging
 import io.horizen.json.Views
 import io.horizen.metrics.{MetricsHelp, MetricsManager}
+import sparkz.core.settings.{ApiSettings, RESTApiSettings}
+
 import java.io.ByteArrayOutputStream
 import scala.concurrent.ExecutionContext
 import scala.reflect.ClassTag
 
 case class AccountMetricsRoute(
-    override val settings: RESTApiSettings,
-    sidechainNodeViewHolderRef: ActorRef,
-    rpcProcessor: RpcProcessor
+      metricsSettings: MetricsApiSettings,
+      sidechainNodeViewHolderRef: ActorRef
 )(implicit val context: ActorRefFactory, override val ec: ExecutionContext)
     extends SidechainApiRoute[
       SidechainTypes#SCAT,
@@ -45,6 +46,8 @@ case class AccountMetricsRoute(
       with ClosableResourceHandler
       with SparkzLogging
       with ApiDirectives {
+
+  override val settings = metricsSettings.asInstanceOf[ApiSettings]
 
   override implicit val tag: ClassTag[AccountNodeView] = ClassTag[AccountNodeView](classOf[AccountNodeView])
   override val route: Route = pathPrefix("metrics") {
