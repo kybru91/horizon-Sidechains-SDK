@@ -8,7 +8,7 @@ import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.{PrivateKeySecp256k1, PrivateKeySecp256k1Creator}
 import io.horizen.account.state.ForgerStakeMsgProcessor.{AddNewStakeCmd => AddNewStakeCmdV1, GetListOfForgersCmd => GetListOfForgersCmdV1}
 import io.horizen.account.state.ForgerStakeV2MsgProcessor._
-import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
+import io.horizen.account.state.nativescdata.forgerstakev2.RegisterOrUpdateForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage._
 import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.state.nativescdata.forgerstakev2.events.{DelegateForgerStake, WithdrawForgerStake}
@@ -173,6 +173,7 @@ class ForgerStakeV2MsgProcessorTest
   def testMethodIds(): Unit = {
     //The expected methodIds were calculated using this site: https://emn178.github.io/online-tools/keccak_256.html
     assertEquals("Wrong MethodId for RegisterForgerCmd", "408abed9", ForgerStakeV2MsgProcessor.RegisterForgerCmd)
+    assertEquals("Wrong MethodId for UpdateForgerCmd", "baed8f01", ForgerStakeV2MsgProcessor.UpdateForgerCmd)
     assertEquals("Wrong MethodId for Delegatemd", "431abc18", ForgerStakeV2MsgProcessor.DelegateCmd)
     assertEquals("Wrong MethodId for WithdrawCmd", "5639b873", ForgerStakeV2MsgProcessor.WithdrawCmd)
     assertEquals("Wrong MethodId for StakeTotalCmd", "895117b1", ForgerStakeV2MsgProcessor.StakeTotalCmd)
@@ -523,7 +524,7 @@ class ForgerStakeV2MsgProcessorTest
       //  Before activate tests
       /////////////////////////////////////////////////////////////////////////////////////////////
 
-      var regCmdInput = RegisterForgerCmdInput(
+      var regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519, signatureVrf
       )
 
@@ -551,7 +552,7 @@ class ForgerStakeV2MsgProcessorTest
       //------------------------------------------------------------------
       // Try register with an invalid signature 25519. It should fail.
       val signature25519Bad: Signature25519 = new Signature25519(BytesUtils.fromHexString("074c8f9c17a54ffc661376b5cd8baf7fbcdfc009f5b8106c14bcf022214ad0db164e5fbbb6e1f6d5b44945c81ed6d113fcf58caec47adc7e4cf84a2070416c09"))
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519Bad, signatureVrf
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -564,7 +565,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Try register with an invalid signature vrf. It should fail.
       val signatureVrfBad: VrfProof = new VrfProof(BytesUtils.fromHexString("03380183fea2c1d43a064cfeda6e4bc92ae5ab855a2388606b3b9d9f4dc9b90d8014eb09085d22f03c0c7fdd7b9864fcb5c3b31b187281a9eefccc98ce4b0c69008222de8501b929dc1d08f67c29033ac352671e11d4e8037cf192f05cbe584d24"))
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519, signatureVrfBad
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -576,7 +577,7 @@ class ForgerStakeV2MsgProcessorTest
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
       // Try register with too low a stake amount. It should fail.
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519, signatureVrf
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -588,7 +589,7 @@ class ForgerStakeV2MsgProcessorTest
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
       // Try register with an illegal stake amount. It should fail.
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519, signatureVrf
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -601,7 +602,7 @@ class ForgerStakeV2MsgProcessorTest
 
 
       // verify we can register a forger after the activation with the proper parameters
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddress.address(), signature25519, signatureVrf
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -622,7 +623,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Try register with an inconsistent reward share and reward address. It should fail.
       var rewardShareTest = 1
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShareTest, smartContractAddress.address(), signature25519, signatureVrf
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -636,7 +637,7 @@ class ForgerStakeV2MsgProcessorTest
       // Try register with an inconsistent reward share and reward address. It should fail.
       rewardShareTest = 0
       val smartContractAddressTest = new AddressProposition(hexStringToByteArray("0011223344556677889900112233445566778899"))
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShare, smartContractAddressTest.address(), signature25519, signatureVrf
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
@@ -650,7 +651,7 @@ class ForgerStakeV2MsgProcessorTest
       // we guard the validity range of reward share in the RegisterForgerCmdInput ctor
       rewardShareTest = -1
       var exc2 = intercept[IllegalArgumentException] {
-        RegisterForgerCmdInput(
+        RegisterOrUpdateForgerCmdInput(
           ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShareTest, smartContractAddress.address(), signature25519, signatureVrf
         )
       }
@@ -659,7 +660,7 @@ class ForgerStakeV2MsgProcessorTest
 
       rewardShareTest = 1001
       exc2 = intercept[IllegalArgumentException] {
-        RegisterForgerCmdInput(
+        RegisterOrUpdateForgerCmdInput(
           ForgerPublicKeys(blockSignerProposition, vrfPublicKey), rewardShareTest, smartContractAddress.address(), signature25519, signatureVrf
         )
       }
@@ -674,7 +675,7 @@ class ForgerStakeV2MsgProcessorTest
       val signature25519_2: Signature25519 = new Signature25519(BytesUtils.fromHexString("a29237e26faf0bf5f56a4caed5cd81531c46279439c586cd7a1d5112758eb7bb71c2daa2d6374926d2e7b02482ed2d181e9882958ca4285598b6cb4f12c94f0f"))
       val signatureVrf_2: VrfProof = new VrfProof(BytesUtils.fromHexString("552d882e2bf603c9aef04f39c831c7649999ae3a5c580aa73fe7ff45caabfd3b80e8a8f40f0d85119309cafe7c40d48e972a801e7818d90f132ed45a327065140605edc4e68080ffa8ad3b9707dbb2478f238e5395b009c1a03e4d8b26b37f2524"))
 
-      regCmdInput = RegisterForgerCmdInput(
+      regCmdInput = RegisterOrUpdateForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition_2, vrfPublicKey_2), rewardShare_2, smartContractAddress_2.address(), signature25519_2, signatureVrf_2
       )
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()

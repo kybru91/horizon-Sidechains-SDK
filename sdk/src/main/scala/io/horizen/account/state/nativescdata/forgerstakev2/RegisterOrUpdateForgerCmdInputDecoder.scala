@@ -14,9 +14,9 @@ import org.web3j.abi.datatypes.generated.{Bytes1, Bytes32, Uint32}
 
 import java.util
 
-object RegisterForgerCmdInputDecoder
-  extends ABIDecoder[RegisterForgerCmdInput]
-    with MsgProcessorInputDecoder[RegisterForgerCmdInput]
+object RegisterOrUpdateForgerCmdInputDecoder
+  extends ABIDecoder[RegisterOrUpdateForgerCmdInput]
+    with MsgProcessorInputDecoder[RegisterOrUpdateForgerCmdInput]
     with VRFDecoder{
 
   val NULL_ADDRESS_WITH_PREFIX_HEX_STRING : String = "0x0000000000000000000000000000000000000000"
@@ -36,7 +36,7 @@ object RegisterForgerCmdInputDecoder
       new TypeReference[Bytes1]() {}
     ))
 
-  override def createType(listOfParams: util.List[Type[_]]): RegisterForgerCmdInput = {
+  override def createType(listOfParams: util.List[Type[_]]): RegisterOrUpdateForgerCmdInput = {
     val blockSignPublicKey = new PublicKey25519Proposition(listOfParams.get(0).asInstanceOf[Bytes32].getValue)
     val vrfKey = decodeVrfKey(listOfParams.get(1).asInstanceOf[Bytes32], listOfParams.get(2).asInstanceOf[Bytes1])
     val forgerPublicKeys = ForgerPublicKeys(blockSignPublicKey, vrfKey)
@@ -47,14 +47,14 @@ object RegisterForgerCmdInputDecoder
       listOfParams.get(7).asInstanceOf[Bytes32].getValue ++ listOfParams.get(8).asInstanceOf[Bytes32].getValue ++
     listOfParams.get(9).asInstanceOf[Bytes32].getValue ++ listOfParams.get(10).asInstanceOf[Bytes1].getValue)
 
-    RegisterForgerCmdInput(forgerPublicKeys, rewardShare, smartcontractAddress, sign1, sign2)
+    RegisterOrUpdateForgerCmdInput(forgerPublicKeys, rewardShare, smartcontractAddress, sign1, sign2)
   }
 
 }
 
-case class RegisterForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, rewardShare: Int,
-                                  smartContractAddress: Address,
-                                  signature25519: Signature25519, signatureVrf: VrfProof) extends ABIEncodable[StaticStruct] {
+case class RegisterOrUpdateForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, rewardShare: Int,
+                                          smartContractAddress: Address,
+                                          signature25519: Signature25519, signatureVrf: VrfProof) extends ABIEncodable[StaticStruct] {
   require(rewardShare >= 0, "reward share expected to be non negative.")
   require(rewardShare <= MAX_REWARD_SHARE, s"reward share expected to be $MAX_REWARD_SHARE at most")
 

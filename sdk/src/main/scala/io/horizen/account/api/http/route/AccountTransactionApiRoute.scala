@@ -19,8 +19,8 @@ import io.horizen.account.secret.PrivateKeySecp256k1
 import io.horizen.account.state.ForgerStakeV2MsgProcessor.MAX_REWARD_SHARE
 import io.horizen.account.state.McAddrOwnershipMsgProcessor._
 import io.horizen.account.state._
-import io.horizen.account.state.nativescdata.forgerstakev2.RegisterForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
-import io.horizen.account.state.nativescdata.forgerstakev2.{RegisterForgerCmdInput, StakeDataDelegator, StakeDataForger}
+import io.horizen.account.state.nativescdata.forgerstakev2.RegisterOrUpdateForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
+import io.horizen.account.state.nativescdata.forgerstakev2.{RegisterOrUpdateForgerCmdInput, StakeDataDelegator, StakeDataForger}
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS, PROXY_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.{EthereumTransactionUtils, ZenWeiConverter}
@@ -1282,7 +1282,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
   def encodeRegisterForgerCmdRequest(blockSignPubKey: PublicKey25519Proposition, vrfPubKey: VrfPublicKey, rewardShare: Int,
                                      smartcontract_address: AddressProposition, sign1: Signature25519, sign2: VrfProof): Array[Byte] = {
 
-    val registerForgerInput = RegisterForgerCmdInput(ForgerPublicKeys(blockSignPubKey, vrfPubKey), rewardShare, smartcontract_address.address(), sign1, sign2)
+    val registerForgerInput = RegisterOrUpdateForgerCmdInput(ForgerPublicKeys(blockSignPubKey, vrfPubKey), rewardShare, smartcontract_address.address(), sign1, sign2)
 
     Bytes.concat(BytesUtils.fromHexString(ForgerStakeV2MsgProcessor.RegisterForgerCmd), registerForgerInput.encode())
   }
