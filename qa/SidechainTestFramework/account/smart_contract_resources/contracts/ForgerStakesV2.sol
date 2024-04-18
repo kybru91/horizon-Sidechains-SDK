@@ -10,7 +10,7 @@ interface ForgerStakesV2 {
     // Event declaration
     // Up to 3 parameters can be indexed.
     // Indexed parameters help you filter the logs by the indexed parameter
-    event RegisterForger(address indexed sender,  bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value, uint32 rewardShare, address reward_address);
+    event RegisterForger(address  sender, bytes32 indexed signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value, uint32 rewardShare, address reward_address);
     event UpdateForger(address indexed sender, bytes32 signPubKey,  bytes32 indexed vrf1, bytes1 indexed vrf2,  uint32 rewardShare, address reward_address);
     event DelegateForgerStake(address indexed sender, bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value);
     event WithdrawForgerStake(address indexed sender, bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value);

@@ -284,13 +284,13 @@ def ac_makeForgerStake(sc_node, owner_address, blockSignPubKey, vrf_public_key, 
     return sc_node.transaction_makeForgerStake(json.dumps(forgerStakes))
 
 
-def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount, reward_share=0, smart_contract_address=None, nonce=None):
+def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount, reward_share=0, reward_address=None, nonce=None):
     parameters = {
         "blockSignPubKey": block_sign_pub_key,
         "vrfPubKey": vrf_public_key,
         "stakedAmount": staked_amount, # in Satoshi
         "rewardShare": reward_share,
-        "smartcontractAddress": smart_contract_address,
+        "rewardAddress": reward_address,
         "nonce": nonce
     }
 
