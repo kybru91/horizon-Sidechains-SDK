@@ -3,7 +3,6 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 import com.google.common.primitives.Bytes
 import io.horizen.account.network.{ForgerInfo, ForgerInfoSerializer}
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
-import io.horizen.account.state.ForgerStakeV2MsgProcessor.requireIsNotPayable
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
 import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{ACCOUNT, ForgerKey}

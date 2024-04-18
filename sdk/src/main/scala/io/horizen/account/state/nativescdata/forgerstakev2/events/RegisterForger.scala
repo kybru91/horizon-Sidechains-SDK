@@ -10,8 +10,8 @@ import java.math.BigInteger
 import scala.annotation.meta.getter
 
 case class RegisterForger(
-    @(Parameter @getter)(1) @(Indexed @getter) sender: AbiAddress,
-    @(Parameter @getter)(2) signPubKey: Bytes32,
+    @(Parameter @getter)(1) sender: AbiAddress,
+    @(Parameter @getter)(2) @(Indexed @getter) signPubKey: Bytes32,
     @(Parameter @getter)(3) @(Indexed @getter) vrf1: Bytes32,
     @(Parameter @getter)(4) @(Indexed @getter) vrf2: Bytes1,
     @(Parameter @getter)(5) value: Uint256,

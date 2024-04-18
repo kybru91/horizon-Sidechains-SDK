@@ -104,12 +104,20 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val inputParams = getArgumentsFromData(invocation.input)
 
     val cmdInput = RegisterOrUpdateForgerCmdInputDecoder.decode(inputParams)
+
     val blockSignPubKey = cmdInput.forgerPublicKeys.blockSignPublicKey
     val vrfPubKey = cmdInput.forgerPublicKeys.vrfPublicKey
     val rewardShare = cmdInput.rewardShare
     val smartContractAddr = cmdInput.smartContractAddress
     val sign25519 = cmdInput.signature25519
     val signVrf = cmdInput.signatureVrf
+
+
+    if (gasView.getBalance(invocation.caller).subtract(stakedAmount).signum() < 0) {
+      val errMsg = s"Not enough balance: ${ForgerPublicKeys(blockSignPubKey, vrfPubKey).toString}"
+      log.warn(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
 
     // check that rewardShare is in legal range
     if (rewardShare < 0 || rewardShare > MAX_REWARD_SHARE) {
@@ -155,6 +163,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val registerForgerEvent = RegisterForger(invocation.caller, blockSignPubKey, vrfPubKey, stakedAmount, rewardShare, smartContractAddr)
     val evmLog = getEthereumConsensusDataLog(registerForgerEvent)
     gasView.addLog(evmLog)
+
 
     gasView.subBalance(invocation.caller, stakedAmount)
     // increase the balance of the "forger stake smart contract” account
