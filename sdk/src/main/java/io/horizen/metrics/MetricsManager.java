@@ -2,6 +2,7 @@ package io.horizen.metrics;
 
 import io.prometheus.metrics.core.metrics.Counter;
 import io.prometheus.metrics.core.metrics.Gauge;
+import io.prometheus.metrics.core.metrics.Info;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import sparkz.core.utils.TimeProvider;
@@ -16,6 +17,8 @@ public class MetricsManager {
 
     private TimeProvider timeProvider;
     private static MetricsManager me;
+
+    private Info nodeInfo;
     private Counter blocksAppliedSuccessfully;
     private Counter blocksNotApplied;
     private Gauge blockApplyTime;
@@ -46,6 +49,9 @@ public class MetricsManager {
 
         //JvmMetrics.builder().register(); // initialize the out-of-the-box JVM metrics
         helps = new ArrayList<>();
+
+        nodeInfo = Info.builder().name("node_info").labelNames("version", "sdkVersion", "architecture", "jdkVersion").register();
+        helps.add(new MetricsHelp(nodeInfo.getPrometheusName(), "Node version"));
 
         blockApplyTime  =  Gauge.builder().name("block_apply_time").register();
         helps.add(new MetricsHelp(blockApplyTime.getPrometheusName(), "Time to apply block to node wallet and state (milliseconds)"));
@@ -83,6 +89,7 @@ public class MetricsManager {
         blocksAppliedSuccessfully.inc();
     }
 
+    public void setVersion(String version){ nodeInfo.setLabelValues(version.split("/"));}
     public void forgedBlock(long millis){
         forgeBlockCreationTime.set(millis);
     }
