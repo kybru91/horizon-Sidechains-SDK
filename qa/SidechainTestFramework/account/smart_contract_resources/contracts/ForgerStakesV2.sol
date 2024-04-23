@@ -59,7 +59,9 @@ interface ForgerStakesV2 {
       A forger can be updated just once and only if rewardAddress == 0x000..00 and rewardShare == 0.
       Vrf key is split in two separate parameters, being longer than 32 bytes.
     */
-    function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare, address rewardAddress, bytes32 signature1, bytes32 signature2) external;
+    function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare,
+        address rewardAddress, bytes32 sign1_1, bytes32 sign1_2,
+        bytes32 sign2_1, bytes32 sign2_2, bytes32 sign2_3, bytes1 sign2_4) external;
 
     /*
       Delegate a stake to a previously registered forger.
