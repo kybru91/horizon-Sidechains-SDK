@@ -31,6 +31,10 @@ trait ForgerStakesV2Provider {
 
 
 object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with ForgerStakesV2Provider {
+
+  val MAX_REWARD_SHARE = 1000
+  val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = convertZenniesToWei(minForgerStake) // 10 Zen
+
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
 
@@ -68,13 +72,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def verifySignatures(msgToSign: Array[Byte], blockSignPubKey: PublicKey25519Proposition, vrfPubKey: VrfPublicKey, sign25519: Signature25519, signVrf: VrfProof): Unit = {
     if (!sign25519.isValid(blockSignPubKey, msgToSign)) {
-      val errMsg = s"Invalid signature, could not validate against blockSignerProposition=$blockSignPubKey"
+      val errMsg = s"Invalid signature, could not validate against blockSignerProposition=$blockSignPubKey (sign=$sign25519)"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
     if (!signVrf.isValid(vrfPubKey, msgToSign)) {
-      val errMsg = s"Invalid signature, could not validate against vrfKey=$vrfPubKey"
+      val errMsg = s"Invalid signature, could not validate against vrfKey=$vrfPubKey (sign=$signVrf)"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
@@ -89,7 +93,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     // check that msg.value is a legal wei amount convertible to satoshis without any remainder and that
     // it is over the minimum threshold
     if (!isValidZenAmount(stakedAmount)) {
-      val errMsg = s"Value is not a legal wei amount: ${stakedAmount.toString()}"
+      val errMsg = s"Value is not a legal wei amount: ${stakedAmount.toString()}, maximum 10 decimals accepted"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
@@ -156,14 +160,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     addForger(gasView, blockSignPubKey, vrfPubKey, rewardShare, smartContractAddr,
       context.blockContext.consensusEpochNumber, delegatorAddress, stakedAmount)
 
-    val registerForgerEvent = RegisterForger(invocation.caller, blockSignPubKey, vrfPubKey, stakedAmount, rewardShare, smartContractAddr)
-    val evmLog = getEthereumConsensusDataLog(registerForgerEvent)
-    gasView.addLog(evmLog)
-
-
     gasView.subBalance(invocation.caller, stakedAmount)
     // increase the balance of the "forger stake smart contract” account
     gasView.addBalance(contractAddress, stakedAmount)
+
+    val registerForgerEvent = RegisterForger(invocation.caller, blockSignPubKey, vrfPubKey, stakedAmount, rewardShare, smartContractAddr)
+    val evmLog = getEthereumConsensusDataLog(registerForgerEvent)
+    gasView.addLog(evmLog)
 
     log.debug(s"register forger exiting - ${cmdInput.toString}")
     Array.emptyByteArray
@@ -246,7 +249,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     Array.emptyByteArray
   }
 
-  private def checkForgerStakesV2IsActive(view: BaseAccountStateView): Unit = {
+  def checkForgerStakesV2IsActive(view: BaseAccountStateView): Unit = {
     if (!StakeStorage.isActive(view)) {
       val msg = "Forger stake V2 has not been activated yet"
       log.debug(msg)
@@ -413,9 +416,6 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     Array.emptyByteArray
   }
 
-  val MAX_REWARD_SHARE = 1000
-  val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = convertZenniesToWei(minForgerStake) // 10 Zen
-
   val RegisterForgerCmd: String = getABIMethodId("registerForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)")
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
@@ -441,8 +441,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String): Array[Byte] = {
     val messageToSignString = blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address)
-    val chunks = messageToSignString.getBytes(StandardCharsets.UTF_8).grouped(Constants.FIELD_ELEMENT_LENGTH - 1).toArray
-    generateHashAndCleanUp(chunks: _*)
+    // we take only first 31 bytes since vrf signature is involved, and we must be on the safe side using less than a field element's modulus bits size (253 bites)
+    Keccak256.hash(messageToSignString.getBytes(StandardCharsets.UTF_8)).take(31)
   }
 
   override private[horizen] def getPagedListOfForgersStakes(view: BaseAccountStateView, startPos: Int, pageSize: Int): PagedForgersListResponse = {
