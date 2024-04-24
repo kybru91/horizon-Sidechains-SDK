@@ -109,7 +109,6 @@ class SCEvmForgerV2register(AccountChainSetup):
         tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
 
-        # Try registerForger before fork 1.4
         # Create one more forger keys pair on node 1
         block_sign_pub_key_1_2 = sc_node_1.wallet_createPrivateKey25519()["result"]["proposition"]["publicKey"]
         vrf_pub_key_1_2 = sc_node_1.wallet_createVrfSecret()["result"]["proposition"]["publicKey"]
@@ -117,6 +116,8 @@ class SCEvmForgerV2register(AccountChainSetup):
 
         MIN_STAKED_AMOUNT_IN_ZEN = 10
         staked_amount = convertZenToZennies(MIN_STAKED_AMOUNT_IN_ZEN)
+
+        # Try registerForger before fork 1.4
         res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_address=None,
                                 reward_share=0, nonce=None)
         assert_true('error' in res)
@@ -128,6 +129,13 @@ class SCEvmForgerV2register(AccountChainSetup):
         for i in range(0, VERSION_1_4_FORK_EPOCH - current_best_epoch):
             generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
             self.sc_sync_all()
+
+        # Try registerForger before storage activation
+        res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_address=None,
+                                reward_share=0, nonce=None)
+        assert_true('error' in res)
+        assert_equal('0204', res['error']['code'])
+        assert_true('Forger Stake Storage V2 is not active' in res['error']['description'])
 
         # Execute activate.
         forger_v2_native_contract = SmartContract("ForgerStakesV2")
@@ -340,7 +348,7 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal(0, status, "Upgrade forger should fail")
 
 
-        # - try updating a forger that already has a reward share not null
+        # - try updating a forger that has a reward share not null
         result = ac_updateForger(sc_node_2, block_sign_pub_key_2, vrf_pub_key_2,
                                  reward_address=reward_address_updated, reward_share=reward_share_updated)
         self.sc_sync_all()
@@ -351,7 +359,7 @@ class SCEvmForgerV2register(AccountChainSetup):
         status = int(receipt['result']['status'], 16)
         assert_equal(0, status, "Upgrade forger should fail")
 
-        # - try updating a forger with a null reward_share
+        # - try updating a forger specifying a null reward_share
         res = ac_updateForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2,
                                  reward_address=reward_address_updated, reward_share=0)
         self.sc_sync_all()
@@ -412,13 +420,12 @@ class SCEvmForgerV2register(AccountChainSetup):
         # update genesis forger via contract call
         reward_share_gen_updated = 33
         reward_address_gen_updated = "3333333333333333333333333333333333333333"
+
         reward_address_bytes = hex_str_to_bytes(reward_address_gen_updated)
         forger_sign_key_bytes = hex_str_to_bytes(block_sign_pub_key_genesis)
         forger_vrf_key_bytes = hex_str_to_bytes(vrf_pub_key_genesis)
-        signature25519_bytes = hex_str_to_bytes(
-            "aba0a70e06f79a790a48e854a343ee7b5ca5e6b7f424577e26ab0012cdb1fdddf6af48ab93b7e8df30ecc54170123e9747cc40f9f97dda5bc02807fb89dce704")
-        signature_vrf_bytes = hex_str_to_bytes(
-            "7e707ec920ddd406b6baa39a7428d779cdef0f9c6472cbbbc2b2b8643a753a0180cf468aefc710ea29f68c8a2b37792c36123b82fc74caf8aa675774e3d385b91d15cd7dfc93dd25188b69553463faff93e44fea660116b4b383c40feee256722d")
+        signature25519_bytes = hex_str_to_bytes("e50f654c4bff1e99c282b0eec21ced63fac7ed28d9a7d4f6529c2dd7a7bce93fd419f1288c8c865a325f9b2a4439aab696384159b736f5ae1562e72f0638a50e")
+        signature_vrf_bytes = hex_str_to_bytes("8f0964a947fe634832cfbef589ed5956792085cd462b5a44d64bd0d0bdc75a0c0062b9c5cc55680ebdec91917721668d725c3b5f4f5c8529f8ed4458c86fb831279e7c8abfefc30eca46c565928d9c89adf27e2359f3827fcc8b6f62f4a4b8ee36")
 
         update_forger_method = 'updateForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)'
         tx_id = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
