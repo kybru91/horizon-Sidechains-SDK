@@ -124,7 +124,8 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
       case Some(secret) => secret.sign(messageToSign)
     }
 
-    log.debug(s"sign1=$signature25519, sign2=$signatureVrf")
+    log.debug(s"25519: key=$blockSignPubKey, signature=$signature25519")
+    log.debug(s"vrf: key=$vrfPublicKey, signature=$signatureVrf")
     (signature25519, signatureVrf)
 
   }
@@ -570,31 +571,25 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         entity(as[ReqRegisterForger]) { body =>
           // lock the view and try to create CoreTransaction
           applyOnNodeView { sidechainNodeView =>
-            val accountState = sidechainNodeView.getNodeState
-            val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-            if (Version1_4_0Fork.get(epochNumber).active) {
-              if (body.rewardShare < 0 || body.rewardShare > MAX_REWARD_SHARE) {
-                val msg = s"Reward share must be in the range [0, $MAX_REWARD_SHARE]"
+
+            if (body.rewardShare < 0 || body.rewardShare > MAX_REWARD_SHARE) {
+              val msg = s"Reward share must be in the range [0, $MAX_REWARD_SHARE]"
+              ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
+            } else {
+              if ((body.rewardAddress.isDefined && body.rewardShare == 0) ||
+                (body.rewardAddress.isEmpty && body.rewardShare != 0)) {
+                val msg = if (body.rewardAddress.isDefined)
+                  s"Reward share cannot be 0 if reward address is defined - Reward share = ${body.rewardShare}, reward address = ${body.rewardAddress}"
+                else
+                  s"Reward share cannot be different from 0 if reward address is not defined - Reward share = ${body.rewardShare}, reward address = ${body.rewardAddress}"
                 ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
-              } else {
-                if ((body.rewardAddress.isDefined && body.rewardShare == 0) ||
-                  (body.rewardAddress.isEmpty && body.rewardShare != 0)) {
-                  val msg = if (body.rewardAddress.isDefined)
-                    s"Reward share cannot be 0 if reward address is defined - Reward share = ${body.rewardShare}, reward address = ${body.rewardAddress}"
-                  else
-                    s"Reward share cannot be different from 0 if reward address is not defined - Reward share = ${body.rewardShare}, reward address = ${body.rewardAddress}"
-                  ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
-                }
-                else {
-                  val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
-                  doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.RegisterForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress.getOrElse(NULL_ADDRESS_WITH_PREFIX_HEX_STRING))
-                }
+              }
+              else {
+                val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
+                doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.RegisterForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress.getOrElse(NULL_ADDRESS_WITH_PREFIX_HEX_STRING))
               }
             }
-            else {
-              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
-                JOptional.empty()))
-            }
+
           }
         }
       }
@@ -607,9 +602,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         entity(as[ReqUpdateForger]) { body =>
           // lock the view and try to create CoreTransaction
           applyOnNodeView { sidechainNodeView =>
-            val accountState = sidechainNodeView.getNodeState
-            val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-            if (Version1_4_0Fork.get(epochNumber).active) {
+            {
               if (body.rewardShare <= 0 || body.rewardShare > MAX_REWARD_SHARE) {
                 val msg = s"Reward share must be in the range (0, $MAX_REWARD_SHARE]"
                 ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
@@ -621,10 +614,6 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
                 doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.UpdateForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress)
               }
             }
-            else {
-              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
-                JOptional.empty()))
-            }
           }
         }
       }
@@ -633,57 +622,68 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
 
   private def doRegisterOrUpdateForger(operation: String, sidechainNodeView: AccountNodeView, valueInWei: BigInteger, body: ReqBaseForger, rewardAddress: String) = {
 
-    // default gas related params
-    val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
-    var maxPriorityFeePerGas = BigInteger.valueOf(120)
-    var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
-    var gasLimit = BigInteger.valueOf(500000)
-
-    if (body.gasInfo.isDefined) {
-      maxFeePerGas = body.gasInfo.get.maxFeePerGas
-      maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
-      gasLimit = body.gasInfo.get.gasLimit
+    val accountState = sidechainNodeView.getNodeState
+    val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
+    if (!Version1_4_0Fork.get(epochNumber).active) {
+      ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
+        JOptional.empty()))
     }
+    else if (!accountState.forgerStakesV2IsActive) {
+      ApiResponseUtil.toResponse(GenericTransactionError(s"Forger Stake Storage V2 is not active, can not invoke this command",
+        JOptional.empty()))
+    } else {
+      // default gas related params
+      val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
+      var maxPriorityFeePerGas = BigInteger.valueOf(120)
+      var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
+      var gasLimit = BigInteger.valueOf(500000)
 
-    val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
+      if (body.gasInfo.isDefined) {
+        maxFeePerGas = body.gasInfo.get.maxFeePerGas
+        maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
+        gasLimit = body.gasInfo.get.gasLimit
+      }
 
-    val secret = getFittingSecret(sidechainNodeView, None, txCost)
+      val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
 
-    secret match {
-      case Some(secret) =>
-        val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
+      val secret = getFittingSecret(sidechainNodeView, None, txCost)
 
-        val blockSignPubKey = PublicKey25519PropositionSerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.blockSignPubKey))
-        val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.vrfPubKey))
+      secret match {
+        case Some(secret) =>
+          val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
 
-        Try {
-          val msg = ForgerStakeV2MsgProcessor.getHashedMessageToSign(body.blockSignPubKey, body.vrfPubKey, body.rewardShare, rewardAddress)
-          val signatures = signMessageWithSecrets(sidechainNodeView, blockSignPubKey, vrfPubKey, msg)
+          val blockSignPubKey = PublicKey25519PropositionSerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.blockSignPubKey))
+          val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.vrfPubKey))
 
-          encodeRegisterOrUpdateForgerCmdRequest(operation, blockSignPubKey, vrfPubKey, body.rewardShare, new AddressProposition(hexStringToByteArray(rewardAddress)), signatures._1, signatures._2)
-        } match {
-          case Success(dataBytes) =>
+          Try {
+            val msg = ForgerStakeV2MsgProcessor.getHashedMessageToSign(body.blockSignPubKey, body.vrfPubKey, body.rewardShare, rewardAddress)
+            val signatures = signMessageWithSecrets(sidechainNodeView, blockSignPubKey, vrfPubKey, msg)
 
-            val tmpTx: EthereumTransaction = new EthereumTransaction(
-              params.chainId,
-              JOptional.of(new AddressProposition(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)),
-              nonce,
-              gasLimit,
-              maxPriorityFeePerGas,
-              maxFeePerGas,
-              valueInWei,
-              dataBytes,
-              null
-            )
-            validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
+            encodeRegisterOrUpdateForgerCmdRequest(operation, blockSignPubKey, vrfPubKey, body.rewardShare, new AddressProposition(hexStringToByteArray(rewardAddress)), signatures._1, signatures._2)
+          } match {
+            case Success(dataBytes) =>
 
-          case Failure(exception) =>
-            ApiResponseUtil.toResponse(GenericTransactionError(s"Command failed: ", JOptional.of(exception)))
+              val tmpTx: EthereumTransaction = new EthereumTransaction(
+                params.chainId,
+                JOptional.of(new AddressProposition(FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)),
+                nonce,
+                gasLimit,
+                maxPriorityFeePerGas,
+                maxFeePerGas,
+                valueInWei,
+                dataBytes,
+                null
+              )
+              validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
 
-        }
+            case Failure(exception) =>
+              ApiResponseUtil.toResponse(GenericTransactionError(s"Command $operation failed: ", JOptional.of(exception)))
 
-      case None =>
-        ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+          }
+
+        case None =>
+          ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+      }
     }
   }
 

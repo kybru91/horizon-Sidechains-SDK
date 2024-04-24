@@ -265,9 +265,9 @@ class SCEvmForgerV2register(AccountChainSetup):
         forger_sign_key_bytes = hex_str_to_bytes(block_sign_pub_key_2)
         forger_vrf_key_bytes = hex_str_to_bytes(vrf_pub_key_2)
         signature25519_bytes = hex_str_to_bytes(
-            "0c730e119711cef778ffb55d7dee9aefcd4d404c1387134d7cd5da28b0fa7a8ecce79eadea977c76d5f200016d90e46af1d5de343a072ae838d604965cc9460c")
+            "776c7362afed8799826d1c61a202c248d11c82866c804db3ed919ecef8581fc65db2a019a543197fa150a3b923aca950b377cbd12701afe4c53361f29f971709")
         signature_vrf_bytes = hex_str_to_bytes(
-            "8709b523d0f82ce70b4606ae1453fa8a1102b0fee503dc5f67ea4769ad1da61900d6c214d49b6cde58e0a20f21b03c9e31059681cf4446031cf3e5c0f6f5fb530d48b553506bbb3ab29e2b445d6aa22d3a06acb6322c3ad1e1e52faa9ab4196f3b")
+            "d710141f62b7f656aaa21ae6fba716774d38e39708374c8b6e6a059482204e2a00e4dd3aabc76d76744e39f2f3e35c26c4ac7837d6ebc757ba4b31fbf92a1b9e0ea337dbf3deecb39e9df9134fc79107469d79acf44ee215eb7e063ab083489725")
 
         staked_amount_2_in_wei = convertZenToWei(33)
         register_forger_method = 'registerForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)'
