@@ -542,7 +542,7 @@ class AccountState(
     None
   }
 
-
+  override def forgerStakesV2IsActive: Boolean = using(getView)(_.forgerStakesV2IsActive)
 }
 
 object AccountState extends SparkzLogging {

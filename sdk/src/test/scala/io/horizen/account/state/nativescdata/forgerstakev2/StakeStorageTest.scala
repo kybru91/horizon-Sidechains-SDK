@@ -760,6 +760,9 @@ class StakeStorageTest
 
       createSenderAccount(view, BigInteger.TEN, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
 
+      // Activate Forger V2
+      StakeStorage.setActive(view)
+
       // check that at the very beginning we have empty lists
       val listOfStakesForgerEmpty = StakeStorage.getPagedForgersStakesByForger(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 0, 100)
       assertTrue(listOfStakesForgerEmpty.stakesData.isEmpty)
@@ -967,6 +970,9 @@ class StakeStorageTest
           delegatorList.append(delegator)
         }
       )
+
+      // Activate Forger V2
+      StakeStorage.setActive(view)
 
       (0 until numOfForgers).foreach(
         idx_forg => {
