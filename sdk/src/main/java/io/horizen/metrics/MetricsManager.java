@@ -24,6 +24,7 @@ public class MetricsManager {
     private Gauge blockApplyTime;
     private Gauge blockApplyTimeAbsolute;
     private Gauge mempoolSize;
+    private Gauge forgeBlockCount;
     private Gauge forgeLotteryTime;
     private Gauge forgeBlockCreationTime;
 
@@ -68,6 +69,9 @@ public class MetricsManager {
         mempoolSize =  Gauge.builder().name("mempool_size").register();
         helps.add(new MetricsHelp(mempoolSize.getPrometheusName(), "Mempool size (number of transactions in this node mempool)"));
 
+        forgeBlockCount = Gauge.builder().name("forge_block_count").register();
+        helps.add(new MetricsHelp(forgeBlockCount.getPrometheusName(), "Number of forged blocks by this node (absolute value since start of the node)"));
+
         forgeLotteryTime = Gauge.builder().name("forge_lottery_time").register();
         helps.add(new MetricsHelp(forgeLotteryTime.getPrometheusName(), "Time to execute the lottery (milliseconds)"));
 
@@ -91,6 +95,7 @@ public class MetricsManager {
 
     public void setVersion(String version){ nodeInfo.setLabelValues(version.split("/"));}
     public void forgedBlock(long millis){
+        forgeBlockCount.inc();
         forgeBlockCreationTime.set(millis);
     }
     public void appliedBlockKo(){
