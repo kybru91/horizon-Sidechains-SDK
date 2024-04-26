@@ -2,6 +2,7 @@ package io.horizen.metrics;
 
 import io.prometheus.metrics.core.metrics.Counter;
 import io.prometheus.metrics.core.metrics.Gauge;
+import io.prometheus.metrics.core.metrics.Info;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import sparkz.core.utils.TimeProvider;
@@ -16,11 +17,14 @@ public class MetricsManager {
 
     private TimeProvider timeProvider;
     private static MetricsManager me;
+
+    private Info nodeInfo;
     private Counter blocksAppliedSuccessfully;
     private Counter blocksNotApplied;
     private Gauge blockApplyTime;
     private Gauge blockApplyTimeAbsolute;
     private Gauge mempoolSize;
+    private Gauge forgeBlockCount;
     private Gauge forgeLotteryTime;
     private Gauge forgeBlockCreationTime;
 
@@ -47,6 +51,9 @@ public class MetricsManager {
         //JvmMetrics.builder().register(); // initialize the out-of-the-box JVM metrics
         helps = new ArrayList<>();
 
+        nodeInfo = Info.builder().name("node_info").labelNames("version", "sdkVersion", "architecture", "jdkVersion").register();
+        helps.add(new MetricsHelp(nodeInfo.getPrometheusName(), "Node version"));
+
         blockApplyTime  =  Gauge.builder().name("block_apply_time").register();
         helps.add(new MetricsHelp(blockApplyTime.getPrometheusName(), "Time to apply block to node wallet and state (milliseconds)"));
 
@@ -61,6 +68,9 @@ public class MetricsManager {
 
         mempoolSize =  Gauge.builder().name("mempool_size").register();
         helps.add(new MetricsHelp(mempoolSize.getPrometheusName(), "Mempool size (number of transactions in this node mempool)"));
+
+        forgeBlockCount = Gauge.builder().name("forge_block_count").register();
+        helps.add(new MetricsHelp(forgeBlockCount.getPrometheusName(), "Number of forged blocks by this node (absolute value since start of the node)"));
 
         forgeLotteryTime = Gauge.builder().name("forge_lottery_time").register();
         helps.add(new MetricsHelp(forgeLotteryTime.getPrometheusName(), "Time to execute the lottery (milliseconds)"));
@@ -83,7 +93,9 @@ public class MetricsManager {
         blocksAppliedSuccessfully.inc();
     }
 
+    public void setVersion(String version){ nodeInfo.setLabelValues(version.split("/"));}
     public void forgedBlock(long millis){
+        forgeBlockCount.inc();
         forgeBlockCreationTime.set(millis);
     }
     public void appliedBlockKo(){
