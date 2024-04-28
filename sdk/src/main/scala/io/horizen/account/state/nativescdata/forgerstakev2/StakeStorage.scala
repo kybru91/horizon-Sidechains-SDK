@@ -243,7 +243,12 @@ object StakeStorage {
   }
 
   def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
-    // TODO check we have activated the new storage, otherwise throw an error
+
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new IllegalArgumentException(msgStr)
+    }
+
     if (startPos < 0)
       throw new IllegalArgumentException(s"Negative start position: $startPos can not be negative")
     if (pageSize <= 0)
@@ -278,8 +283,11 @@ object StakeStorage {
   }
 
   def getPagedForgersStakesByDelegator(view: BaseAccountStateView,  delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
-    // TODO check we have activated the new storage, otherwise throw an error
 
+    if (!StakeStorage.isActive(view)) {
+      val msgStr = s"Forger stake V2 is not activated"
+      throw new IllegalArgumentException(msgStr)
+    }
     if (startPos < 0)
       throw new IllegalArgumentException(s"Negative start position: $startPos")
     if (pageSize <= 0)
@@ -355,7 +363,6 @@ object StakeStorage {
         throw new IllegalArgumentException(s"Size cannot be negative: $historySize")
     }
 
-
     def getCheckpoint(view: BaseAccountStateView, index: Int): StakeCheckpoint = {
       val paddedValue = getValue(view, index)
       StakeCheckpointSerializer.parseBytes(paddedValue)
@@ -370,7 +377,6 @@ object StakeStorage {
         StakeCheckpointSerializer.parseBytes(paddedValue).stakedAmount
       }
     }
-
 
     private[horizen] def checkpointToPaddedBytes(checkpoint: StakeCheckpoint): Array[Byte] = {
       BytesUtils.padRightWithZeroBytes(StakeCheckpointSerializer.toBytes(checkpoint), 32)

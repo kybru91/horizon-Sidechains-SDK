@@ -421,4 +421,6 @@ class StateDbAccountStateView(
   def disableWriteProtection(): Unit = readOnly = false
 
   override def getNativeSmartContractAddressList(): Array[Address] = listOfNativeSmartContractAddresses
+
+  override def forgerStakesV2IsActive: Boolean = forgerStakesV2Provider.isActive(this)
 }
