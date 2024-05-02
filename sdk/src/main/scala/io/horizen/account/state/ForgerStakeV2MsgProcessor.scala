@@ -199,7 +199,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     }
 
     if (rewardAddress == Address.ZERO) {
-      val errMsg = s"Reward share cannot be 0 if reward address is defined - Reward share = $rewardShare, reward address = $rewardAddress"
+      val errMsg = s"Reward share cannot be ZERO"
       log.warn(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }

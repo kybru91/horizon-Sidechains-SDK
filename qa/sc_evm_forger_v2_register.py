@@ -421,6 +421,11 @@ class SCEvmForgerV2register(AccountChainSetup):
         reward_share_gen_updated = 33
         reward_address_gen_updated = "3333333333333333333333333333333333333333"
 
+        # result = ac_updateForger(sc_node_1, block_sign_pub_key_genesis, vrf_pub_key_genesis,
+        #                          reward_address=reward_address_gen_updated, reward_share=reward_share_gen_updated)
+        #
+        # self.sc_sync_all()
+
         reward_address_bytes = hex_str_to_bytes(reward_address_gen_updated)
         forger_sign_key_bytes = hex_str_to_bytes(block_sign_pub_key_genesis)
         forger_vrf_key_bytes = hex_str_to_bytes(vrf_pub_key_genesis)
