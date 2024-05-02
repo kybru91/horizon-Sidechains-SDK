@@ -1,6 +1,7 @@
 package io.horizen.account.storage
 
 import io.horizen.account.proposition.AddressProposition
+import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.account.state.receipt.EthereumReceipt
 import io.horizen.account.utils.AccountBlockFeeInfo
 import io.horizen.block.WithdrawalEpochCertificate
@@ -38,4 +39,10 @@ trait AccountStateMetadataStorageReader {
   def getForgerBlockCounters: Map[AddressProposition, Long]
 
   def getMcForgerPoolRewards: Map[AddressProposition, BigInteger]
+
+  def getForgerRewards(
+    forgerPublicKeys: ForgerPublicKeys,
+    consensusEpochStart: Int,
+    maxNumOfEpochs: Int,
+  ): Seq[BigInteger]
 }

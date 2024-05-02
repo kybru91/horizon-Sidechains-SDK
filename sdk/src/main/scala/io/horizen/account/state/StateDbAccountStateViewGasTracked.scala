@@ -1,6 +1,7 @@
 package io.horizen.account.state
 
 import io.horizen.account.state.receipt.EthereumConsensusDataLog
+import io.horizen.account.storage.AccountStateMetadataStorageView
 import io.horizen.evm.{Address, Hash, StateDB}
 
 import java.math.BigInteger
@@ -13,9 +14,10 @@ import java.math.BigInteger
 class StateDbAccountStateViewGasTracked(
     stateDb: StateDB,
     messageProcessors: Seq[MessageProcessor],
+    metadataStorageView: AccountStateMetadataStorageView,
     readOnly: Boolean,
     gas: GasPool
-) extends StateDbAccountStateView(stateDb, messageProcessors, readOnly) {
+) extends StateDbAccountStateView(stateDb, messageProcessors, metadataStorageView, readOnly) {
 
   /**
    * Consume gas for account access:

@@ -1,9 +1,13 @@
 package io.horizen.account.utils
 
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.proposition.AddressProposition
-import io.horizen.account.utils.AccountFeePaymentsUtils.{getForgersRewards, getMainchainWithdrawalEpochDistributionCap}
+import io.horizen.account.secret.PrivateKeySecp256k1Creator
+import io.horizen.account.state.ForgerPublicKeys
+import io.horizen.account.utils.AccountFeePaymentsUtils.{getForgerAndDelegatorShares, getForgersRewards, getMainchainWithdrawalEpochDistributionCap}
 import io.horizen.fixtures._
 import io.horizen.params.MainNetParams
+import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
 import org.junit.Assert._
 import org.junit._
@@ -11,6 +15,7 @@ import org.scalatestplus.junit.JUnitSuite
 import org.scalatestplus.mockito._
 
 import java.math.BigInteger
+import java.nio.charset.StandardCharsets
 
 
 class AccountFeePaymentsUtilsTest
@@ -232,5 +237,36 @@ class AccountFeePaymentsUtilsTest
     actual = getMainchainWithdrawalEpochDistributionCap(1680010, params)
     expected = ZenWeiConverter.convertZenniesToWei((rewardAfterFirstHalving * (params.withdrawalEpochLength - 10) / divider) + (rewardAfterSecondHalving * 10 / divider))
     assertEquals(expected, actual)
+  }
+
+  @Test
+  def getForgerAndDelegatorSharesTest(): Unit = {
+    val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
+    val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+    val forgerPublicKeys = ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
+    val rewardAddress: AddressProposition = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8)).publicImage()
+
+    val mcForgerPoolRewards = Map(
+      forgerAddr_a -> BigInteger.valueOf(10),
+      forgerAddr_b -> BigInteger.valueOf(10),
+      forgerAddr_c -> BigInteger.valueOf(10),
+      forgerAddr_d -> BigInteger.valueOf(10),
+    )
+
+    val feePayment = AccountPayment(forgerAddr_a, BigInteger.valueOf(100))
+    val forgerInfo = ForgerInfo(forgerPublicKeys, 100, rewardAddress)
+
+    val (forgerPayment, delegatorPayment) = getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, forgerInfo)
+
+    assertEquals(forgerPayment.address, forgerAddr_a)
+    assertEquals(forgerPayment.value, BigInteger.valueOf(90))
+    assertEquals(forgerPayment.valueFromMainchain.get, BigInteger.valueOf(9))
+    assertEquals(forgerPayment.valueFromFees.get, BigInteger.valueOf(81))
+
+    assertEquals(delegatorPayment.feePayment.address, rewardAddress)
+    assertEquals(delegatorPayment.feePayment.value, BigInteger.valueOf(10))
+    assertEquals(delegatorPayment.feePayment.valueFromMainchain.get, BigInteger.valueOf(1))
+    assertEquals(delegatorPayment.feePayment.valueFromFees.get, BigInteger.valueOf(9))
+    assertEquals(delegatorPayment.forgerKeys, forgerPublicKeys)
   }
 }

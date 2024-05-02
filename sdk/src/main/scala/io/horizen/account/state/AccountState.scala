@@ -5,6 +5,7 @@ import io.horizen.SidechainTypes
 import io.horizen.account.block.AccountBlock
 import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork, Version1_4_0Fork}
 import io.horizen.account.history.validation.InvalidTransactionChainIdException
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.node.NodeAccountState
 import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumReceipt}
@@ -205,7 +206,18 @@ class AccountState(
       // - base -> forgers pool, weighted by number of blocks forged
       // - tip -> block forger
       // Note: store also entries with zero values, which can arise in sc blocks without any tx
-      stateView.updateFeePaymentInfo(AccountBlockFeeInfo(cumBaseFee, cumForgerTips, mod.header.forgerAddress))
+      if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+        stateView.updateFeePaymentInfo(
+          AccountBlockFeeInfo(
+            cumBaseFee,
+            cumForgerTips,
+            mod.header.forgerAddress,
+            Some(mod.header.forgingStakeInfo.blockSignPublicKey),
+            Some(mod.header.forgingStakeInfo.vrfPublicKey)
+          ))
+      } else {
+        stateView.updateFeePaymentInfo(AccountBlockFeeInfo(cumBaseFee, cumForgerTips, mod.header.forgerAddress))
+      }
 
       // update block counters for forger pool fee distribution
       stateView.updateForgerBlockCounter(mod.forgerPublicKey, consensusEpochNumber)
@@ -356,7 +368,11 @@ class AccountState(
 
   // get a view over state db which is built with the given state root
   def getStateDbViewFromRoot(stateRoot: Array[Byte]): StateDbAccountStateView =
-    new StateDbAccountStateView(new StateDB(stateDbStorage, new Hash(stateRoot)), messageProcessors)
+    new StateDbAccountStateView(
+      new StateDB(stateDbStorage, new Hash(stateRoot)),
+      messageProcessors,
+      stateMetadataStorage.getView
+    )
 
   // Base getters
   override def getWithdrawalRequests(withdrawalEpoch: Int): Seq[WithdrawalRequest] =
@@ -400,8 +416,19 @@ class AccountState(
     val feePaymentInfoSeq = stateMetadataStorage.getFeePayments(withdrawalEpoch)
     val mcForgerPoolRewards = stateMetadataStorage.getMcForgerPoolRewards
     val poolBalanceDistributed = mcForgerPoolRewards.values.foldLeft(BigInteger.ZERO)((a, b) => a.add(b))
-
-    (AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards), poolBalanceDistributed)
+    if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+      val (feePayments, delegatorPayments) =
+        using(getView)(
+          _.getForgersAndDelegatorsShares(
+            AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards),
+            feePaymentInfoSeq,
+            mcForgerPoolRewards
+          )
+        )
+      (feePayments ++ delegatorPayments.map(_.feePayment), poolBalanceDistributed)
+    } else {
+      (AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards), poolBalanceDistributed)
+    }
   }
 
   override def getWithdrawalEpochInfo: WithdrawalEpochInfo = stateMetadataStorage.getWithdrawalEpochInfo
@@ -448,6 +475,8 @@ class AccountState(
   override def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = using(getView)(_.getPagedForgersStakesByForger(forger, startPos, pageSize))
  
   override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = using(getView)(_.getPagedForgersStakesByDelegator(delegator, startPos, pageSize))
+
+  override def getForgerInfo(forger: ForgerPublicKeys): Option[ForgerInfo] = using(getView)(_.getForgerInfo(forger))
 
   override def getAllowedForgerList: Seq[Int] = using(getView)(_.getAllowedForgerList)
 

@@ -1,6 +1,7 @@
 package io.horizen.account.storage
 
 import io.horizen.account.proposition.AddressProposition
+import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.account.state.receipt.EthereumReceipt
 import io.horizen.account.utils.AccountBlockFeeInfo
 import io.horizen.block.WithdrawalEpochCertificate
@@ -59,4 +60,10 @@ class AccountStateMetadataStorage(storage: Storage)
   override def getForgerBlockCounters: Map[AddressProposition, Long] = getView.getForgerBlockCounters
 
   override def getMcForgerPoolRewards: Map[AddressProposition, BigInteger] = getView.getMcForgerPoolRewards
+
+  override def getForgerRewards(
+    forgerPublicKeys: ForgerPublicKeys,
+    consensusEpochStart: Int,
+    maxNumOfEpochs: Int,
+  ): Seq[BigInteger] = getView.getForgerRewards(forgerPublicKeys, consensusEpochStart, maxNumOfEpochs)
 }

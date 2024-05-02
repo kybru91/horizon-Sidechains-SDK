@@ -1,6 +1,8 @@
 package io.horizen.account.utils
 
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.proposition.AddressProposition
+import io.horizen.account.state.{ForgerPublicKeys, ForgerStakeV2MsgProcessor}
 import io.horizen.evm.{StateDB, TrieHasher}
 import io.horizen.params.NetworkParams
 
@@ -60,6 +62,28 @@ object AccountFeePaymentsUtils {
     }
   }
 
+  def getForgerAndDelegatorShares(mcForgerPoolRewards: Map[AddressProposition, BigInteger], feePayment: AccountPayment, forgerInfo: ForgerInfo): (AccountPayment, DelegatorFeePayment) = {
+    val delegatorShare = BigInteger.valueOf(forgerInfo.rewardShare)
+    val totalShare = BigInteger.valueOf(ForgerStakeV2MsgProcessor.MAX_REWARD_SHARE)
+    val totalMcReward = mcForgerPoolRewards.getOrElse(feePayment.address, BigInteger.ZERO)
+
+    val delegatorReward = feePayment.value.multiply(delegatorShare).divide(totalShare)
+    val delegatorMcReward = totalMcReward.multiply(delegatorShare).divide(totalShare)
+    val delegatorFeeReward = delegatorReward.subtract(delegatorMcReward)
+
+    val forgerReward = feePayment.value.subtract(delegatorReward)
+    val forgerMcReward = totalMcReward.subtract(delegatorMcReward)
+    val forgerFeeReward = forgerReward.subtract(forgerMcReward)
+
+    (
+      AccountPayment(feePayment.address, forgerReward, Some(forgerMcReward), Some(forgerFeeReward)),
+      DelegatorFeePayment(
+        AccountPayment(forgerInfo.rewardAddress, delegatorReward, Some(delegatorMcReward), Some(delegatorFeeReward)),
+        forgerInfo.forgerPublicKeys
+      )
+    )
+  }
+
   def getMainchainWithdrawalEpochDistributionCap(epochMaxHeight: Long, params: NetworkParams): BigInteger = {
     val baseReward = 12.5 * 1e8
     val halvingInterval = params.mcHalvingInterval
@@ -80,4 +104,6 @@ object AccountFeePaymentsUtils {
   }
 
   private def getMcDistributionCapDivider: BigInteger = MC_DISTRIBUTION_CAP_DIVIDER
+
+  case class DelegatorFeePayment(feePayment: AccountPayment, forgerKeys: ForgerPublicKeys)
 }

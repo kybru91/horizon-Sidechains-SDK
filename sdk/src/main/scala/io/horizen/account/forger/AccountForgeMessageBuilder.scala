@@ -264,8 +264,13 @@ class AccountForgeMessageBuilder(
                 val mcLastBlockHeight = params.mainchainCreationBlockHeight + ((withdrawalEpochNumber + 1) * params.withdrawalEpochLength) - 1
                 AccountFeePaymentsUtils.getMainchainWithdrawalEpochDistributionCap(mcLastBlockHeight, params)
               } else MAX_MONEY_IN_WEI
+              val blockToAppendFeeInfo = if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+                Some(currentBlockPayments.copy(blockSignPublicKey = Some(forgingStakeInfo.blockSignPublicKey), vrfPublicKey = Some(forgingStakeInfo.vrfPublicKey)))
+              } else {
+                Some(currentBlockPayments)
+              }
               // get all previous payments for current ending epoch and append the one of the current block
-              val (feePayments, poolBalanceDistributed) = dummyView.getFeePaymentsInfo(withdrawalEpochNumber, consensusEpochNumber, distributionCap, Some(currentBlockPayments))
+              val (feePayments, poolBalanceDistributed) = dummyView.getFeePaymentsInfo(withdrawalEpochNumber, consensusEpochNumber, distributionCap, blockToAppendFeeInfo)
 
               dummyView.subtractForgerPoolBalanceAndResetBlockCounters(consensusEpochNumber, poolBalanceDistributed)
 

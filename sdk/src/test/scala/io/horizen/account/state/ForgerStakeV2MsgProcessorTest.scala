@@ -24,6 +24,7 @@ import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.{BytesUtils, Pair, ZenCoinsUtils}
 import org.junit.Assert._
 import org.junit._
+import org.mockito.Mockito.when
 import org.mockito._
 import org.scalatestplus.junit.JUnitSuite
 import org.scalatestplus.mockito._
@@ -1391,6 +1392,38 @@ class ForgerStakeV2MsgProcessorTest
       data= stakeTotalCmdInput.encode()
       msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
       assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas))
+    }
+  }
+
+  @Test
+  def testGetForgerRewards(): Unit = {
+    val blockSignerProposition1 = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
+    val vrfPublicKey1 = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+    val forgerPublicKeys1 = ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1)
+    val forgerRewards = Seq(BigInteger.valueOf(10), BigInteger.valueOf(20), BigInteger.valueOf(30), BigInteger.valueOf(40), BigInteger.valueOf(50))
+    when(metadataStorageView.getForgerRewards(forgerPublicKeys1, 10, 5))
+      .thenReturn(forgerRewards)
+
+    usingView(forgerStakeV2MessageProcessor) { view =>
+      forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
+
+      // test getRewardsReceived fails until ForgerStakeV2 is active
+      val msg1 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(RewardsReceivedCmd) ++ Array.emptyByteArray, randomNonce)
+      val gas = new GasPool(1000000000)
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas))
+
+      StakeStorage.setActive(view)
+
+      // test getRewardsReceived
+      val rewardsReceivedCmdInput = RewardsReceivedCmdInput(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 10, 5)
+      val msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(RewardsReceivedCmd) ++ rewardsReceivedCmdInput.encode(), randomNonce)
+      val returnData = assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      val rewardsReceivedOutput = RewardsReceivedCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        forgerRewards,
+        rewardsReceivedOutput.listOfRewards
+      )
     }
   }
 

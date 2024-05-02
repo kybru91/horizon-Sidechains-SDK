@@ -2,10 +2,12 @@ package io.horizen.account.state
 
 import io.horizen.SidechainTypes
 import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt.ReceiptStatus
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumConsensusDataReceipt}
+import io.horizen.account.storage.AccountStateMetadataStorageView
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.{BigIntegerUtil, MainchainTxCrosschainOutputAddressUtil, ZenWeiConverter}
 import io.horizen.block.{MainchainBlockReferenceData, MainchainTxForwardTransferCrosschainOutput, MainchainTxSidechainCreationCrosschainOutput}
@@ -26,6 +28,7 @@ import scala.util.Try
 class StateDbAccountStateView(
     stateDb: StateDB,
     messageProcessors: Seq[MessageProcessor],
+    metadataStorageView: AccountStateMetadataStorageView,
     var readOnly: Boolean = false
 ) extends BaseAccountStateView
       with AutoCloseable
@@ -87,6 +90,10 @@ class StateDbAccountStateView(
 
   override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse =
     forgerStakesV2Provider.getPagedForgersStakesByDelegator(this, delegator, startPos, pageSize)
+
+  override def getForgerInfo(forger: ForgerPublicKeys): Option[ForgerInfo] = {
+    forgerStakesV2Provider.getForgerInfo(this, forger)
+  }
 
   override def getAllowedForgerList: Seq[Int] =
     forgerStakesProvider.getAllowedForgerListIndexes(this)
@@ -407,7 +414,7 @@ class StateDbAccountStateView(
   def revertToSnapshot(revisionId: Int): Unit = stateDb.revertToSnapshot(revisionId)
 
   override def getGasTrackedView(gas: GasPool): BaseAccountStateView =
-    new StateDbAccountStateViewGasTracked(stateDb, messageProcessors, readOnly, gas)
+    new StateDbAccountStateViewGasTracked(stateDb, messageProcessors, metadataStorageView, readOnly, gas)
 
   /**
    * Prevent write access to account storage, balance, nonce and code. While write protection is enabled invalid access
@@ -423,4 +430,12 @@ class StateDbAccountStateView(
   override def getNativeSmartContractAddressList(): Array[Address] = listOfNativeSmartContractAddresses
 
   override def forgerStakesV2IsActive: Boolean = forgerStakesV2Provider.isActive(this)
+
+  override def getForgerRewards(
+    forgerPublicKeys: ForgerPublicKeys,
+    consensusEpochStart: Int,
+    maxNumOfEpochs: Int
+  ): Seq[BigInteger] = {
+    metadataStorageView.getForgerRewards(forgerPublicKeys, consensusEpochStart, maxNumOfEpochs)
+  }
 }
