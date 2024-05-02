@@ -66,8 +66,6 @@ case class RegisterOrUpdateForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, re
     val sign1Bytes = signature25519.bytes
     val sign2Bytes = signatureVrf.bytes
 
-
-    // TODO make dynamic array of signatures
     listOfParams.add(new Bytes32(forgerPublicKeys.blockSignPublicKey.bytes()))
     listOfParams.add(vrfPublicKeyBytes._1)
     listOfParams.add(vrfPublicKeyBytes._2)
