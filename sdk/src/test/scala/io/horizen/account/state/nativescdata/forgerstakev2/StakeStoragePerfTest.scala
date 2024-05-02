@@ -9,7 +9,6 @@ import io.horizen.evm.{Address, Hash, MemoryDatabase, StateDB}
 import io.horizen.fixtures.StoreFixture
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.{ByteArrayWrapper, BytesUtils, ForgingStakeMerklePathInfo, MerkleTree}
-import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.scalatestplus.junit.JUnitSuite
 
@@ -66,6 +65,12 @@ class StakeStoragePerfTest
 
 
       using(new BufferedWriter(new FileWriter(s"log/testAddForgers_${cal.getTimeInMillis}.csv", true))) { out =>
+        // This tests if addForger method increases its time of execution increasing the number of forgers.
+        // It tests also:
+        // - the time of the operations performed by the lottery, i.e. getForgingStakes (including filtering),
+        //   creation of the Merkle tree and creation of the Merkle Path.
+        // - The time and the gas consumed by stakeTotal method.
+
         out.write("#*********************************************************************\n\n")
         out.write("#*                Adding forger performance test                      \n\n")
         out.write("#*********************************************************************\n\n")
@@ -160,7 +165,17 @@ class StakeStoragePerfTest
       // Testing stakeTotal and the lottery with multiple checkpoints/epochs
       using(new BufferedWriter(new FileWriter(s"log/testMultipleEpochs_${cal.getTimeInMillis}.csv", true))) { out =>
 
-        val numOfCheckpoints = 100
+        // This tests how stakeTotal and Lottery methods increase their time/gas increasing the number of checkpoints.
+        // Checkpoints are added adding stakes to each forger in each epoch.
+        // stakeTotal is measured in 3 different epochs ranges: the first epochs, the last epochs and in the middle.
+
+
+      out.write("#*********************************************************************\n\n")
+        out.write("#*                Adding checkpoints performance test                      \n\n")
+        out.write("#*********************************************************************\n\n")
+        out.write(s"# Date and time of the test: ${cal.getTime}\n\n")
+
+        val numOfCheckpoints = 200
         val numOfCheckpointsPerSnapshot = numOfCheckpoints / numOfSnapshots
         val numOfEpochs = numOfCheckpointsPerSnapshot
         out.write(s"# Total number of checkpoints:                        $numOfCheckpoints\n")
@@ -249,7 +264,12 @@ class StakeStoragePerfTest
 
     val cal = Calendar.getInstance()
     using(new BufferedWriter(new FileWriter(s"log/testSingleForgerMultipleCheckpoints_${cal.getTimeInMillis}.csv", true))) { out =>
-      out.write("#*********************************************************************\n\n")
+
+      // This tests how stakeTotal and addStake methods increase their time/gas increasing the number of checkpoints.
+      // Checkpoints are added always to the same forger in each epoch.
+      // stakeTotal is measured in 3 different epochs ranges: the first epochs, the last epochs and in the middle.
+
+    out.write("#*********************************************************************\n\n")
       out.write("#*                Adding checkpoints performance test                      \n\n")
       out.write("#*********************************************************************\n\n")
 
