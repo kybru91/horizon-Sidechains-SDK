@@ -59,6 +59,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
         doPagedForgersStakesByForgerCmd(invocation, gasView)
       case GetPagedForgersStakesByDelegatorCmd =>
         doPagedForgersStakesByDelegatorCmd(invocation, gasView)
+      case GetCurrentConsensusEpochCmd =>
+        doGetCurrentConsensusEpochCmd(invocation, gasView, context)
       case ActivateCmd =>
         doActivateCmd(invocation, view, context) // That shouldn't consume gas, so it doesn't use gasView
       case GetPagedForgersCmd =>
@@ -323,10 +325,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doGetForgerCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 has not been activated yet"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
 
     val inputParams = getArgumentsFromData(invocation.input)
@@ -341,10 +340,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def doGetPagedForgersCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
 
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 has not been activated yet"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
 
     val inputParams = getArgumentsFromData(invocation.input)
@@ -352,6 +348,14 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
     val res = StakeStorage.getPagedListOfForgers(view, startPos, pageSize)
     PagedForgersOutput(res.nextStartPos, res.forgers).encode()
+  }
+
+  def doGetCurrentConsensusEpochCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+    checkForgerStakesV2IsActive(view)
+    requireIsNotPayable(invocation)
+    checkInputDoesntContainParams(invocation)
+
+    ConsensusEpochCmdOutput(context.blockContext.consensusEpochNumber).encode()
   }
 
   def doActivateCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
@@ -425,6 +429,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   val ActivateCmd: String = getABIMethodId("activate()")
   val GetForgerCmd: String = getABIMethodId("getForger(bytes32,bytes32,bytes1)")
   val GetPagedForgersCmd: String = getABIMethodId("getPagedForgers(int32,int32)")
+  val GetCurrentConsensusEpochCmd: String = getABIMethodId("getCurrentConsensusEpoch()")
 
   // ensure we have strings consistent with size of opcode
   require(
@@ -436,7 +441,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
       GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH &&
       GetForgerCmd.length == 2 * METHOD_ID_LENGTH &&
-      GetPagedForgersCmd.length == 2 * METHOD_ID_LENGTH
+      GetPagedForgersCmd.length == 2 * METHOD_ID_LENGTH &&
+      GetCurrentConsensusEpochCmd.length == 2 * METHOD_ID_LENGTH
   )
 
   def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String): Array[Byte] = {

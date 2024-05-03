@@ -183,6 +183,7 @@ class ForgerStakeV2MsgProcessorTest
     assertEquals("Wrong MethodId for ActivateCmd", "0f15f4c0", ForgerStakeV2MsgProcessor.ActivateCmd)
     assertEquals("Wrong MethodId for GetForgerCmd", "7d8589fd", ForgerStakeV2MsgProcessor.GetForgerCmd)
     assertEquals("Wrong MethodId for GetPagedForgersCmd", "c1bf3d56", ForgerStakeV2MsgProcessor.GetPagedForgersCmd)
+    assertEquals("Wrong MethodId for GetCurrentConsensusEpochCmd", "cf94a955", ForgerStakeV2MsgProcessor.GetCurrentConsensusEpochCmd)
   }
 
 
@@ -1700,6 +1701,108 @@ class ForgerStakeV2MsgProcessorTest
 
   }
 
+
+  @Test
+  def testGetCurrentConsensusEpoch(): Unit = {
+
+    val processors = Seq(forgerStakeV2MessageProcessor, forgerStakeMessageProcessor)
+
+    usingView(processors) { view =>
+      forgerStakeMessageProcessor.init(view, V1_3_MOCK_FORK_POINT)
+      forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
+
+      // create sender account with some fund in it
+      val initialAmount = BigInteger.valueOf(100).multiply(validWeiAmount)
+      createSenderAccount(view, initialAmount)
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Before activate tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      // Check that getCurrentConsensusEpoch cannot be called before activate
+
+      val getCurrentConsensusEpochData: Array[Byte] = BytesUtils.fromHexString(GetCurrentConsensusEpochCmd)
+      var msg = getMessage(contractAddress, BigInteger.ZERO,  getCurrentConsensusEpochData, randomNonce)
+
+      // Try GetCurrentConsensusEpochCmd before fork 1.4
+      val blockContextBeforeFork = new BlockContext(
+        Address.ZERO,
+        0,
+        0,
+        DefaultGasFeeFork.blockGasLimit,
+        0,
+        V1_4_MOCK_FORK_POINT - 1,
+        0,
+        1,
+        MockedHistoryBlockHashProvider,
+        Hash.ZERO
+      )
+
+      var exc = intercept[ExecutionRevertedException] {
+        assertGas(0, msg, view, forgerStakeV2MessageProcessor, blockContextBeforeFork)
+      }
+      var expectedErr = "fork not active"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+
+      // Try getForger after fork 1.4 but before activate
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+
+      expectedErr = "Forger stake V2 has not been activated yet"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // Call activate
+
+      val initialOwnerBalance = BigInteger.valueOf(200).multiply(validWeiAmount)
+      createSenderAccount(view, initialOwnerBalance, ownerAddressProposition.address())
+
+      msg = getMessage(
+        contractAddress, 0, BytesUtils.fromHexString(ActivateCmd), randomNonce, ownerAddressProposition.address())
+
+      assertGasInterop(0, msg, view, processors, blockContextForkV1_4)
+
+      /////////////////////////////////////////////////////////////////////////////////////////////
+      //  Tests
+      /////////////////////////////////////////////////////////////////////////////////////////////
+
+      msg = getMessage(contractAddress, BigInteger.ZERO,  getCurrentConsensusEpochData, randomNonce)
+      var res = assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)
+
+      var epoch = ConsensusEpochCmdOutputDecoder.decode(res).epoch
+      assertEquals(blockContextForkV1_4.consensusEpochNumber, epoch)
+
+      val expectedEpoch = blockContextForkV1_4.consensusEpochNumber + 345
+      res = assertGas(2100, msg, view, forgerStakeV2MessageProcessor, getBlockContextForEpoch(expectedEpoch))
+      epoch = ConsensusEpochCmdOutputDecoder.decode(res).epoch
+      assertEquals(expectedEpoch, epoch)
+
+      ////////////////////////////////////////////////////////////
+      // Negative tests
+      //////////////////////////////////////////////////////////
+
+      // Check that it is not payable
+      msg = getMessage(contractAddress, validWeiAmount, getCurrentConsensusEpochData, randomNonce)
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "Call value must be zero"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+
+      // try processing a msg with a trailing byte in the arguments
+      val badData = Bytes.concat(getCurrentConsensusEpochData, new Array[Byte](1))
+      val msgBad = getMessage(contractAddress, BigInteger.ZERO, badData, randomNonce)
+
+      // should fail because input has a trailing byte
+      exc = intercept[ExecutionRevertedException] {
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+      }
+      expectedErr = "invalid msg data length"
+      assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
+    }
+
+  }
 
 
   def checkActivateEvents(listOfLogs: Array[EthereumConsensusDataLog]): Unit = {
