@@ -42,6 +42,8 @@ trait ForgerStakesProvider {
   private[horizen] def isForgerStakeAvailable(view: BaseAccountStateView, isForkV1_3Active: Boolean): Boolean
 
   private[horizen] def getAllowedForgerListIndexes(view: BaseAccountStateView): Seq[Int]
+
+  private[horizen] def isForgerStakeV1SmartContractDisabled(view: BaseAccountStateView, isForkV1_4Active: Boolean): Boolean
 }
 
 case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartContractMsgProcessor with ForgerStakesProvider {
@@ -460,6 +462,10 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
     view.addLog(evmLog)
 
     doUncheckedGetListOfForgersStakesCmd(view, isForkV1_3Active = true)
+  }
+
+  override def isForgerStakeV1SmartContractDisabled(view: BaseAccountStateView, isForkV1_4Active: Boolean): Boolean = {
+    isForkV1_4Active && ForgerStakeStorage.isDisabled(view)
   }
 
     @throws(classOf[ExecutionFailedException])

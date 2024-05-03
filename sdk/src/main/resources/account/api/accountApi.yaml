@@ -646,7 +646,7 @@ paths:
       tags:
         - transaction
       summary: creates transaction with forger stake
-      description: Creates transaction with forger stake.
+      description: Creates transaction with forger stake. It will be disabled after Forger Stake V2 will be activated.
       operationId: makeForgerStake
       security:
         - basicAuth: []
@@ -707,7 +707,7 @@ paths:
       tags:
         - transaction
       summary: creates and signs sidechain transaction for spending forging stake
-      description: Creates and signs sidechain transaction for spending forging stake.
+      description: Creates and signs sidechain transaction for spending forging stake. It will be disabled after Forger Stake V2 will be activated.
       operationId: spendForgingStake
       security:
         - basicAuth: []
@@ -3618,6 +3618,7 @@ components:
         stakeId:
           type: string
           format: byte
+          nullable: true
         forgerStakeData:
           type: object
           properties:

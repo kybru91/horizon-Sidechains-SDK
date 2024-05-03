@@ -428,48 +428,52 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
           applyOnNodeView { sidechainNodeView =>
             val accountState = sidechainNodeView.getNodeState
             val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-            if (!sidechainNodeView.getNodeState.isForgerStakeAvailable(Version1_3_0Fork.get(epochNumber).active)) {
-              ApiResponseUtil.toResponse(GenericTransactionError("Unable to add", JOptional.empty()))
-            } else {
-              val valueInWei = ZenWeiConverter.convertZenniesToWei(body.forgerStakeInfo.value)
+            if (!accountState.isForgerStakeV1SmartContractDisabled(Version1_4_0Fork.get(epochNumber).active)) {
+              if (!sidechainNodeView.getNodeState.isForgerStakeAvailable(Version1_3_0Fork.get(epochNumber).active)) {
+                ApiResponseUtil.toResponse(GenericTransactionError("Unable to add", JOptional.empty()))
+              } else {
+                val valueInWei = ZenWeiConverter.convertZenniesToWei(body.forgerStakeInfo.value)
 
-              // default gas related params
-              val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
-              var maxPriorityFeePerGas = BigInteger.valueOf(120)
-              var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
-              var gasLimit = BigInteger.valueOf(500000)
+                // default gas related params
+                val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
+                var maxPriorityFeePerGas = BigInteger.valueOf(120)
+                var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
+                var gasLimit = BigInteger.valueOf(500000)
 
-              if (body.gasInfo.isDefined) {
-                maxFeePerGas = body.gasInfo.get.maxFeePerGas
-                maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
-                gasLimit = body.gasInfo.get.gasLimit
-              }
+                if (body.gasInfo.isDefined) {
+                  maxFeePerGas = body.gasInfo.get.maxFeePerGas
+                  maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
+                  gasLimit = body.gasInfo.get.gasLimit
+                }
 
-              val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
+                val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
 
-              val secret = getFittingSecret(sidechainNodeView, None, txCost)
+                val secret = getFittingSecret(sidechainNodeView, None, txCost)
 
-              secret match {
-                case Some(secret) =>
+                secret match {
+                  case Some(secret) =>
 
-                  val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
-                  val dataBytes = encodeAddNewStakeCmdRequest(body.forgerStakeInfo)
-                  val tmpTx: EthereumTransaction = new EthereumTransaction(
-                    params.chainId,
-                    JOptional.of(new AddressProposition(FORGER_STAKE_SMART_CONTRACT_ADDRESS)),
-                    nonce,
-                    gasLimit,
-                    maxPriorityFeePerGas,
-                    maxFeePerGas,
-                    valueInWei,
-                    dataBytes,
-                    null
-                  )
-                  validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
-                case None =>
-                  ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+                    val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(secret.publicImage.address))
+                    val dataBytes = encodeAddNewStakeCmdRequest(body.forgerStakeInfo)
+                    val tmpTx: EthereumTransaction = new EthereumTransaction(
+                      params.chainId,
+                      JOptional.of(new AddressProposition(FORGER_STAKE_SMART_CONTRACT_ADDRESS)),
+                      nonce,
+                      gasLimit,
+                      maxPriorityFeePerGas,
+                      maxFeePerGas,
+                      valueInWei,
+                      dataBytes,
+                      null
+                    )
+                    validateAndSendTransaction(signTransactionWithSecret(secret, tmpTx))
+                  case None =>
+                    ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+                }
               }
             }
+            else
+              ApiResponseUtil.toResponse(ErrorDisabledMethod())
           }
         }
       }
@@ -482,57 +486,61 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         entity(as[ReqSpendForgingStake]) { body =>
           // lock the view and try to create CoreTransaction
           applyOnNodeView { sidechainNodeView =>
-            val valueInWei = BigInteger.ZERO
-            // default gas related params
-            val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
-            var maxPriorityFeePerGas = BigInteger.valueOf(120)
-            var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
-            var gasLimit = BigInteger.valueOf(500000)
+            val epochNumber = sidechainNodeView.getNodeState.getConsensusEpochNumber.getOrElse(0)
+            if (!sidechainNodeView.getNodeState.isForgerStakeV1SmartContractDisabled(Version1_4_0Fork.get(epochNumber).active)) {
+              val valueInWei = BigInteger.ZERO
+              // default gas related params
+              val baseFee = sidechainNodeView.getNodeState.getNextBaseFee
+              var maxPriorityFeePerGas = BigInteger.valueOf(120)
+              var maxFeePerGas = BigInteger.TWO.multiply(baseFee).add(maxPriorityFeePerGas)
+              var gasLimit = BigInteger.valueOf(500000)
 
-          if (body.gasInfo.isDefined) {
-            maxFeePerGas = body.gasInfo.get.maxFeePerGas
-            maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
-            gasLimit = body.gasInfo.get.gasLimit
-          }
-          //getFittingSecret needs to take into account only gas
-          val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
-          val secret = getFittingSecret(sidechainNodeView, None, txCost)
-          secret match {
-            case Some(txCreatorSecret) =>
-              val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(txCreatorSecret.publicImage.address))
-              val epochNumber = sidechainNodeView.getNodeState.getConsensusEpochNumber.getOrElse(0)
-              val stakeDataOpt = sidechainNodeView.getNodeState.getForgerStakeData(body.stakeId, Version1_3_0Fork.get(epochNumber).active)
-              stakeDataOpt match {
-                case Some(stakeData) =>
-                  val stakeOwnerSecretOpt = sidechainNodeView.getNodeWallet.secretByPublicKey(stakeData.ownerPublicKey)
-                  if (stakeOwnerSecretOpt.isEmpty) {
-                    ApiResponseUtil.toResponse(ErrorForgerStakeOwnerNotFound(s"Forger Stake Owner not found"))
+              if (body.gasInfo.isDefined) {
+                maxFeePerGas = body.gasInfo.get.maxFeePerGas
+                maxPriorityFeePerGas = body.gasInfo.get.maxPriorityFeePerGas
+                gasLimit = body.gasInfo.get.gasLimit
+              }
+              //getFittingSecret needs to take into account only gas
+              val txCost = valueInWei.add(maxFeePerGas.multiply(gasLimit))
+              val secret = getFittingSecret(sidechainNodeView, None, txCost)
+              secret match {
+                case Some(txCreatorSecret) =>
+                  val nonce = body.nonce.getOrElse(sidechainNodeView.getNodeState.getNonce(txCreatorSecret.publicImage.address))
+                  val stakeDataOpt = sidechainNodeView.getNodeState.getForgerStakeData(body.stakeId, Version1_3_0Fork.get(epochNumber).active)
+                  stakeDataOpt match {
+                    case Some(stakeData) =>
+                      val stakeOwnerSecretOpt = sidechainNodeView.getNodeWallet.secretByPublicKey(stakeData.ownerPublicKey)
+                      if (stakeOwnerSecretOpt.isEmpty) {
+                        ApiResponseUtil.toResponse(ErrorForgerStakeOwnerNotFound(s"Forger Stake Owner not found"))
+                      }
+                      else {
+                        val stakeOwnerSecret = stakeOwnerSecretOpt.get().asInstanceOf[PrivateKeySecp256k1]
+
+                        val msgToSign = ForgerStakeMsgProcessor.getRemoveStakeCmdMessageToSign(BytesUtils.fromHexString(body.stakeId), txCreatorSecret.publicImage().address(), nonce.toByteArray)
+                        val signature = stakeOwnerSecret.sign(msgToSign)
+                        val dataBytes = encodeSpendStakeCmdRequest(signature, body.stakeId)
+                        val tmpTx: EthereumTransaction = new EthereumTransaction(
+                          params.chainId,
+                          JOptional.of(new AddressProposition(FORGER_STAKE_SMART_CONTRACT_ADDRESS)),
+                          nonce,
+                          gasLimit,
+                          maxPriorityFeePerGas,
+                          maxFeePerGas,
+                          valueInWei,
+                          dataBytes,
+                          null
+                        )
+
+                        validateAndSendTransaction(signTransactionWithSecret(txCreatorSecret, tmpTx))
+                      }
+                    case None => ApiResponseUtil.toResponse(ErrorForgerStakeNotFound(s"No Forger Stake found with stake id ${body.stakeId}"))
                   }
-                  else {
-                    val stakeOwnerSecret = stakeOwnerSecretOpt.get().asInstanceOf[PrivateKeySecp256k1]
-
-                    val msgToSign = ForgerStakeMsgProcessor.getRemoveStakeCmdMessageToSign(BytesUtils.fromHexString(body.stakeId), txCreatorSecret.publicImage().address(), nonce.toByteArray)
-                    val signature = stakeOwnerSecret.sign(msgToSign)
-                    val dataBytes = encodeSpendStakeCmdRequest(signature, body.stakeId)
-                    val tmpTx: EthereumTransaction = new EthereumTransaction(
-                      params.chainId,
-                      JOptional.of(new AddressProposition(FORGER_STAKE_SMART_CONTRACT_ADDRESS)),
-                      nonce,
-                      gasLimit,
-                      maxPriorityFeePerGas,
-                      maxFeePerGas,
-                      valueInWei,
-                      dataBytes,
-                      null
-                    )
-
-                      validateAndSendTransaction(signTransactionWithSecret(txCreatorSecret, tmpTx))
-                    }
-                  case None => ApiResponseUtil.toResponse(ErrorForgerStakeNotFound(s"No Forger Stake found with stake id ${body.stakeId}"))
-                }
-              case None =>
-                ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+                case None =>
+                  ApiResponseUtil.toResponse(ErrorInsufficientBalance("No account with enough balance found", JOptional.empty()))
+              }
             }
+            else
+              ApiResponseUtil.toResponse(ErrorDisabledMethod())
           }
         }
       }
@@ -1775,4 +1783,11 @@ object AccountTransactionErrorResponse {
     override val code: String = "0211"
     override val exception: JOptional[Throwable] = JOptional.empty()
   }
+
+  case class ErrorDisabledMethod() extends ErrorResponse {
+    override val code: String = "0212"
+    override val exception: JOptional[Throwable] = JOptional.empty()
+    override val description: String = "Method is disabled after Fork 1.4. Use Forger Stakes Native Smart Contract V2"
+  }
+
 }

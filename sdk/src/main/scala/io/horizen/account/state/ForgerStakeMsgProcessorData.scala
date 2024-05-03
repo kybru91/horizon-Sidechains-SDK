@@ -35,15 +35,21 @@ case class AccountForgingStakeInfo(
 
   override def serializer: SparkzSerializer[AccountForgingStakeInfo] = AccountForgingStakeInfoSerializer
 
-  override def toString: String = "%s(stakeId: %s, forgerStakeData: %s)"
-    .format(this.getClass.toString, BytesUtils.toHexString(stakeId), forgerStakeData)
+  override def toString: String = {
+    val stakeIdStr = if (stakeId != null) BytesUtils.toHexString(stakeId) else "null"
+    "%s(stakeId: %s, forgerStakeData: %s)"
+      .format(this.getClass.toString, stakeIdStr, forgerStakeData)
+  }
 
   private[horizen] def asABIType(): StaticStruct = {
 
     val forgerPublicKeysParams = forgerStakeData.forgerPublicKeys.asABIType().getValue.asInstanceOf[util.Collection[_ <: Type[_]]]
     val listOfParams = new util.ArrayList[Type[_]]()
 
-    listOfParams.add(new Bytes32(stakeId))
+    if (stakeId != null)
+      listOfParams.add(new Bytes32(stakeId))
+    else
+      listOfParams.add(new Bytes32(new Array[Byte](32)))
     listOfParams.add(new Uint256(forgerStakeData.stakedAmount))
     listOfParams.add(new AbiAddress(forgerStakeData.ownerPublicKey.address().toString))
 

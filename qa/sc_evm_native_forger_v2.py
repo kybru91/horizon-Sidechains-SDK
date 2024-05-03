@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import json
+import logging
 import time
 from decimal import Decimal
 
@@ -183,7 +185,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           evm_address_sc_node_1, method)
             fail("disableAndMigrate call should fail before fork point")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("op code not supported" in str(err))
 
         # Check that if activate is called before fork 1.4 it doesn't fail, but it is not executed. It is interpreted
@@ -212,7 +214,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           evm_address_sc_node_1, method)
             fail("disableAndMigrate call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Authorization failed" in str(err))
 
         # Check that delegate cannot be called before activate
@@ -227,7 +229,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           forger_1_vrf_pub_key_to_bytes[32:])
             fail("delegate call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
         # Check that withdraw cannot be called before activate
@@ -241,7 +243,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           convertZenToWei(1))
             fail("withdraw call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
         # Test that getForger and getPagedForgers fail before activate.
@@ -255,7 +257,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           evm_address_sc_node_1, method, *forger_1_keys_to_bytes)
             fail("getForger call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
         method = 'getPagedForgers(int32,int32)'
@@ -265,7 +267,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           evm_address_sc_node_1, method, *get_paged_forgers_args)
             fail("getForger call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
         # Test that getCurrentConsensusEpoch fails before activate.
@@ -278,6 +280,35 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         except RuntimeError as err:
             print("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
+
+
+        # Check that after fork 1.4 but before activate, it is still possible to call makeForgerStake and
+        # spendForgingStake
+
+        make_forger_stake_json_res = ac_makeForgerStake(sc_node_1, evm_address_5, block_sign_pub_key_1,
+                           vrf_pub_key_1, convertZenToZennies(4))
+
+        if "result" not in make_forger_stake_json_res:
+            fail("make forger stake with native smart contract v1 should work before activate")
+        else:
+            logging.info("Transaction created as expected")
+        generate_next_block(sc_node_1, "first node")
+        self.sc_sync_all()
+
+        stake_list = sc_node_1.transaction_allForgingStakes()["result"]['stakes']
+        assert_equal(len(orig_stake_list) + 1, len(stake_list))
+
+        stake_id = stake_list[-1]['stakeId']
+        spend_forger_stake_json_res = sc_node_1.transaction_spendForgingStake(
+            json.dumps({"stakeId": stake_id}))
+        if "result" not in spend_forger_stake_json_res:
+            fail("spend forger stake failed: " + json.dumps(spend_forger_stake_json_res))
+        else:
+            logging.info("Forger stake removed: " + json.dumps(spend_forger_stake_json_res))
+        self.sc_sync_all()
+
+        generate_next_block(sc_node_1, "first node")
+        self.sc_sync_all()
 
         # Execute activate.
         forger_stake_v2_balance = rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
@@ -333,6 +364,41 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             else:
                 assert_equal(genesis_stake, stake['forgerStakeData']['stakedAmount'],
                              "Forger stake is different after upgrade")
+            assert_false('stakeId' in stake)
+
+        # Test myForgingStakes(). On node 1 should return stakes belonging to evm_address_sc_node_1, evm_address_3, evm_address_5 and genesis.
+        # On node 2 evm_address_sc_node_2 and evm_address_4.
+        stake_list_node1 = sc_node_1.transaction_myForgingStakes()["result"]['stakes']
+        for stake in stake_list_node1:
+            if stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_1:
+                assert_equal(exp_stake_own_1, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_3:
+                assert_equal(exp_stake_own_3, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_5:
+                assert_equal(exp_stake_own_5, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_2:
+                fail("returned stakes not belonging to an address of the node")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_4:
+                fail("returned stakes not belonging to an address of the node")
+            else:
+                assert_equal(genesis_stake, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            assert_false('stakeId' in stake)
+
+        stake_list_node2 = sc_node_2.transaction_myForgingStakes()["result"]['stakes']
+        for stake in stake_list_node2:
+            if stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_1:
+                fail("returned stakes not belonging to an address of the node")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_3:
+                fail("returned stakes not belonging to an address of the node")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_5:
+                fail("returned stakes not belonging to an address of the node")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_2:
+                assert_equal(exp_stake_own_2, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_4:
+                assert_equal(exp_stake_own_4, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+            else:
+                fail("returned stakes not belonging to an address of the node")
+            assert_false('stakeId' in stake)
 
         # Check the balance of the 2 smart contracts
         assert_equal(0, rpc_get_balance(sc_node_1, FORGER_STAKE_SMART_CONTRACT_ADDRESS))
@@ -357,11 +423,30 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                                    toAddress=FORGER_STAKE_SMART_CONTRACT_ADDRESS)
             fail("call should fail after activate of Forger Stake v2")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             # error is raised from API since the address has no balance
             assert_true("Method is disabled" in str(err))
 
         generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
+
+        # Check that after activate, calling makeForgerStake and spendForgingStake HTTP APIs is not possible anymore
+        make_forger_stake_json_res = ac_makeForgerStake(sc_node_1, evm_address_5, block_sign_pub_key_1,
+                                                        vrf_pub_key_1, convertZenToZennies(4))
+
+        if "error" not in make_forger_stake_json_res:
+            fail("make forger stake with native smart contract v1 should fail after activate")
+
+        assert_equal("Method is disabled after Fork 1.4. Use Forger Stakes Native Smart Contract V2",
+                     make_forger_stake_json_res['error']['description'])
+        generate_next_block(sc_node_1, "first node")
+        self.sc_sync_all()
+
+        spend_forger_stake_json_res = sc_node_1.transaction_spendForgingStake(
+            json.dumps({"stakeId": stake_id}))
+        if "error" not in spend_forger_stake_json_res:
+            fail("spend forger stake failed: " + json.dumps(spend_forger_stake_json_res))
+        assert_equal("Method is disabled after Fork 1.4. Use Forger Stakes Native Smart Contract V2",
+                     spend_forger_stake_json_res['error']['description'])
 
         # Check getPagedForgers
         method = 'getPagedForgers(int32,int32)'
@@ -412,7 +497,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           evm_address_sc_node_1, method, *forger_2_keys_to_bytes)
             fail("getForger call should fail if forger is not registered yet")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger doesn't exist." in str(err))
 
         ################################
@@ -507,7 +592,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           value=convertZenToWei(1))
             fail("delegate call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger doesn't exist" in str(err))
 
         ################################
@@ -590,7 +675,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                           staked_amount_withdrawn)
             fail("withdrawal call should fail")
         except RuntimeError as err:
-            print("Expected exception thrown: {}".format(err))
+            logging.info("Expected exception thrown: {}".format(err))
             assert_true("Not enough stake" in str(err))
 
         # Try getCurrentConsensusEpoch
