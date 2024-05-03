@@ -478,6 +478,8 @@ class AccountState(
 
   override def getForgerInfo(forger: ForgerPublicKeys): Option[ForgerInfo] = using(getView)(_.getForgerInfo(forger))
 
+  override def isForgerStakeV1SmartContractDisabled(isForkV1_4Active: Boolean): Boolean = using(getView)(_.isForgerStakeV1SmartContractDisabled(isForkV1_4Active))
+
   override def getAllowedForgerList: Seq[Int] = using(getView)(_.getAllowedForgerList)
 
   override def getForgerStakeData(stakeId: String, isForkV1_3Active: Boolean): Option[ForgerStakeData] = using(getView)(_.getForgerStakeData(stakeId, isForkV1_3Active))
