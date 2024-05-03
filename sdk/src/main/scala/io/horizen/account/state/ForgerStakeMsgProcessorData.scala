@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, ABIListEncoder, MsgProcessorInputDecoder}
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
+import io.horizen.account.state.nativescdata.forgerstakev2.DelegateCmdInputDecoder.vrfPublicKeyToAbi
 import io.horizen.account.utils.BigIntegerUInt256.getUnsignedByteArray
 import io.horizen.account.utils.{BigIntegerUInt256, Secp256k1}
 import io.horizen.evm.Address
@@ -130,12 +131,6 @@ case class ForgerPublicKeys(
   extends BytesSerializable with ABIEncodable[StaticStruct] {
   override type M = ForgerPublicKeys
 
-  private[horizen] def vrfPublicKeyToAbi(vrfPublicKey: Array[Byte]): (Bytes32, Bytes1) = {
-    val vrfPublicKeyFirst32Bytes = new Bytes32(util.Arrays.copyOfRange(vrfPublicKey, 0, 32))
-    val vrfPublicKeyLastByte = new Bytes1(Array[Byte](vrfPublicKey(32)))
-    (vrfPublicKeyFirst32Bytes, vrfPublicKeyLastByte)
-  }
-
   override def asABIType(): StaticStruct = {
 
     val vrfPublicKeyBytes = vrfPublicKeyToAbi(vrfPublicKey.pubKeyBytes())
@@ -153,6 +148,7 @@ case class ForgerPublicKeys(
   override def serializer: SparkzSerializer[ForgerPublicKeys] = ForgerPublicKeysSerializer
 
 }
+
 
 object ForgerPublicKeysSerializer extends SparkzSerializer[ForgerPublicKeys] {
 

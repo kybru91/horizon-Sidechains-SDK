@@ -271,16 +271,48 @@ def estimate_gas(node, from_address=None, to_address=None, data='0x', value='0x0
 
 
 def ac_makeForgerStake(sc_node, owner_address, blockSignPubKey, vrf_public_key, amount, nonce=None):
-    forgerStakes = {"forgerStakeInfo": {
-        "ownerAddress": owner_address,
-        "blockSignPublicKey": blockSignPubKey,
-        "vrfPubKey": vrf_public_key,
-        "value": amount  # in Satoshi
-    },
+    forgerStakes = {"forgerStakeInfo":
+        {
+            "ownerAddress": owner_address,
+            "blockSignPublicKey": blockSignPubKey,
+            "vrfPubKey": vrf_public_key,
+            "value": amount  # in Satoshi
+        },
         "nonce": nonce
     }
 
     return sc_node.transaction_makeForgerStake(json.dumps(forgerStakes))
+
+
+def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount, reward_share=0, reward_address=None, nonce=None):
+    parameters = {
+        "blockSignPubKey": block_sign_pub_key,
+        "vrfPubKey": vrf_public_key,
+        "stakedAmount": staked_amount, # in Satoshi
+        "rewardShare": reward_share,
+        "rewardAddress": reward_address,
+        "nonce": nonce
+    }
+
+    return sc_node.transaction_registerForger(json.dumps(parameters))
+
+def ac_pagedForgersStakesByForger(sc_node, block_sign_pub_key, vrf_public_key, start_pos=0, size=10):
+    parameters = {
+        "blockSignPubKey": block_sign_pub_key,
+        "vrfPubKey": vrf_public_key,
+        "startPos": start_pos,
+        "size": size
+    }
+    return sc_node.transaction_pagedForgersStakesByForger(json.dumps(parameters))
+
+
+def ac_pagedForgersStakesByDelegator(sc_node, delegator_address, start_pos=0, size=10):
+    parameters = {
+        "delegatorAddress": delegator_address,
+        "startPos": start_pos,
+        "size": size
+    }
+    return sc_node.transaction_pagedForgersStakesByDelegator(json.dumps(parameters))
 
 
 def ac_invokeProxy(sc_node, contract_address, data, nonce=None, static=False):

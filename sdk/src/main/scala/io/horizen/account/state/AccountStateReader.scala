@@ -44,4 +44,6 @@ trait AccountStateReader {
 
   def certifiersKeys(withdrawalEpoch: Int): Option[CertifiersKeys]
   def keyRotationProof(withdrawalEpoch: Int, indexOfSigner: Int, keyType: Int): Option[KeyRotationProof]
+
+  def forgerStakesV2IsActive: Boolean
 }

@@ -39,8 +39,11 @@ Test:
     - Check that activate cannot be called on ForgerStake smart contract V2 before fork 1.4
     - Reach fork point 1.4. 
     - Try to execute disable on old Forger stake native contract and verify that it is not possible.
+    - Try executing methods of ForgerStake smart contract V2 before calling activate and verify that it is not possible.
     - Execute activate on ForgerStake smart contract V2 and verify that the total amount of stakes are the same as before
     - Try methods of the old Forger stake native contract and verify they cannot be executed anymore
+    - Try delegate and withdraw and verify they work as expected
+    - Try executing methods of ForgerStake smart contract V2 from a smart contract and verify they work as expected
 
     
 
@@ -193,7 +196,6 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
                                          evm_address_sc_node_1, method, value=convertZenToZennies(2))
 
-        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
         self.sc_sync_all()
         tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
@@ -245,7 +247,6 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
         # Test that getForger and getPagedForgers fail before activate.
-
         method = 'getForger(bytes32,bytes32,bytes1)'
         forger_1_sign_key_to_bytes = hex_str_to_bytes(block_sign_pub_key_1)
         forger_1_vrf_pub_key_to_bytes = hex_str_to_bytes(vrf_pub_key_1)
@@ -268,6 +269,18 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         except RuntimeError as err:
             logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
+
+        # Test that getCurrentConsensusEpoch fails before activate.
+
+        method = 'getCurrentConsensusEpoch()'
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method)
+            fail("getCurrentConsensusEpoch call should fail")
+        except RuntimeError as err:
+            print("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
+
 
         # Check that after fork 1.4 but before activate, it is still possible to call makeForgerStake and
         # spendForgingStake
@@ -334,17 +347,23 @@ class SCEvmNativeForgerV2(AccountChainSetup):
 
         for stake in stake_list_node1:
             if stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_1:
-                assert_equal(exp_stake_own_1, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+                assert_equal(exp_stake_own_1, stake['forgerStakeData']['stakedAmount'],
+                             "Forger stake is different after upgrade")
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_sc_node_2:
-                assert_equal(exp_stake_own_2, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+                assert_equal(exp_stake_own_2, stake['forgerStakeData']['stakedAmount'],
+                             "Forger stake is different after upgrade")
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_3:
-                assert_equal(exp_stake_own_3, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+                assert_equal(exp_stake_own_3, stake['forgerStakeData']['stakedAmount'],
+                             "Forger stake is different after upgrade")
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_4:
-                assert_equal(exp_stake_own_4, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+                assert_equal(exp_stake_own_4, stake['forgerStakeData']['stakedAmount'],
+                             "Forger stake is different after upgrade")
             elif stake['forgerStakeData']['ownerPublicKey']['address'] == evm_address_5:
-                assert_equal(exp_stake_own_5, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+                assert_equal(exp_stake_own_5, stake['forgerStakeData']['stakedAmount'],
+                             "Forger stake is different after upgrade")
             else:
-                assert_equal(genesis_stake, stake['forgerStakeData']['stakedAmount'], "Forger stake is different after upgrade")
+                assert_equal(genesis_stake, stake['forgerStakeData']['stakedAmount'],
+                             "Forger stake is different after upgrade")
             assert_false('stakeId' in stake)
 
         # Test myForgingStakes(). On node 1 should return stakes belonging to evm_address_sc_node_1, evm_address_3, evm_address_5 and genesis.
@@ -659,6 +678,36 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             logging.info("Expected exception thrown: {}".format(err))
             assert_true("Not enough stake" in str(err))
 
+        # Try getCurrentConsensusEpoch
+        method = "getCurrentConsensusEpoch()"
+        epoch = \
+        contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                      evm_address_sc_node_2, method)[0]
+
+        current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
+        assert_equal(current_best_epoch, epoch)
+
+        # Get the block hash of the tip at the current epoch
+        block_id = sc_node_1.block_best()["result"]["block"]["id"]
+
+        # Switch to a new epoch
+        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
+        current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
+        assert_false(epoch == current_best_epoch)
+        rpc_tag = {
+            "blockHash": "0x" + block_id
+        }
+        data_input = forger_v2_native_contract.raw_encode_call(method)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, rpc_tag
+        )
+        epoch_at_block = decode(['uint32'], hex_str_to_bytes(result['result'][2:]))[0]
+        assert_equal(epoch, epoch_at_block)
+
         #######################################################################################################
         # Interoperability test with an EVM smart contract calling forger stakes V2 native contract
         #######################################################################################################
@@ -703,7 +752,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                                                   staked_amount, native_input)
         tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
-        assert_equal(161741, int(tx_receipt['gasUsed'], 16), "wrong used gas")
+        assert_equal(183841, int(tx_receipt['gasUsed'], 16), "wrong used gas")
         assert_equal(1, len(tx_receipt['logs']), 'Wrong number of logs')
         delegate_event = tx_receipt['logs'][0]
         check_delegate_event(delegate_event, format_eoa(proxy_contract.contract_address), forger_1_vrf_pub_key_to_bytes,
@@ -773,7 +822,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         tx_receipt = generate_block_and_get_tx_receipt(sc_node_1, tx_hash)['result']
 
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
-        assert_equal(46675, int(tx_receipt['gasUsed'], 16), "wrong used gas")
+        assert_equal(48675, int(tx_receipt['gasUsed'], 16), "wrong used gas")
         assert_equal(1, len(tx_receipt['logs']), 'Wrong number of logs')
         withdraw_event = tx_receipt['logs'][0]
         check_withdraw_event(withdraw_event, format_eoa(proxy_contract.contract_address), forger_1_vrf_pub_key_to_bytes,
@@ -828,6 +877,18 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(-1, next_pos)
         assert_equal(0, len(list_of_stakes))
 
+        # Check getCurrentConsensusEpoch using proxy
+        method = "getCurrentConsensusEpoch()"
+        native_input = format_eoa(
+            forger_v2_native_contract.raw_encode_call(method))
+
+        result = proxy_contract.do_static_call(evm_address_interop, 3, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                               native_input)
+
+        epoch = decode(['uint32'], result)[0]
+        current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
+        assert_equal(current_best_epoch, epoch)
+
 
 def decode_paged_list_of_forgers(result):
     next_pos = decode(['int32'], result[0:32])[0]
@@ -855,6 +916,7 @@ def decode_forger_info(result):
                    raw_stake[3], raw_stake[4])
 
     return forger_info
+
 
 def sum_stakes(exp_stake_own):
     return sum(map(lambda stake: stake['forgerStakeData']['stakedAmount'], exp_stake_own))
