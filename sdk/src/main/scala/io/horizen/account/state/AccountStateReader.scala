@@ -27,7 +27,8 @@ trait AccountStateReader {
   def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo])
   def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
   def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
- 
+  def isForgerStakeV1SmartContractDisabled(isForkV1_4Active: Boolean): Boolean
+
   def getForgerStakeData(stakeId: String, isForkV1_3Active: Boolean): Option[ForgerStakeData]
   def isForgingOpen: Boolean
   def isForgerStakeAvailable(isForkV1_3Active: Boolean): Boolean
@@ -43,4 +44,6 @@ trait AccountStateReader {
 
   def certifiersKeys(withdrawalEpoch: Int): Option[CertifiersKeys]
   def keyRotationProof(withdrawalEpoch: Int, indexOfSigner: Int, keyType: Int): Option[KeyRotationProof]
+
+  def forgerStakesV2IsActive: Boolean
 }

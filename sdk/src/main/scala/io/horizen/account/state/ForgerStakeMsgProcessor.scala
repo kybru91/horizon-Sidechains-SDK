@@ -11,8 +11,9 @@ import io.horizen.account.state.ForgerStakeStorage.getStorageVersionFromDb
 import io.horizen.account.state.ForgerStakeStorageV1.LinkedListTipKey
 import io.horizen.account.state.ForgerStakeStorageVersion.ForgerStakeStorageVersion
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
-import io.horizen.account.state.events.{DelegateForgerStake, DisableStakeV1, OpenForgerList, StakeUpgrade, WithdrawForgerStake}
-import io.horizen.account.utils.WellKnownAddresses
+import io.horizen.account.state.events._
+import io.horizen.account.utils.{AccountPayment, WellKnownAddresses}
+import io.horizen.account.state.events.{DelegateForgerStake, OpenForgerList, StakeUpgrade, WithdrawForgerStake}
 import io.horizen.account.utils.WellKnownAddresses.FORGER_STAKE_SMART_CONTRACT_ADDRESS
 import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
 import io.horizen.evm.Address
@@ -41,6 +42,8 @@ trait ForgerStakesProvider {
   private[horizen] def isForgerStakeAvailable(view: BaseAccountStateView, isForkV1_3Active: Boolean): Boolean
 
   private[horizen] def getAllowedForgerListIndexes(view: BaseAccountStateView): Seq[Int]
+
+  private[horizen] def isForgerStakeV1SmartContractDisabled(view: BaseAccountStateView, isForkV1_4Active: Boolean): Boolean
 }
 
 case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartContractMsgProcessor with ForgerStakesProvider {
@@ -90,7 +93,7 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
     if (!isForkV1_3Active){
        true
     }else{
-      val stakeStorage: ForgerStakeStorage = getForgerStakeStorage(view, true)
+      val stakeStorage: ForgerStakeStorage = getForgerStakeStorage(view, isForkV1_3Active = true)
       stakeStorage.isForgerStakeAvailable(view)
     }
   }
@@ -459,6 +462,10 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
     view.addLog(evmLog)
 
     doUncheckedGetListOfForgersStakesCmd(view, isForkV1_3Active = true)
+  }
+
+  override def isForgerStakeV1SmartContractDisabled(view: BaseAccountStateView, isForkV1_4Active: Boolean): Boolean = {
+    isForkV1_4Active && ForgerStakeStorage.isDisabled(view)
   }
 
     @throws(classOf[ExecutionFailedException])

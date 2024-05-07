@@ -2,12 +2,10 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.state.ForgerPublicKeys
-import io.horizen.account.state.nativescdata.forgerstakev2.StakeTotalCmdInputDecoder.{emptyAddressPlaceholder, emptyForgerPublicKeysPlaceholder, emptyIntPlaceholder}
-import io.horizen.evm.Address
-import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
+import io.horizen.proposition.PublicKey25519Proposition
 import org.web3j.abi.TypeReference
-import org.web3j.abi.datatypes.generated.{Bytes1, Bytes32, Uint32}
-import org.web3j.abi.datatypes.{StaticStruct, Type, Address => AbiAddress}
+import org.web3j.abi.datatypes.generated.{Bytes1, Bytes32}
+import org.web3j.abi.datatypes.{StaticStruct, Type}
 
 import java.util
 

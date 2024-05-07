@@ -72,7 +72,7 @@ class StateDbAccountStateView(
   override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = {
     if (isForkV1_4Active && forgerStakesV2Provider.isActive(this)) {
       forgerStakesV2Provider.getListOfForgersStakes(this)
-        .map(AccountForgingStakeInfo(Array.emptyByteArray, _))
+        .map(AccountForgingStakeInfo(null, _))
     } else {
       forgerStakesProvider.getListOfForgersStakes(this, isForkV1_3Active)
     }
@@ -84,6 +84,9 @@ class StateDbAccountStateView(
 
   override def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse =
     forgerStakesV2Provider.getPagedForgersStakesByForger(this, forger, startPos, pageSize)
+
+  def isForgerStakeV1SmartContractDisabled(isForkV1_4Active: Boolean): Boolean =
+    forgerStakesProvider.isForgerStakeV1SmartContractDisabled(this, isForkV1_4Active)
 
   override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse =
     forgerStakesV2Provider.getPagedForgersStakesByDelegator(this, delegator, startPos, pageSize)
@@ -421,4 +424,6 @@ class StateDbAccountStateView(
   def disableWriteProtection(): Unit = readOnly = false
 
   override def getNativeSmartContractAddressList(): Array[Address] = listOfNativeSmartContractAddresses
+
+  override def forgerStakesV2IsActive: Boolean = forgerStakesV2Provider.isActive(this)
 }
