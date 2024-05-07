@@ -9,7 +9,7 @@ import io.horizen.evm.{Address, Hash, MemoryDatabase, StateDB}
 import io.horizen.fixtures.StoreFixture
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.{ByteArrayWrapper, BytesUtils, ForgingStakeMerklePathInfo, MerkleTree}
-import org.junit.Test
+import org.junit.{Ignore, Test}
 import org.scalatestplus.junit.JUnitSuite
 
 import java.io.{BufferedWriter, FileWriter}
@@ -30,6 +30,7 @@ class StakeStoragePerfTest
   val delegator1 = new Address("0xaaa00001230000000000deadbeefaaaa2222de01")
 
 
+  @Ignore
   @Test
   def testMultipleForgers(): Unit = {
 
@@ -259,6 +260,7 @@ class StakeStoragePerfTest
 
 
 
+  @Ignore
   @Test
   def testSingleForgerMultipleCheckpoints(): Unit = {
 
@@ -275,7 +277,7 @@ class StakeStoragePerfTest
 
       out.write(s"# Date and time of the test: ${cal.getTime}\n\n")
 
-      val numOfCheckpoints = 1000
+      val numOfCheckpoints = 10000
       val numOfSnapshots = 100
       val numOfCheckpointsPerSnapshot = numOfCheckpoints / numOfSnapshots
       val numOfEpochs = numOfCheckpointsPerSnapshot
