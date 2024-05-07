@@ -41,7 +41,7 @@ import io.horizen.proposition._
 import io.horizen.secret.PrivateKey25519
 import io.horizen.utils.BytesUtils
 import org.web3j.crypto.Keys
-import org.web3j.utils.Numeric.hexStringToByteArray
+import org.web3j.utils.Numeric.{cleanHexPrefix, hexStringToByteArray, prependHexPrefix}
 import sparkz.core.settings.RESTApiSettings
 
 import java.math.BigInteger
@@ -565,6 +565,18 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     }
   }
 
+  private def addressIsNull(address: String) : Boolean = {
+    prependHexPrefix(address) == NULL_ADDRESS_WITH_PREFIX_HEX_STRING
+  }
+
+  private def addressStringIsValid(address: String) : Try[Unit] =  Try {
+    if (cleanHexPrefix(address).length == 2 * Address.LENGTH) {
+        val _ = BytesUtils.fromHexString(cleanHexPrefix(address))
+    } else {
+      throw new IllegalArgumentException(s"Invalid address string length: ${cleanHexPrefix(address).length}, expected ${2 * Address.LENGTH}")
+    }
+  }
+
   def registerForger: Route = (post & path("registerForger")) {
     withBasicAuth {
       _ => {
@@ -575,21 +587,28 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
             if (body.rewardShare < 0 || body.rewardShare > MAX_REWARD_SHARE) {
               val msg = s"Reward share must be in the range [0, $MAX_REWARD_SHARE]"
               ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
-            } else {
-              if ((body.rewardAddress.isDefined && body.rewardShare == 0) ||
-                (body.rewardAddress.isEmpty && body.rewardShare != 0)) {
-                val msg = if (body.rewardAddress.isDefined)
-                  s"Reward share cannot be 0 if reward address is defined - Reward share = ${body.rewardShare}, reward address = ${body.rewardAddress}"
-                else
-                  s"Reward share cannot be different from 0 if reward address is not defined - Reward share = ${body.rewardShare}, reward address = ${body.rewardAddress}"
-                ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
-              }
-              else {
-                val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
-                doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.RegisterForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress.getOrElse(NULL_ADDRESS_WITH_PREFIX_HEX_STRING))
+            }
+            else {
+              val rewardAddress = body.rewardAddress.getOrElse(NULL_ADDRESS_WITH_PREFIX_HEX_STRING)
+
+              addressStringIsValid(rewardAddress) match {
+                case Success(_) =>
+                  if (!addressIsNull(rewardAddress) && body.rewardShare == 0) {
+                    val msg = s"Reward share cannot be 0 if reward address is defined - Reward share = ${body.rewardShare}, reward address = $rewardAddress"
+                    ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
+                  }
+                  else if (addressIsNull(rewardAddress) && body.rewardShare != 0) {
+                    val msg = s"Reward share cannot be different from 0 if reward address is null - Reward share = ${body.rewardShare}, reward address = $rewardAddress"
+                    ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
+                  }
+                  else {
+                    val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
+                    doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.RegisterForgerCmd, sidechainNodeView, valueInWei, body, rewardAddress)
+                  }
+                case Failure(ex) =>
+                  ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(s"Invalid address: ${ex.getMessage}"))
               }
             }
-
           }
         }
       }
@@ -602,16 +621,21 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         entity(as[ReqUpdateForger]) { body =>
           // lock the view and try to create CoreTransaction
           applyOnNodeView { sidechainNodeView =>
-            {
-              if (body.rewardShare <= 0 || body.rewardShare > MAX_REWARD_SHARE) {
-                val msg = s"Reward share must be in the range (0, $MAX_REWARD_SHARE]"
-                ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
-              } else if (body.rewardAddress == NULL_ADDRESS_WITH_PREFIX_HEX_STRING) {
-                  val msg = s"Reward address can not be the null address"
-                  ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
-              } else {
-                val valueInWei = BigInteger.ZERO
-                doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.UpdateForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress)
+            if (body.rewardShare <= 0 || body.rewardShare > MAX_REWARD_SHARE) {
+              val msg = s"Reward share must be in the range (0, $MAX_REWARD_SHARE]"
+              ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
+            } else {
+              addressStringIsValid(body.rewardAddress) match {
+                case Success(_) =>
+                  if (addressIsNull(body.rewardAddress)) {
+                    val msg = s"Reward address can not be the null address"
+                    ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
+                  } else {
+                    val valueInWei = BigInteger.ZERO
+                    doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.UpdateForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress)
+                  }
+                case Failure(ex) =>
+                  ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(s"Invalid address: ${ex.getMessage}"))
               }
             }
           }
@@ -624,6 +648,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
 
     val accountState = sidechainNodeView.getNodeState
     val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
+
     if (!Version1_4_0Fork.get(epochNumber).active) {
       ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
         JOptional.empty()))
@@ -1450,6 +1475,8 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         (transactionPathPrefix, "sendKeysOwnership", error),
         (transactionPathPrefix, "removeKeysOwnership", error),
         (transactionPathPrefix, "sendMultisigKeysOwnership", error),
+        (transactionPathPrefix, "registerForger", error),
+        (transactionPathPrefix, "updateForger", error),
       ) ++ proxyRoutes
     } else
       proxyRoutes

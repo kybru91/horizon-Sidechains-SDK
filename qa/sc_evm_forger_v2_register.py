@@ -210,7 +210,7 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_true('error' in res)
         assert_equal('0211', res['error']['code'])
         assert_true(
-            'Reward share cannot be different from 0 if reward address is not defined' in res['error']['description'])
+            'Reward share cannot be different from 0 if reward address is null' in res['error']['description'])
 
         reward_address = add_0x_prefix(evm_address_sc_node_2)
         res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount,
@@ -219,12 +219,29 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal('0211', res['error']['code'])
         assert_true('Reward share cannot be 0 if reward address is defined ' in res['error']['description'])
 
+
+        #   . invalid reward address string (wrong length)
+        res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_address="0x111111112222222233333333444444445555555566",
+                                reward_share=1000, nonce=None)
+        assert_true('error' in res)
+        assert_equal('0211', res['error']['code'])
+        assert_true(
+            'Invalid address string length' in res['error']['description'])
+
+        #   . invalid reward address string (wrong hex string)
+        res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_address="0x111111112222222233333333444444445555555h",
+                                reward_share=1000, nonce=None)
+        assert_true('error' in res)
+        assert_equal('0211', res['error']['code'])
+        assert_true(
+            'Unrecognized character: h' in res['error']['description'])
+
         # register a new forger
+        reward_share = 0
         evm_address_sc_node_1_balance = rpc_get_balance(sc_node_1, evm_address_sc_node_1)
         forger_contract_balance = rpc_get_balance(sc_node_1, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
 
-        reward_share = 0
-        result = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount)
+        result = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount, reward_share=reward_share)
 
         self.sc_sync_all()
         generate_next_block(sc_node_1, "first node")
@@ -331,11 +348,12 @@ class SCEvmForgerV2register(AccountChainSetup):
                      block_sign_pub_key_genesis)
         assert_equal(list5['result']['stakes'][0]['forgerPublicKeys']['vrfPublicKey']['publicKey'], vrf_pub_key_genesis)
 
+
+        reward_share_updated = 1
+        reward_address_updated = "0x1111111122222222333333334444444455555555"
+
         # negative tests
         # ==============================================================================================================
-        reward_share_updated = 1
-        reward_address_updated = "1111111122222222333333334444444455555555"
-
         # - try updating a forger that does not exist
         result = ac_updateForger(sc_node_1, block_sign_pub_key_genesis, vrf_pub_key_1_2,
                                  reward_address=reward_address_updated, reward_share=reward_share_updated)
@@ -348,7 +366,7 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal(0, status, "Upgrade forger should fail")
 
 
-        # - try updating a forger that has a reward share not null
+        # - try updating a forger that currently has a reward share not null
         result = ac_updateForger(sc_node_2, block_sign_pub_key_2, vrf_pub_key_2,
                                  reward_address=reward_address_updated, reward_share=reward_share_updated)
         self.sc_sync_all()
@@ -378,6 +396,28 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_true('error' in res)
         assert_equal('0211', res['error']['code'])
         assert_true('Reward address can not be the null address' in res['error']['description'])
+
+
+        # - try updating a forger with an invalid reward address (wrong length)
+        res = ac_updateForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2,
+                                 reward_address="0x0", reward_share=reward_share_updated)
+        self.sc_sync_all()
+        generate_next_block(sc_node_1, "first node")
+        self.sc_sync_all()
+        assert_true('error' in res)
+        assert_equal('0211', res['error']['code'])
+        assert_true('Invalid address string length' in res['error']['description'])
+
+        # - try updating a forger with an invalid reward address (wrong hex string)
+        res = ac_updateForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2,
+                                 reward_address="0h11111111222222223333333344444444555555", reward_share=reward_share_updated)
+        self.sc_sync_all()
+        generate_next_block(sc_node_1, "first node")
+        self.sc_sync_all()
+        assert_true('error' in res)
+        assert_equal('0211', res['error']['code'])
+        assert_true(
+            'Unrecognized character: h' in res['error']['description'])
 
         # update first forger
         result = ac_updateForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2,
@@ -420,11 +460,6 @@ class SCEvmForgerV2register(AccountChainSetup):
         # update genesis forger via contract call
         reward_share_gen_updated = 33
         reward_address_gen_updated = "3333333333333333333333333333333333333333"
-
-        # result = ac_updateForger(sc_node_1, block_sign_pub_key_genesis, vrf_pub_key_genesis,
-        #                          reward_address=reward_address_gen_updated, reward_share=reward_share_gen_updated)
-        #
-        # self.sc_sync_all()
 
         reward_address_bytes = hex_str_to_bytes(reward_address_gen_updated)
         forger_sign_key_bytes = hex_str_to_bytes(block_sign_pub_key_genesis)

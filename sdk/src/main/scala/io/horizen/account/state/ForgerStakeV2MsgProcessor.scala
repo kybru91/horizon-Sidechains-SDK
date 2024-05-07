@@ -194,13 +194,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     // check that rewardShare is in legal range (0, MAX]
     if (rewardShare <= 0 || rewardShare > MAX_REWARD_SHARE) {
       val errMsg = s"Illegal reward share value: = $rewardShare"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
     if (rewardAddress == Address.ZERO) {
-      val errMsg = s"Reward share cannot be ZERO"
-      log.warn(errMsg)
+      val errMsg = s"Reward address cannot be the ZERO address"
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
@@ -209,13 +209,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       case Some(obj) => obj
       case None =>
         val errMsg = s"Forger does not exist: ${ForgerPublicKeys(blockSignPubKey, vrfPubKey).toString}"
-        log.warn(errMsg)
+        log.debug(errMsg)
         throw new ExecutionRevertedException(errMsg)
     }
 
     if (forger.rewardShare != 0 || forger.rewardAddress.address() != Address.ZERO) {
       val errMsg = s"Reward share or reward address are not null - Reward share = ${forger.rewardShare}, reward address = ${forger.rewardAddress}"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 

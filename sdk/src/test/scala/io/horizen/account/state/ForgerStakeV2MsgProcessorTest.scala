@@ -856,7 +856,7 @@ class ForgerStakeV2MsgProcessorTest
       exc = intercept[ExecutionRevertedException] {
         withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
       }
-      expectedErr = "Reward share cannot be ZERO"
+      expectedErr = "Reward address cannot be the ZERO address"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
       // - Try updating a forger that does not exist
@@ -946,7 +946,7 @@ class ForgerStakeV2MsgProcessorTest
   }
 
   @Test
-  def qqq() {
+  def testSignatures() {
     val generatedDataSeed = 908
 
     val pairVrfKey: (VrfSecretKey, VrfPublicKey) = getVrfKeyPair(generatedDataSeed)
