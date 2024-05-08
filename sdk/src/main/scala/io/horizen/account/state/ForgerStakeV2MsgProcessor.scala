@@ -4,9 +4,9 @@ import com.horizen.librustsidechains.Constants
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
 import io.horizen.account.network.PagedForgersOutput
-import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger}
+import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger, updateForger}
 import io.horizen.account.state.nativescdata.forgerstakev2._
-import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, RegisterForger, WithdrawForgerStake}
+import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, RegisterForger, UpdateForger, WithdrawForgerStake}
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.{convertZenniesToWei, isValidZenAmount}
 import io.horizen.consensus.{ForgingStakeInfo, generateHashAndCleanUp, minForgerStake}
@@ -49,6 +49,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     getFunctionSignature(invocation.input) match {
       case RegisterForgerCmd =>
         doRegisterForger(invocation, gasView, context)
+      case UpdateForgerCmd =>
+        doUpdateForger(invocation, gasView)
       case DelegateCmd =>
         doDelegateCmd(invocation, gasView, context)
       case WithdrawCmd =>
@@ -106,7 +108,9 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     }
 
     val inputParams = getArgumentsFromData(invocation.input)
-    val cmdInput = RegisterForgerCmdInputDecoder.decode(inputParams)
+
+    val cmdInput = RegisterOrUpdateForgerCmdInputDecoder.decode(inputParams)
+
     val blockSignPubKey = cmdInput.forgerPublicKeys.blockSignPublicKey
     val vrfPubKey = cmdInput.forgerPublicKeys.vrfPublicKey
     val rewardShare = cmdInput.rewardShare
@@ -171,6 +175,69 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     gasView.addLog(evmLog)
 
     log.debug(s"register forger exiting - ${cmdInput.toString}")
+    Array.emptyByteArray
+  }
+
+
+  def doUpdateForger(invocation: Invocation, gasView: BaseAccountStateView): Array[Byte] = {
+    requireIsNotPayable(invocation)
+    checkForgerStakesV2IsActive(gasView)
+
+    val inputParams = getArgumentsFromData(invocation.input)
+
+    val cmdInput = RegisterOrUpdateForgerCmdInputDecoder.decode(inputParams)
+    val blockSignPubKey = cmdInput.forgerPublicKeys.blockSignPublicKey
+    val vrfPubKey = cmdInput.forgerPublicKeys.vrfPublicKey
+    val rewardShare = cmdInput.rewardShare
+    val rewardAddress = cmdInput.smartContractAddress
+    val sign25519 = cmdInput.signature25519
+    val signVrf = cmdInput.signatureVrf
+
+    // check that rewardShare is in legal range (0, MAX]
+    if (rewardShare <= 0 || rewardShare > MAX_REWARD_SHARE) {
+      val errMsg = s"Illegal reward share value: = $rewardShare"
+      log.debug(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
+
+    if (rewardAddress == Address.ZERO) {
+      val errMsg = s"Reward address cannot be the ZERO address"
+      log.debug(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
+
+    // check we do have this forger and get it
+    val forger = getForger(gasView, blockSignPubKey, vrfPubKey) match {
+      case Some(obj) => obj
+      case None =>
+        val errMsg = s"Forger does not exist: ${ForgerPublicKeys(blockSignPubKey, vrfPubKey).toString}"
+        log.debug(errMsg)
+        throw new ExecutionRevertedException(errMsg)
+    }
+
+    if (forger.rewardShare != 0 || forger.rewardAddress.address() != Address.ZERO) {
+      val errMsg = s"Reward share or reward address are not null - Reward share = ${forger.rewardShare}, reward address = ${forger.rewardAddress}"
+      log.debug(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
+
+    val messageToSign = getHashedMessageToSign(
+      BytesUtils.toHexString(blockSignPubKey.pubKeyBytes()),
+      BytesUtils.toHexString(vrfPubKey.pubKeyBytes()),
+      rewardShare,
+      BytesUtils.toHexString(rewardAddress.toBytes))
+
+    // verify the signatures (throws exceptions)
+    verifySignatures(messageToSign, blockSignPubKey, vrfPubKey, sign25519, signVrf)
+
+    // update forger in the db
+    updateForger(gasView, blockSignPubKey, vrfPubKey, rewardShare, rewardAddress)
+
+    val updateForgerEvent = UpdateForger(invocation.caller, blockSignPubKey, vrfPubKey, rewardShare, rewardAddress)
+    val evmLog = getEthereumConsensusDataLog(updateForgerEvent)
+    gasView.addLog(evmLog)
+
+    log.debug(s"update forger exiting - ${cmdInput.toString}")
     Array.emptyByteArray
   }
 
@@ -421,6 +488,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   val RegisterForgerCmd: String = getABIMethodId("registerForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)")
+  val UpdateForgerCmd: String = getABIMethodId("updateForger(bytes32,bytes32,bytes1,uint32,address,bytes32,bytes32,bytes32,bytes32,bytes32,bytes1)")
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
   val StakeTotalCmd: String = getABIMethodId("stakeTotal(bytes32,bytes32,bytes1,address,uint32,uint32)")
@@ -434,6 +502,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   // ensure we have strings consistent with size of opcode
   require(
     RegisterForgerCmd.length == 2 * METHOD_ID_LENGTH &&
+      UpdateForgerCmd.length == 2 * METHOD_ID_LENGTH &&
       DelegateCmd.length == 2 * METHOD_ID_LENGTH &&
       WithdrawCmd.length == 2 * METHOD_ID_LENGTH &&
       StakeTotalCmd.length == 2 * METHOD_ID_LENGTH &&

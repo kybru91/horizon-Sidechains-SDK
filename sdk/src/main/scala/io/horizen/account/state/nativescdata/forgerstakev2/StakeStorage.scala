@@ -64,7 +64,7 @@ object StakeStorage {
 
   }
 
-  def updateForger(view: AccountStateView, blockSignProposition: PublicKey25519Proposition, vrfPublicKey: VrfPublicKey, rewardShare: Int, rewardAddress: Address): Unit = {
+  def updateForger(view: BaseAccountStateView, blockSignProposition: PublicKey25519Proposition, vrfPublicKey: VrfPublicKey, rewardShare: Int, rewardAddress: Address): Unit = {
     val forgerKey = ForgerKey(blockSignProposition, vrfPublicKey)
     val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
     if ((forger.rewardShare > 0) || (forger.rewardAddress.address() != Address.ZERO))
