@@ -1,15 +1,14 @@
 package io.horizen.account.state
 
-import com.horizen.librustsidechains.Constants
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.fork.Version1_4_0Fork
 import io.horizen.account.network.PagedForgersOutput
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger, updateForger}
 import io.horizen.account.state.nativescdata.forgerstakev2._
-import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, RegisterForger, UpdateForger, WithdrawForgerStake}
+import io.horizen.account.state.nativescdata.forgerstakev2.events._
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.{convertZenniesToWei, isValidZenAmount}
-import io.horizen.consensus.{ForgingStakeInfo, generateHashAndCleanUp, minForgerStake}
+import io.horizen.consensus.{ForgingStakeInfo, minForgerStake}
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
@@ -57,6 +56,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
         doWithdrawCmd(invocation, gasView, context)
       case StakeTotalCmd =>
         doStakeTotalCmd(invocation, gasView, context.blockContext.consensusEpochNumber)
+      case StakeStartCmd =>
+        doStakeStartCmd(invocation, gasView)
       case GetPagedForgersStakesByForgerCmd =>
         doPagedForgersStakesByForgerCmd(invocation, gasView)
       case GetPagedForgersStakesByDelegatorCmd =>
@@ -353,6 +354,21 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     response.encode()
   }
 
+  def doStakeStartCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
+    requireIsNotPayable(invocation)
+    checkForgerStakesV2IsActive(view)
+
+    val inputParams = getArgumentsFromData(invocation.input)
+    val cmdInput = StakeStartCmdInputDecoder.decode(inputParams)
+
+    val forgerKeys = cmdInput.forgerPublicKeys
+    val delegator = cmdInput.delegator
+    log.info(s"stakeStart called - $forgerKeys $delegator")
+
+    val response: StakeStartCmdOutput = StakeStorage.getStakeStart(view, forgerKeys, delegator)
+    response.encode()
+  }
+
   def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
     requireIsNotPayable(invocation)
     if (!StakeStorage.isActive(view)) {
@@ -492,6 +508,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   val DelegateCmd: String = getABIMethodId("delegate(bytes32,bytes32,bytes1)")
   val WithdrawCmd: String = getABIMethodId("withdraw(bytes32,bytes32,bytes1,uint256)")
   val StakeTotalCmd: String = getABIMethodId("stakeTotal(bytes32,bytes32,bytes1,address,uint32,uint32)")
+  val StakeStartCmd: String = getABIMethodId("stakeStart(bytes32,bytes32,bytes1,address)")
   val GetPagedForgersStakesByForgerCmd: String = getABIMethodId("getPagedForgersStakesByForger(bytes32,bytes32,bytes1,int32,int32)")
   val GetPagedForgersStakesByDelegatorCmd: String = getABIMethodId("getPagedForgersStakesByDelegator(address,int32,int32)")
   val ActivateCmd: String = getABIMethodId("activate()")
@@ -506,6 +523,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       DelegateCmd.length == 2 * METHOD_ID_LENGTH &&
       WithdrawCmd.length == 2 * METHOD_ID_LENGTH &&
       StakeTotalCmd.length == 2 * METHOD_ID_LENGTH &&
+      StakeStartCmd.length == 2 * METHOD_ID_LENGTH &&
       ActivateCmd.length == 2 * METHOD_ID_LENGTH &&
       GetPagedForgersStakesByForgerCmd.length == 2 * METHOD_ID_LENGTH &&
       GetPagedForgersStakesByDelegatorCmd.length == 2 * METHOD_ID_LENGTH &&
