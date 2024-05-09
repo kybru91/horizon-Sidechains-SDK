@@ -11,6 +11,7 @@ import io.horizen.cryptolibprovider.CircuitTypes
 import io.horizen.customconfig.CustomAkkaConfiguration
 import io.horizen.fixtures.{CompanionsFixture, StoreFixture}
 import io.horizen.fork.{ForkManagerUtil, SimpleForkConfigurator}
+import io.horizen.metrics.MetricsManager
 import io.horizen.params.{MainNetParams, NetworkParams, RegTestParams, TestNetParams}
 import io.horizen.secret.SecretSerializer
 import io.horizen.storage.SidechainSecretStorage
@@ -25,6 +26,7 @@ import io.horizen.utxo.state.{ApplicationState, SidechainUtxoMerkleTreeProviderC
 import io.horizen.utxo.storage._
 import io.horizen.utxo.wallet.{ApplicationWallet, SidechainWalletCswDataProvider, SidechainWalletCswDataProviderCSWEnabled}
 import io.horizen.{SidechainSettings, SidechainSettingsReader, SidechainTypes}
+import org.scalatestplus.mockito.MockitoSugar.mock
 import sparkz.core.api.http.ApiRejectionHandler
 import sparkz.core.utils.NetworkTimeProvider
 
@@ -42,7 +44,6 @@ trait SidechainNodeViewHolderFixture
 
   val simpleForkConfigurator = new SimpleForkConfigurator
   ForkManagerUtil.initializeForkManager(simpleForkConfigurator, "regtest")
-
   implicit def exceptionHandler: ExceptionHandler = SidechainApiErrorHandler.exceptionHandler
 
   implicit def rejectionHandler: RejectionHandler = ApiRejectionHandler.rejectionHandler
@@ -52,6 +53,7 @@ trait SidechainNodeViewHolderFixture
   implicit val materializer: ActorMaterializer = ActorMaterializer()
 
   val timeProvider = new NetworkTimeProvider(sidechainSettings.sparkzSettings.ntp)
+  MetricsManager.init(timeProvider)
 
   val sidechainBoxesCompanion: SidechainBoxesCompanion = SidechainBoxesCompanion(new JHashMap[JByte, BoxSerializer[SidechainTypes#SCB]]())
   val sidechainSecretsCompanion: SidechainSecretsCompanion = SidechainSecretsCompanion(new JHashMap[JByte, SecretSerializer[SidechainTypes#SCS]]())
