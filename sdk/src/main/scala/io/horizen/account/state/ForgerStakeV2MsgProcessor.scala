@@ -6,6 +6,7 @@ import io.horizen.account.network.{ForgerInfo, PagedForgersOutput}
 import io.horizen.account.state.nativescdata.forgerstakev2.StakeStorage.{addForger, getForger}
 import io.horizen.account.state.nativescdata.forgerstakev2._
 import io.horizen.account.state.nativescdata.forgerstakev2.events.{ActivateStakeV2, DelegateForgerStake, RegisterForger, WithdrawForgerStake}
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.WellKnownAddresses.{FORGER_STAKE_SMART_CONTRACT_ADDRESS, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS}
 import io.horizen.account.utils.ZenWeiConverter.{convertZenniesToWei, isValidZenAmount}
 import io.horizen.consensus.{ForgingStakeInfo, minForgerStake}
@@ -42,7 +43,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     Version1_4_0Fork.get(consensusEpochNumber).active
   }
 
-  override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+  override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
     if (!Version1_4_0Fork.get(context.blockContext.consensusEpochNumber).active)
       throw new ExecutionRevertedException(s"fork not active")
     val gasView = view.getGasTrackedView(invocation.gasPool)
@@ -56,7 +57,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       case StakeTotalCmd =>
         doStakeTotalCmd(invocation, gasView, context.blockContext.consensusEpochNumber)
       case RewardsReceivedCmd =>
-        doRewardsReceivedCmd(invocation, gasView, context.blockContext.consensusEpochNumber)
+        doRewardsReceivedCmd(invocation, gasView, metadata, context.blockContext.consensusEpochNumber)
       case GetPagedForgersStakesByForgerCmd =>
         doPagedForgersStakesByForgerCmd(invocation, gasView)
       case GetPagedForgersStakesByDelegatorCmd =>
@@ -288,7 +289,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     response.encode()
   }
 
-  def doRewardsReceivedCmd(invocation: Invocation, view: BaseAccountStateView, currentEpoch: Int): Array[Byte] = {
+  def doRewardsReceivedCmd(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, currentEpoch: Int): Array[Byte] = {
     requireIsNotPayable(invocation)
     checkForgerStakesV2IsActive(view)
 
@@ -298,14 +299,16 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val forgerKeys: ForgerPublicKeys = cmdInput.forgerPublicKeys
     val consensusEpochStart: Int = cmdInput.consensusEpochStart
     val maxNumOfEpoch: Int =
-      if (consensusEpochStart + cmdInput.maxNumOfEpoch > currentEpoch)
-        currentEpoch - consensusEpochStart
+      if (consensusEpochStart + cmdInput.maxNumOfEpoch - 1 > currentEpoch)
+        currentEpoch - consensusEpochStart - 1
       else
         cmdInput.maxNumOfEpoch
 
     log.info(s"rewardsReceived called - $forgerKeys epochStart: $consensusEpochStart")
+    StakeStorage.getForger(view, forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey)
+      .getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
 
-    val rewards: Seq[BigInteger] = view.getForgerRewards(forgerKeys, consensusEpochStart, maxNumOfEpoch)
+    val rewards: Seq[BigInteger] = metadata.getForgerRewards(forgerKeys, consensusEpochStart, maxNumOfEpoch)
     val response = RewardsReceivedCmdOutput(rewards)
 
     response.encode()

@@ -14,10 +14,9 @@ import java.math.BigInteger
 class StateDbAccountStateViewGasTracked(
     stateDb: StateDB,
     messageProcessors: Seq[MessageProcessor],
-    metadataStorageView: AccountStateMetadataStorageView,
     readOnly: Boolean,
     gas: GasPool
-) extends StateDbAccountStateView(stateDb, messageProcessors, metadataStorageView, readOnly) {
+) extends StateDbAccountStateView(stateDb, messageProcessors, readOnly) {
 
   /**
    * Consume gas for account access:

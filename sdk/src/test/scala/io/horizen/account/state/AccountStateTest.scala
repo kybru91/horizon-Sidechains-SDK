@@ -5,7 +5,7 @@ import io.horizen.account.fork.GasFeeFork
 import io.horizen.account.fork.GasFeeFork.DefaultGasFeeFork
 import io.horizen.account.storage.{AccountStateMetadataStorage, AccountStateMetadataStorageView}
 import io.horizen.account.transaction.EthereumTransaction
-import io.horizen.account.utils.{AccountBlockFeeInfo, AccountPayment}
+import io.horizen.account.utils.{AccountBlockFeeInfo, AccountPayment, ForgerIdentifier}
 import io.horizen.consensus.{ConsensusEpochNumber, ConsensusParamsUtil, intToConsensusEpochNumber, intToConsensusSlotNumber}
 import io.horizen.evm._
 import io.horizen.fixtures.{SecretFixture, SidechainTypesTestsExtension, StoreFixture}
@@ -202,7 +202,7 @@ class AccountStateTest
 
     Mockito.when(metadataStorage.getFeePayments(ArgumentMatchers.any[Int]()))
       .thenReturn(Seq(blockFeeInfo1, blockFeeInfo2, blockFeeInfo3, blockFeeInfo4))
-    Mockito.when(metadataStorage.getMcForgerPoolRewards).thenAnswer(_ => Map(addr1 -> perBlockFee, addr2 -> perBlockFee, addr3 -> perBlockFee.add(perBlockFee)))
+    Mockito.when(metadataStorage.getMcForgerPoolRewards).thenAnswer(_ => Map(ForgerIdentifier(addr1) -> perBlockFee, ForgerIdentifier(addr2) -> perBlockFee, ForgerIdentifier(addr3) -> perBlockFee.add(perBlockFee)))
 
     val feePayments = state.getFeePaymentsInfo(0, intToConsensusEpochNumber(0))._1
     assertEquals(s"Fee payments size expected to be different.", 3, feePayments.size)

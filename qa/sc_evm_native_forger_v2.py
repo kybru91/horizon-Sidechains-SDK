@@ -18,8 +18,10 @@ from SidechainTestFramework.account.httpCalls.transaction.createEIP1559Transacti
 from SidechainTestFramework.account.simple_proxy_contract import SimpleProxyContract
 from SidechainTestFramework.account.utils import convertZenToZennies, FORGER_STAKE_SMART_CONTRACT_ADDRESS, \
     VERSION_1_3_FORK_EPOCH, \
-    VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, convertZenToWei, computeForgedTxFee
+    VERSION_1_4_FORK_EPOCH, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS, convertZenToWei, computeForgedTxFee, \
+    FORGER_POOL_RECIPIENT_ADDRESS
 from SidechainTestFramework.scutil import generate_next_block, EVM_APP_SLOT_TIME
+from httpCalls.block.getFeePayments import http_block_getFeePayments
 from sc_evm_forger import print_current_epoch_and_slot
 from test_framework.util import (
     assert_equal, assert_true, assert_false, fail, forward_transfer_to_sidechain, bytes_to_hex_str, hex_str_to_bytes, )
@@ -52,7 +54,7 @@ Test:
 
 class SCEvmNativeForgerV2(AccountChainSetup):
     def __init__(self):
-        super().__init__(number_of_sidechain_nodes=2, forward_amount=100,
+        super().__init__(number_of_sidechain_nodes=2, forward_amount=100, withdrawalEpochLength=20,
                          block_timestamp_rewind=1500 * EVM_APP_SLOT_TIME * VERSION_1_4_FORK_EPOCH)
 
     def run_test(self):
@@ -121,7 +123,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         ac_makeForgerStake(sc_node_1, evm_address_sc_node_2, block_sign_pub_key_1,
                            vrf_pub_key_1, convertZenToZennies(1), 1)
         ac_makeForgerStake(sc_node_1, evm_address_sc_node_2, block_sign_pub_key_1,
-                           vrf_pub_key_1, convertZenToZennies(6), 2)
+                           vrf_pub_key_1, convertZenToZennies(11), 2)
         ac_makeForgerStake(sc_node_1, evm_address_3, block_sign_pub_key_1,
                            vrf_pub_key_1, convertZenToZennies(2), 3)
         ac_makeForgerStake(sc_node_1, evm_address_sc_node_2, block_sign_pub_key_1,
@@ -888,6 +890,37 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         epoch = decode(['uint32'], result)[0]
         current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
         assert_equal(current_best_epoch, epoch)
+
+        #######################################################################################################
+        # Reward workflow test
+        #######################################################################################################
+
+        ft_pool_amount = 0.5
+        ft_pool_amount_wei = convertZenToWei(ft_pool_amount)
+        forward_transfer_to_sidechain(self.sc_nodes_bootstrap_info.sidechain_id,
+                                      mc_node,
+                                      format_eoa(FORGER_POOL_RECIPIENT_ADDRESS),
+                                      ft_pool_amount,
+                                      mc_return_address=mc_node.getnewaddress(),
+                                      generate_block=False)
+        mc_node.generate(1)
+        generate_next_block(sc_node_1, "second node")
+        # assert Forger Pool balance is updated
+        forger_pool_balance = int(self.sc_nodes[0].rpc_eth_getBalance(format_evm(FORGER_POOL_RECIPIENT_ADDRESS), 'latest')['result'], 16)
+        assert_equal(ft_pool_amount_wei, forger_pool_balance)
+        mc_node.generate(19)
+
+        sc_last_we_block_id = generate_next_block(sc_node_1, "first node")
+
+        self.sc_sync_all()
+
+        # assert Forger Pool balance is distributed
+        forger_pool_balance = int(
+            self.sc_nodes[0].rpc_eth_getBalance(format_evm(FORGER_POOL_RECIPIENT_ADDRESS), 'latest')['result'], 16)
+        assert_equal(0, forger_pool_balance)
+
+        payments = http_block_getFeePayments(sc_node_1, sc_last_we_block_id)['feePayments']
+        print(payments)
 
 
 def decode_paged_list_of_forgers(result):

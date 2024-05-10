@@ -11,7 +11,7 @@ import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.PrivateKeySecp256k1
 import io.horizen.account.state._
 import io.horizen.account.state.receipt.EthereumReceipt
-import io.horizen.account.storage.AccountStateMetadataStorageView
+import io.horizen.account.storage.{AccountStateMetadataStorageView, MsgProcessorMetadataStorageReader}
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.wallet.AccountWallet
 import io.horizen.block.SidechainBlockBase.GENESIS_BLOCK_PARENT_ID
@@ -457,7 +457,7 @@ case class AccountMockDataHelper(genesis: Boolean)
       .when(mockMsgProcessor.canProcess(any[Invocation], any[BaseAccountStateView], any[Int]))
       .thenReturn(true)
     Mockito
-      .when(mockMsgProcessor.process(any[Invocation], any[BaseAccountStateView], any[ExecutionContext]))
+      .when(mockMsgProcessor.process(any[Invocation], any[BaseAccountStateView], any[MsgProcessorMetadataStorageReader], any[ExecutionContext]))
       .thenReturn(Array.empty[Byte])
     mockMsgProcessor
   }

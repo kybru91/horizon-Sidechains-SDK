@@ -322,7 +322,7 @@ class McAddrOwnershipMsgProcessorTest
       val txHash2 = Keccak256.hash("second tx")
       view.setupTxContext(txHash2, 10)
       // try processing a msg with the same data (same msg), should fail
-      assertThrows[ExecutionRevertedException](withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _)))
+      assertThrows[ExecutionRevertedException](withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view)))
 
       // Checking that log doesn't change
       listOfLogs = view.getLogs(txHash2)
@@ -482,7 +482,7 @@ class McAddrOwnershipMsgProcessorTest
         listOfAllExpectedData.add(McAddrOwnershipData(scAddrStr1.toLowerCase(), mcAddr))
         listOfScAddress1ExpectedData.add(McAddrOwnershipData(scAddrStr1.toLowerCase(), mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -502,7 +502,7 @@ class McAddrOwnershipMsgProcessorTest
         listOfAllExpectedData.add(McAddrOwnershipData(scAddrStr2.toLowerCase(), mcAddr))
         listOfScAddress2ExpectedData.add(McAddrOwnershipData(scAddrStr2.toLowerCase(), mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -573,7 +573,7 @@ class McAddrOwnershipMsgProcessorTest
 
         listOfExpectedData.add(McAddrOwnershipData(scAddrStr1, mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -639,7 +639,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce, scAddressObj1
       )
       var ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Value must be zero"))
 
@@ -653,7 +653,7 @@ class McAddrOwnershipMsgProcessorTest
         scAddressObj1)
 
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Wrong message data field length"))
 
@@ -666,7 +666,7 @@ class McAddrOwnershipMsgProcessorTest
         scAddressObj1)
 
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("already associated"))
 
@@ -679,7 +679,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce,
         origin)
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Invalid mc signature"))
 
@@ -694,7 +694,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce,
         scAddressObj1)
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Invalid mc signature"))
 
@@ -709,7 +709,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce,
         scAddressObj1)
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Invalid mc signature"))
 
@@ -738,7 +738,7 @@ class McAddrOwnershipMsgProcessorTest
       )
 
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msg2, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msg2, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains(s"already associated to sc address ${scAddrStr1.toLowerCase()}"))
     }
@@ -777,7 +777,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce, scAddressObj1
       )
       var ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Value must be zero"))
 
@@ -787,7 +787,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce, scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Value must be zero"))
 
@@ -798,7 +798,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce, scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Wrong message data field length"))
 
@@ -808,7 +808,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce, origin
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("account does not exist"))
 
@@ -819,7 +819,7 @@ class McAddrOwnershipMsgProcessorTest
         randomNonce, origin
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       val ownershipIdStr = BytesUtils.toHexString(getOwnershipId(mcAddrStr1))
       assertTrue(ex.getMessage.contains("is not the owner"))
@@ -902,7 +902,7 @@ class McAddrOwnershipMsgProcessorTest
     )
 
     // try processing the removal of ownership, should succeed
-    val returnData = withGas(TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, _))
+    val returnData = withGas(TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, _, stateView))
     assertNotNull(returnData)
     assertArrayEquals(getOwnershipId(mcTransparentAddress), returnData)
   }
@@ -911,7 +911,7 @@ class McAddrOwnershipMsgProcessorTest
     val msg = getMessage(contractAddress, 0, BytesUtils.fromHexString(GetListOfAllOwnershipsCmd), randomNonce)
 
     val (returnData, usedGas) = withGas { gas =>
-      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas)
+      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas, stateView)
       (result, gas.getUsedGas)
     }
     // gas consumption depends on the number of items in the list
@@ -930,7 +930,7 @@ class McAddrOwnershipMsgProcessorTest
       contractAddress, 0,
       BytesUtils.fromHexString(GetListOfOwnershipsCmd) ++ data, randomNonce)
     val (returnData, usedGas) = withGas { gas =>
-      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas)
+      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas, stateView)
       (result, gas.getUsedGas)
     }
     // gas consumption depends on the number of items in the list
@@ -969,7 +969,7 @@ class McAddrOwnershipMsgProcessorTest
 
       listOfExpectedData.add(McAddrOwnershipData(scAddrStr1, mcAddr))
 
-      val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+      val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
       assertNotNull(returnData)
 
 
@@ -991,7 +991,7 @@ class McAddrOwnershipMsgProcessorTest
         scAddressObj1
       )
 
-      val returnData2 = withGas(TestContext.process(messageProcessor, msg2, view, defaultBlockContext, _))
+      val returnData2 = withGas(TestContext.process(messageProcessor, msg2, view, defaultBlockContext, _, view))
       assertNotNull(returnData2)
       println("This is the returned value: " + BytesUtils.toHexString(returnData2))
 
@@ -1027,7 +1027,7 @@ class McAddrOwnershipMsgProcessorTest
 
         listOfScAddress2ExpectedData.add(McAddrOwnershipData(scAddrStr2.toLowerCase(), mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -1045,7 +1045,7 @@ class McAddrOwnershipMsgProcessorTest
 
         listOfExpectedData.add(McAddrOwnershipData(scAddrStr1, mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 

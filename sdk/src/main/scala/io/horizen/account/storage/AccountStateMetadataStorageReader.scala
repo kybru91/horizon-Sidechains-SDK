@@ -3,7 +3,7 @@ package io.horizen.account.storage
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.account.state.receipt.EthereumReceipt
-import io.horizen.account.utils.AccountBlockFeeInfo
+import io.horizen.account.utils.{AccountBlockFeeInfo, ForgerIdentifier}
 import io.horizen.block.WithdrawalEpochCertificate
 import io.horizen.consensus.ConsensusEpochNumber
 import io.horizen.utils.WithdrawalEpochInfo
@@ -36,9 +36,9 @@ trait AccountStateMetadataStorageReader {
   // zero bytes when storage is empty
   def getAccountStateRoot: Array[Byte] // 32 bytes, kessack hash
 
-  def getForgerBlockCounters: Map[AddressProposition, Long]
+  def getForgerBlockCounters: Map[ForgerIdentifier, Long]
 
-  def getMcForgerPoolRewards: Map[AddressProposition, BigInteger]
+  def getMcForgerPoolRewards: Map[ForgerIdentifier, BigInteger]
 
   def getForgerRewards(
     forgerPublicKeys: ForgerPublicKeys,

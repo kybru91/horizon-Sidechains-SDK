@@ -5,6 +5,7 @@ import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgu
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.state.CertificateKeyRotationMsgProcessor.{CertificateKeyRotationContractAddress, CertificateKeyRotationContractCode, SubmitKeyRotationReqCmdSig}
 import io.horizen.account.state.events.SubmitKeyRotation
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.WellKnownAddresses.CERTIFICATE_KEY_ROTATION_SMART_CONTRACT_ADDRESS
 import io.horizen.certificatesubmitter.keys.KeyRotationProofTypes.{KeyRotationProofType, MasterKeyRotationProofType, SigningKeyRotationProofType}
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof, KeyRotationProofSerializer, KeyRotationProofTypes}
@@ -37,7 +38,7 @@ case class CertificateKeyRotationMsgProcessor(params: NetworkParams) extends Nat
   override val contractCode: Array[Byte] = CertificateKeyRotationContractCode
 
   @throws(classOf[ExecutionFailedException])
-  override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+  override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
     val gasView = view.getGasTrackedView(invocation.gasPool)
     getFunctionSignature(invocation.input) match {
       case SubmitKeyRotationReqCmdSig =>

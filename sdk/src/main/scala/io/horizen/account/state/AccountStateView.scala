@@ -2,16 +2,15 @@ package io.horizen.account.state
 
 import io.horizen.SidechainTypes
 import io.horizen.account.fork.{Version1_2_0Fork, Version1_4_0Fork}
-import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.receipt.EthereumReceipt
-import io.horizen.account.storage.AccountStateMetadataStorageView
+import io.horizen.account.storage.{AccountStateMetadataStorageView, MsgProcessorMetadataStorageReader}
 import io.horizen.account.utils.AccountFeePaymentsUtils.DelegatorFeePayment
 import io.horizen.account.utils._
 import io.horizen.block.{MainchainBlockReferenceData, WithdrawalEpochCertificate}
 import io.horizen.consensus.ConsensusEpochNumber
+import io.horizen.evm.StateDB
 import io.horizen.state.StateView
 import io.horizen.utils.WithdrawalEpochInfo
-import io.horizen.evm.StateDB
 import sparkz.core.VersionTag
 import sparkz.util.{ModifierId, SparkzLogging}
 
@@ -26,7 +25,8 @@ class AccountStateView(
   metadataStorageView: AccountStateMetadataStorageView,
   stateDb: StateDB,
   messageProcessors: Seq[MessageProcessor],
-) extends StateDbAccountStateView(stateDb, messageProcessors, metadataStorageView)
+) extends StateDbAccountStateView(stateDb, messageProcessors)
+    with MsgProcessorMetadataStorageReader
     with StateView[SidechainTypes#SCAT]
     with SparkzLogging {
 
@@ -101,50 +101,58 @@ class AccountStateView(
       val (feePayments, delegatorPayments) =
         getForgersAndDelegatorsShares(
           AccountFeePaymentsUtils.getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards),
-          blockFeeInfoSeq,
-          mcForgerPoolRewards
+          mcForgerPoolRewards,
         )
       metadataStorageView.updateForgerDelegatorPayments(delegatorPayments, consensusEpochNumber)
 
-      (feePayments ++ delegatorPayments.map(_.feePayment), poolBalanceDistributed)
+      val allPayments = AccountFeePaymentsUtils.groupAllPaymentsByAddress(feePayments, delegatorPayments)
+
+      (allPayments, poolBalanceDistributed)
     } else {
-      (AccountFeePaymentsUtils.getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards), poolBalanceDistributed)
+      val payments = AccountFeePaymentsUtils.getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards)
+          .map(fp => AccountPayment(fp.identifier.address, fp.value))
+      (payments, poolBalanceDistributed)
     }
   }
 
   private[horizen] def getForgersAndDelegatorsShares(
-    feePayments: Seq[AccountPayment],
-    blockFeePaymentInfoSeq: Seq[AccountBlockFeeInfo],
-    mcForgerPoolRewards: Map[AddressProposition, BigInteger],
+    feePayments: Seq[ForgerPayment],
+    mcForgerPoolRewards: Map[ForgerIdentifier, BigInteger],
   ): (Seq[AccountPayment], Seq[DelegatorFeePayment]) = {
     val allPayments = feePayments.map { feePayment =>
-      // for each forger, get forger info from ForgerStakeV2 that contains reward share and reward address
-      val forgerInfo = blockFeePaymentInfoSeq
-        .find(fpi => fpi.forgerAddress == feePayment.address && fpi.blockSignPublicKey.isDefined && fpi.vrfPublicKey.isDefined)
-        .flatMap(fpi => getForgerInfo(ForgerPublicKeys(fpi.blockSignPublicKey.get, fpi.vrfPublicKey.get)))
-
-      // If forgerInfo present, calculate forger and delegators shares. If not, all goes to forger
-      forgerInfo match {
-        case Some(info) =>
-          val (forgerPayment, delegatorsPayment) = AccountFeePaymentsUtils.getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, info)
-          (forgerPayment, Some(delegatorsPayment))
-        case None => (feePayment, None)
-      }
+      Some(feePayment)
+        // after fork 1.4 blockSignPublicKey and vrfPublicKey are mandatory
+        .filter(_.identifier.blockSignPublicKey.isDefined).filter(_.identifier.vrfPublicKey.isDefined)
+        // try get ForgerInfo from StakeStorageV2
+        .flatMap(fp => getForgerInfo(ForgerPublicKeys(fp.identifier.blockSignPublicKey.get, fp.identifier.vrfPublicKey.get)))
+        // split reward into forger and delegator shares
+        .map(info => AccountFeePaymentsUtils.getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, info))
+        // for <1.4 fork all reward goes to forger, mc part is not calculated
+        .getOrElse((AccountPayment(feePayment.identifier.address, feePayment.value), None))
     }
+    // this is to collapse delegator payments into a flat list
     (allPayments.map(_._1), allPayments.flatMap(_._2))
   }
 
   override def getAccountStateRoot: Array[Byte] = metadataStorageView.getAccountStateRoot
 
+  override def getForgerRewards(
+    forgerPublicKeys: ForgerPublicKeys,
+    consensusEpochStart: Int,
+    maxNumOfEpochs: Int,
+  ): Seq[BigInteger] = {
+    metadataStorageView.getForgerRewards(forgerPublicKeys, consensusEpochStart, maxNumOfEpochs)
+  }
+
   def getMcForgerPoolRewards(
     consensusEpochNumber: ConsensusEpochNumber,
     distributionCap: BigInteger,
-  ): Map[AddressProposition, BigInteger] = {
+  ): Map[ForgerIdentifier, BigInteger] = {
     if (Version1_2_0Fork.get(consensusEpochNumber).active) {
       val extraForgerReward = getBalance(WellKnownAddresses.FORGER_POOL_RECIPIENT_ADDRESS)
       if (extraForgerReward.signum() == 1) {
         val availableReward = extraForgerReward.min(distributionCap)
-        val counters: Map[AddressProposition, Long] = getForgerBlockCounters
+        val counters: Map[ForgerIdentifier, Long] = getForgerBlockCounters
         val perBlockFee_remainder = availableReward.divideAndRemainder(BigInteger.valueOf(counters.values.sum))
         val perBlockFee = perBlockFee_remainder(0)
         var remainder = perBlockFee_remainder(1)
@@ -163,13 +171,13 @@ class AccountStateView(
     } else Map.empty
   }
 
-  def updateForgerBlockCounter(forgerPublicKey: AddressProposition, consensusEpochNumber: ConsensusEpochNumber): Unit = {
+  def updateForgerBlockCounter(forgerKey: ForgerIdentifier, consensusEpochNumber: ConsensusEpochNumber): Unit = {
     if (Version1_2_0Fork.get(consensusEpochNumber).active) {
-      metadataStorageView.updateForgerBlockCounter(forgerPublicKey)
+      metadataStorageView.updateForgerBlockCounter(forgerKey)
     }
   }
 
-  def getForgerBlockCounters: Map[AddressProposition, Long] = {
+  def getForgerBlockCounters: Map[ForgerIdentifier, Long] = {
     metadataStorageView.getForgerBlockCounters
   }
 
@@ -180,7 +188,8 @@ class AccountStateView(
     if (Version1_2_0Fork.get(consensusEpochNumber).active) {
       val forgerPoolBalance = getBalance(WellKnownAddresses.FORGER_POOL_RECIPIENT_ADDRESS)
       if (poolBalanceDistributed.compareTo(forgerPoolBalance) > 0) {
-        val errMsg = s"Trying to subtract more($poolBalanceDistributed) from the forger pool balance than available($forgerPoolBalance)"
+        val errMsg =
+          s"Trying to subtract more($poolBalanceDistributed) from the forger pool balance than available($forgerPoolBalance)"
         log.error(errMsg)
         throw new IllegalArgumentException(errMsg)
       }

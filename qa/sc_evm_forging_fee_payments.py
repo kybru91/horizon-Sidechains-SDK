@@ -117,7 +117,7 @@ class ScEvmForgingFeePayments(AccountChainSetup):
         # Do FT of some Zen to SC Node 2
         evm_address_sc_node_2 = sc_node_2.wallet_createPrivateKeySecp256k1()["result"]["proposition"]["address"]
 
-        ft_amount_in_zen = 2.0
+        ft_amount_in_zen = 12.0
         ft_amount_in_zennies = convertZenToZennies(ft_amount_in_zen)
         ft_amount_in_wei = convertZenniesToWei(ft_amount_in_zennies)
 
@@ -149,7 +149,7 @@ class ScEvmForgingFeePayments(AccountChainSetup):
         sc2_blockSignPubKey = sc_node_2.wallet_createPrivateKey25519()["result"]["proposition"]["publicKey"]
         sc2_vrfPubKey = sc_node_2.wallet_createVrfSecret()["result"]["proposition"]["publicKey"]
 
-        forger_stake_amount = 1  # Zen
+        forger_stake_amount = 11  # Zen
         forger_stake_amount_in_wei = convertZenToWei(forger_stake_amount)
 
         makeForgerStakeJsonRes = ac_makeForgerStake(sc_node_2, evm_address_sc_node_2, sc2_blockSignPubKey,
@@ -408,8 +408,8 @@ class ScEvmForgingFeePayments(AccountChainSetup):
         assert_equal(ft_pool_remaining, forger_pool_balance)
 
         fee_payments_api_response = http_block_getFeePayments(sc_node_1, last_block_id)['feePayments']
-        assert_equal(node_1_fees, fee_payments_api_response[0]['value'])
-        assert_equal(node_2_fees, fee_payments_api_response[1]['value'])
+        assert_equal(node_1_fees, [f for f in fee_payments_api_response if f['address']['address'] != self.FORGER_REWARD_ADDRESS][0]['value'])
+        assert_equal(node_2_fees, [f for f in fee_payments_api_response if f['address']['address'] == self.FORGER_REWARD_ADDRESS][0]['value'])
 
         # reach the VERSION_1_3_FORK_EPOCH fork and upgrade the forger stakes to the new format
         current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]

@@ -17,12 +17,7 @@ import org.scalatestplus.mockito._
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 
-
-class AccountFeePaymentsUtilsTest
-  extends JUnitSuite
-    with SidechainRelatedMainchainOutputFixture
-    with MockitoSugar
-{
+class AccountFeePaymentsUtilsTest extends JUnitSuite with SidechainRelatedMainchainOutputFixture with MockitoSugar {
   val addr_a: Array[Byte] = BytesUtils.fromHexString("00000000000000000000000000000000000000aa")
   val addr_b: Array[Byte] = BytesUtils.fromHexString("00000000000000000000000000000000000000bb")
   val addr_c: Array[Byte] = BytesUtils.fromHexString("00000000000000000000000000000000000000cc")
@@ -34,7 +29,7 @@ class AccountFeePaymentsUtilsTest
 
   @Test
   def testNullBlockFeeInfoSeq(): Unit = {
-    val blockFeeInfoSeq : Seq[AccountBlockFeeInfo] = Seq()
+    val blockFeeInfoSeq: Seq[AccountBlockFeeInfo] = Seq()
     val accountPaymentsList = getForgersRewards(blockFeeInfoSeq)
     assertTrue(accountPaymentsList.isEmpty)
   }
@@ -42,20 +37,14 @@ class AccountFeePaymentsUtilsTest
   @Test
   def testHomogeneousBlockFeeInfoSeq(): Unit = {
 
-    var blockFeeInfoSeq : Seq[AccountBlockFeeInfo] = Seq()
+    var blockFeeInfoSeq: Seq[AccountBlockFeeInfo] = Seq()
 
-    val abfi_a = AccountBlockFeeInfo(
-      baseFee = BigInteger.valueOf(100),
-      forgerTips = BigInteger.valueOf(10),
-      forgerAddr_a)
-    val abfi_b = AccountBlockFeeInfo(
-      baseFee = BigInteger.valueOf(100),
-      forgerTips = BigInteger.valueOf(10),
-      forgerAddr_b)
-    val abfi_c = AccountBlockFeeInfo(
-      baseFee = BigInteger.valueOf(100),
-      forgerTips = BigInteger.valueOf(10),
-      forgerAddr_c)
+    val abfi_a =
+      AccountBlockFeeInfo(baseFee = BigInteger.valueOf(100), forgerTips = BigInteger.valueOf(10), forgerAddr_a)
+    val abfi_b =
+      AccountBlockFeeInfo(baseFee = BigInteger.valueOf(100), forgerTips = BigInteger.valueOf(10), forgerAddr_b)
+    val abfi_c =
+      AccountBlockFeeInfo(baseFee = BigInteger.valueOf(100), forgerTips = BigInteger.valueOf(10), forgerAddr_c)
 
     blockFeeInfoSeq = blockFeeInfoSeq :+ abfi_a
     blockFeeInfoSeq = blockFeeInfoSeq :+ abfi_b
@@ -71,7 +60,7 @@ class AccountFeePaymentsUtilsTest
   @Test
   def testNotUniqueForgerAddresses(): Unit = {
 
-    var blockFeeInfoSeq : Seq[AccountBlockFeeInfo] = Seq()
+    var blockFeeInfoSeq: Seq[AccountBlockFeeInfo] = Seq()
 
     val abfi_a = AccountBlockFeeInfo(
       baseFee = BigInteger.valueOf(100),
@@ -99,21 +88,18 @@ class AccountFeePaymentsUtilsTest
     val accountPaymentsList = getForgersRewards(blockFeeInfoSeq)
     assertEquals(accountPaymentsList.length, 3)
 
-    accountPaymentsList.foreach(
-      payment => {
-        if (payment.address.equals(forgerAddr_c))
-          assertEquals(payment.value, BigInteger.valueOf(220))
-        else
-          assertEquals(payment.value, BigInteger.valueOf(110))
-      }
-    )
+    accountPaymentsList.foreach(payment => {
+      if (payment.identifier.address.equals(forgerAddr_c))
+        assertEquals(payment.value, BigInteger.valueOf(220))
+      else
+        assertEquals(payment.value, BigInteger.valueOf(110))
+    })
   }
-
 
   @Test
   def testPoolWithRemainder(): Unit = {
 
-    var blockFeeInfoSeq : Seq[AccountBlockFeeInfo] = Seq()
+    var blockFeeInfoSeq: Seq[AccountBlockFeeInfo] = Seq()
 
     val abfi_a = AccountBlockFeeInfo(
       baseFee = BigInteger.valueOf(3),
@@ -148,24 +134,22 @@ class AccountFeePaymentsUtilsTest
     val accountPaymentsList = getForgersRewards(blockFeeInfoSeq)
     assertEquals(accountPaymentsList.length, 3)
 
-    accountPaymentsList.foreach(
-      payment => {
-        if (payment.address.equals(forgerAddr_c))
-          // last address is repeated, its reward are summed
-          //   (forgerTip (4) + poolFee quota (3)) + (forgerTip (6) + poolFee quota (3))
-          assertEquals(payment.value, BigInteger.valueOf((4 + 3) + (6 + 3)))
-        else {
-          // first 2 addresses have 1 satoshi more due to the remainder:
-          //   forgerTip (10) + poolFee quota (3) + remainder quota (1)
-          assertEquals(payment.value, BigInteger.valueOf(10 + 3 + 1))
-        }
+    accountPaymentsList.foreach(payment => {
+      if (payment.identifier.address.equals(forgerAddr_c))
+        // last address is repeated, its reward are summed
+        //   (forgerTip (4) + poolFee quota (3)) + (forgerTip (6) + poolFee quota (3))
+        assertEquals(payment.value, BigInteger.valueOf((4 + 3) + (6 + 3)))
+      else {
+        // first 2 addresses have 1 satoshi more due to the remainder:
+        //   forgerTip (10) + poolFee quota (3) + remainder quota (1)
+        assertEquals(payment.value, BigInteger.valueOf(10 + 3 + 1))
       }
-    )
+    })
   }
 
   @Test
   def testWithMcForgerPoolRewards(): Unit = {
-    var blockFeeInfoSeq : Seq[AccountBlockFeeInfo] = Seq()
+    var blockFeeInfoSeq: Seq[AccountBlockFeeInfo] = Seq()
 
     val abfi_a = AccountBlockFeeInfo(
       baseFee = BigInteger.valueOf(100),
@@ -185,13 +169,11 @@ class AccountFeePaymentsUtilsTest
       forgerAddr_c)
 
     val mcForgerPoolRewards = Map(
-      forgerAddr_a -> BigInteger.valueOf(10),
-      forgerAddr_b -> BigInteger.valueOf(10),
-      forgerAddr_c -> BigInteger.valueOf(10),
-      forgerAddr_d -> BigInteger.valueOf(10),
-
+      ForgerIdentifier(forgerAddr_a) -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_b) -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_c) -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_d) -> BigInteger.valueOf(10),
     )
-
 
     blockFeeInfoSeq = blockFeeInfoSeq :+ abfi_a
     blockFeeInfoSeq = blockFeeInfoSeq :+ abfi_b
@@ -201,16 +183,14 @@ class AccountFeePaymentsUtilsTest
     val accountPaymentsList = getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards)
     assertEquals(accountPaymentsList.length, 4)
 
-    accountPaymentsList.foreach(
-      payment => {
-        if (payment.address.equals(forgerAddr_c))
-          assertEquals(BigInteger.valueOf(230), payment.value)
-        else if (payment.address.equals(forgerAddr_d))
-          assertEquals(BigInteger.valueOf(10), payment.value)
-        else
-          assertEquals(BigInteger.valueOf(120), payment.value)
-      }
-    )
+    accountPaymentsList.foreach(payment => {
+      if (payment.identifier.address.equals(forgerAddr_c))
+        assertEquals(BigInteger.valueOf(230), payment.value)
+      else if (payment.identifier.address.equals(forgerAddr_d))
+        assertEquals(BigInteger.valueOf(10), payment.value)
+      else
+        assertEquals(BigInteger.valueOf(120), payment.value)
+    })
   }
 
   @Test
@@ -247,16 +227,16 @@ class AccountFeePaymentsUtilsTest
     val rewardAddress: AddressProposition = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8)).publicImage()
 
     val mcForgerPoolRewards = Map(
-      forgerAddr_a -> BigInteger.valueOf(10),
-      forgerAddr_b -> BigInteger.valueOf(10),
-      forgerAddr_c -> BigInteger.valueOf(10),
-      forgerAddr_d -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_a) -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_b) -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_c) -> BigInteger.valueOf(10),
+      ForgerIdentifier(forgerAddr_d) -> BigInteger.valueOf(10),
     )
 
-    val feePayment = AccountPayment(forgerAddr_a, BigInteger.valueOf(100))
+    val feePayment = ForgerPayment(ForgerIdentifier(forgerAddr_a), BigInteger.valueOf(100))
     val forgerInfo = ForgerInfo(forgerPublicKeys, 100, rewardAddress)
 
-    val (forgerPayment, delegatorPayment) = getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, forgerInfo)
+    val (forgerPayment, Some(delegatorPayment)) = getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, forgerInfo)
 
     assertEquals(forgerPayment.address, forgerAddr_a)
     assertEquals(forgerPayment.value, BigInteger.valueOf(90))

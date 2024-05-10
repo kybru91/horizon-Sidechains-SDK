@@ -352,7 +352,7 @@ class ForgerStakeV2MsgProcessorTest
 
       msg = getMessage(forgerStakeMessageProcessor.contractAddress, 0, BytesUtils.fromHexString(GetListOfForgersCmdV1), randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       assertTrue(s"Wrong error message ${exc.getMessage}", exc.getMessage.contains("disabled"))
 
@@ -382,7 +382,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // should fail because input has a trailing byte
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _, view))
       }
       assertTrue(s"Wrong exc message: ${exc.getMessage}, expected:invalid msg data length", exc.getMessage.contains("invalid msg data length"))
       view.commit(bytesToVersion(getVersion.data()))
@@ -538,7 +538,7 @@ class ForgerStakeV2MsgProcessorTest
       // Check that register forger cannot be called before activate
 
       var exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       var expectedErr = "Forger stake V2 has not been activated yet"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -562,7 +562,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validStakeWeiAmount, registerForgerData, randomNonce, from = senderAddress)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Invalid signature, could not validate against blockSignerProposition"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -575,7 +575,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validStakeWeiAmount, registerForgerData, randomNonce, from = senderAddress)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Invalid signature, could not validate against vrfKey"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -587,7 +587,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validWeiAmount, registerForgerData, randomNonce, from = senderAddress)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "is below the minimum stake amount threshold"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -599,7 +599,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validStakeWeiAmount.add(BigInteger.ONE), registerForgerData, randomNonce, from = senderAddress)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "is not a legal wei amount"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -638,7 +638,7 @@ class ForgerStakeV2MsgProcessorTest
       // -------------------------------------------------------------------------------
       // Try register the same forger twice. It should fail.
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Can not register an already existing forger"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -651,7 +651,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validStakeWeiAmount, registerForgerData, randomNonce, from = senderAddress)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Reward share cannot be different from 0 if reward address is not defined"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -665,7 +665,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validStakeWeiAmount, registerForgerData, randomNonce, from = senderAddress)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Reward share cannot be 0 if reward address is defined"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -697,7 +697,7 @@ class ForgerStakeV2MsgProcessorTest
       registerForgerData = BytesUtils.fromHexString(RegisterForgerCmd) ++ regCmdInput.encode()
       msg = getMessage(contractAddress, validStakeWeiAmount, registerForgerData, randomNonce, from = origin)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Not enough balance"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -780,7 +780,7 @@ class ForgerStakeV2MsgProcessorTest
       // Check that delegate and withdraw cannot be called before activate
 
       var exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       var expectedErr = "Forger stake V2 has not been activated yet"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -792,7 +792,7 @@ class ForgerStakeV2MsgProcessorTest
 
       msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(WithdrawCmd) ++ withdrawCmdInput.encode(), randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       assertTrue(exc.getMessage.contains("Forger stake V2 has not been activated yet"))
 
@@ -813,7 +813,7 @@ class ForgerStakeV2MsgProcessorTest
       // Try delegate to a non-existing forger. It should fail.
       msg = getMessage(contractAddress, validWeiAmount, delegateData, randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Forger doesn't exist."
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1023,7 +1023,7 @@ class ForgerStakeV2MsgProcessorTest
       // should fail because input has a trailing byte
       blockContext = getBlockContextForEpoch(blockContext.consensusEpochNumber + 10)
       val ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContext, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Wrong message data field length"))
 
@@ -1317,7 +1317,7 @@ class ForgerStakeV2MsgProcessorTest
       // assert invocation fails until stake v2 is active
       val msg1 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ Array.emptyByteArray, randomNonce)
       val gas = new GasPool(1000000000)
-      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas))
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas, view))
 
       val BI_0 = BigInteger.ZERO
       val BI_20 = BigInteger.valueOf(20 * ZenCoinsUtils.COIN)
@@ -1392,7 +1392,7 @@ class ForgerStakeV2MsgProcessorTest
       stakeTotalCmdInput = StakeTotalCmdInput(None, Some(address4), None, None)
       data= stakeTotalCmdInput.encode()
       msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
-      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas))
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas, view))
     }
   }
 
@@ -1411,14 +1411,15 @@ class ForgerStakeV2MsgProcessorTest
       // test getRewardsReceived fails until ForgerStakeV2 is active
       val msg1 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(RewardsReceivedCmd) ++ Array.emptyByteArray, randomNonce)
       val gas = new GasPool(1000000000)
-      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas))
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas, view))
 
       StakeStorage.setActive(view)
+      StakeStorage.addForger(view, blockSignerProposition1, vrfPublicKey1, 100, Address.ZERO, V1_4_MOCK_FORK_POINT + 3, Address.ZERO, BigInteger.ZERO)
 
       // test getRewardsReceived
       val rewardsReceivedCmdInput = RewardsReceivedCmdInput(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), 10, 5)
       val msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(RewardsReceivedCmd) ++ rewardsReceivedCmdInput.encode(), randomNonce)
-      val returnData = assertGas(2100, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      val returnData = assertGas(10600, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
       assertNotNull(returnData)
       val rewardsReceivedOutput = RewardsReceivedCmdOutputDecoder.decode(returnData)
       assertEquals(
@@ -1482,7 +1483,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Try getForger after fork 1.4 but before activate
      exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
 
       expectedErr = "Forger stake V2 has not been activated yet"
@@ -1505,7 +1506,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Try getPagedForgers after fork 1.4 but before activate
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
 
       expectedErr = "Forger stake V2 has not been activated yet"
@@ -1529,7 +1530,7 @@ class ForgerStakeV2MsgProcessorTest
       // Try getForger for a non-existing forger. It should fail.
       msg = getMessage(contractAddress, BigInteger.ZERO,  getForgerData, randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Forger doesn't exist."
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1613,7 +1614,7 @@ class ForgerStakeV2MsgProcessorTest
         )
         val msg = getMessage(
           contractAddress, 0, BytesUtils.fromHexString(GetPagedForgersCmd) ++ cmdInput.encode(), randomNonce)
-        val returnData = withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        val returnData = withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
         //Check getPagedForgers
         val res = PagedForgersOutputDecoder.decode(returnData)
         assertEquals(currentPage, res.listOfForgerInfo)
@@ -1644,7 +1645,7 @@ class ForgerStakeV2MsgProcessorTest
       // Check that it is not payable
       msg = getMessage(contractAddress, validWeiAmount, getForgerData, randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Call value must be zero"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1652,7 +1653,7 @@ class ForgerStakeV2MsgProcessorTest
 
       msg = getMessage(contractAddress, validWeiAmount, getPagedForgersData, randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Call value must be zero"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1664,7 +1665,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // should fail because input has a trailing byte
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Wrong message data field length"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1674,7 +1675,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // should fail because input has a trailing byte
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _, view))
       }
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
 
@@ -1780,7 +1781,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Try getForger after fork 1.4 but before activate
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
 
       expectedErr = "Forger stake V2 has not been activated yet"
@@ -1818,7 +1819,7 @@ class ForgerStakeV2MsgProcessorTest
       // Check that it is not payable
       msg = getMessage(contractAddress, validWeiAmount, getCurrentConsensusEpochData, randomNonce)
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "Call value must be zero"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1829,7 +1830,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // should fail because input has a trailing byte
       exc = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _))
+        withGas(TestContext.process(forgerStakeV2MessageProcessor, msgBad, view, blockContextForkV1_4, _, view))
       }
       expectedErr = "invalid msg data length"
       assertTrue(s"Wrong error message, expected $expectedErr, got: ${exc.getMessage}", exc.getMessage.contains(expectedErr))
@@ -1930,7 +1931,7 @@ class ForgerStakeV2MsgProcessorTest
       listOfForgerStakes = listOfForgerStakes :+ AccountForgingStakeInfo(expStakeId,
         ForgerStakeData(ForgerPublicKeys(blockSignerProposition, vrfPublicKey),
           ownerAddressProposition1, stakeAmount))
-      val returnData = withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContext, _))
+      val returnData = withGas(TestContext.process(forgerStakeMessageProcessor, msg, view, blockContext, _, view))
       assertNotNull(returnData)
       totalAmount = totalAmount.add(stakeAmount)
     }

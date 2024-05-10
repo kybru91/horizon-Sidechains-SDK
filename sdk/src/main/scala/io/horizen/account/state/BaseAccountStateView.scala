@@ -6,7 +6,7 @@ import io.horizen.evm.Address
 
 import java.math.BigInteger
 
-trait BaseAccountStateView extends AccountStateReader with MsgProcessorMetadataStorageReader {
+trait BaseAccountStateView extends AccountStateReader {
 
   def addAccount(address: Address, code: Array[Byte]): Unit
   def increaseNonce(address: Address): Unit

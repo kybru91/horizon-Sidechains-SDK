@@ -6,7 +6,7 @@ import io.horizen.account.state.receipt.{EthereumReceipt, EthereumReceiptSeriali
 import io.horizen.account.state.{ForgerBlockCountersSerializer, ForgerPublicKeys, McForgerPoolRewardsSerializer}
 import io.horizen.account.storage.AccountStateMetadataStorageView.DEFAULT_ACCOUNT_STATE_ROOT
 import io.horizen.account.utils.AccountFeePaymentsUtils.DelegatorFeePayment
-import io.horizen.account.utils.{AccountBlockFeeInfo, AccountBlockFeeInfoSerializer, FeeUtils}
+import io.horizen.account.utils.{AccountBlockFeeInfo, AccountBlockFeeInfoSerializer, FeeUtils, ForgerIdentifier}
 import io.horizen.block.SidechainBlockBase.GENESIS_BLOCK_PARENT_ID
 import io.horizen.block.{WithdrawalEpochCertificate, WithdrawalEpochCertificateSerializer}
 import io.horizen.consensus.{ConsensusEpochNumber, intToConsensusEpochNumber}
@@ -45,8 +45,8 @@ class AccountStateMetadataStorageView(storage: Storage) extends AccountStateMeta
   private[horizen] var lastCertificateSidechainBlockIdOpt: Option[ModifierId] = None
   private[horizen] var blockFeeInfoOpt: Option[AccountBlockFeeInfo] = None
   private[horizen] var consensusEpochOpt: Option[ConsensusEpochNumber] = None
-  private[horizen] var forgerBlockCountersOpt: Option[Map[AddressProposition, Long]] = None
-  private[horizen] var mcForgerPoolRewardsOpt: Option[Map[AddressProposition, BigInteger]] = None
+  private[horizen] var forgerBlockCountersOpt: Option[Map[ForgerIdentifier, Long]] = None
+  private[horizen] var mcForgerPoolRewardsOpt: Option[Map[ForgerIdentifier, BigInteger]] = None
   private[horizen] var accountStateRootOpt: Option[Array[Byte]] = None
   private[horizen] var receiptsOpt: Option[Seq[EthereumReceipt]] = None
   //Contains the base fee to be used when forging the next block
@@ -424,47 +424,47 @@ class AccountStateMetadataStorageView(storage: Storage) extends AccountStateMeta
     new ByteArrayWrapper(Blake2b256.hash(key))
   }
 
-  def updateForgerBlockCounter(forgerPublicKey: AddressProposition): Unit = {
-    val counters: Map[AddressProposition, Long] = getForgerBlockCounters
+  def updateForgerBlockCounter(forgerPublicKey: ForgerIdentifier): Unit = {
+    val counters: Map[ForgerIdentifier, Long] = getForgerBlockCounters
     val existingCount: Long = counters.getOrElse(forgerPublicKey, 0)
     forgerBlockCountersOpt = Some(counters.updated(forgerPublicKey, existingCount + 1))
   }
 
-  def updateMcForgerPoolRewards(forgerPoolRewards: Map[AddressProposition, BigInteger]): Unit = {
+  def updateMcForgerPoolRewards(forgerPoolRewards: Map[ForgerIdentifier, BigInteger]): Unit = {
     mcForgerPoolRewardsOpt = Some(forgerPoolRewards)
   }
 
-  override def getForgerBlockCounters: Map[AddressProposition, Long] = {
+  override def getForgerBlockCounters: Map[ForgerIdentifier, Long] = {
     forgerBlockCountersOpt.getOrElse(getForgerBlockCountersFromStorage)
   }
 
-  private[horizen] def getForgerBlockCountersFromStorage: Map[AddressProposition, Long] = {
+  private[horizen] def getForgerBlockCountersFromStorage: Map[ForgerIdentifier, Long] = {
     storage.get(getForgerBlockCountersKey).asScala match {
       case Some(baw) =>
         ForgerBlockCountersSerializer.parseBytesTry(baw.data) match {
           case Success(counters) => counters
           case Failure(e) =>
             log.error("Failed to parse forger block counters from storage", e)
-            Map.empty[AddressProposition, Long]
+            Map.empty[ForgerIdentifier, Long]
         }
-      case _ => Map.empty[AddressProposition, Long]
+      case _ => Map.empty[ForgerIdentifier, Long]
     }
   }
 
-  override def getMcForgerPoolRewards: Map[AddressProposition, BigInteger] = {
+  override def getMcForgerPoolRewards: Map[ForgerIdentifier, BigInteger] = {
     mcForgerPoolRewardsOpt.getOrElse(getMcForgerPoolRewardsFromStorage)
   }
 
-  private[horizen] def getMcForgerPoolRewardsFromStorage: Map[AddressProposition, BigInteger] = {
+  private[horizen] def getMcForgerPoolRewardsFromStorage: Map[ForgerIdentifier, BigInteger] = {
     storage.get(getMcForgerPoolRewardsKey).asScala match {
       case Some(baw) =>
         McForgerPoolRewardsSerializer.parseBytesTry(baw.data) match {
           case Success(rewards) => rewards
           case Failure(exception) =>
             log.error("Error while mc forger pool rewards parsing.", exception)
-            Map.empty[AddressProposition, BigInteger]
+            Map.empty[ForgerIdentifier, BigInteger]
         }
-      case _ => Map.empty[AddressProposition, BigInteger]
+      case _ => Map.empty[ForgerIdentifier, BigInteger]
     }
   }
 
@@ -473,7 +473,7 @@ class AccountStateMetadataStorageView(storage: Storage) extends AccountStateMeta
     consensusEpochStart: Int,
     maxNumOfEpochs: Int,
   ): Seq[BigInteger] = {
-    (0 to maxNumOfEpochs).map { epoch =>
+    (0 until maxNumOfEpochs).map { epoch =>
       getForgerReward(getForgerRewardsKey(forgerPublicKeys, consensusEpochStart + epoch))
     }
   }
@@ -503,7 +503,7 @@ class AccountStateMetadataStorageView(storage: Storage) extends AccountStateMeta
   }
 
   def resetForgerBlockCounters(): Unit = {
-    forgerBlockCountersOpt = Some(Map.empty[AddressProposition, Long])
+    forgerBlockCountersOpt = Some(Map.empty[ForgerIdentifier, Long])
   }
 
   private[horizen] def getForgerRewardsKey(forgerKeys: ForgerPublicKeys, consensusEpochNumber: Int): ByteArrayWrapper = {

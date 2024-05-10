@@ -1,6 +1,8 @@
 package io.horizen.account.state;
 
 
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader;
+
 // This interface models the entity which is responsible for handling the application of a transaction to a state view.
 // More in detail, a transaction is converted into a 'Message' object, which is processed
 // by a specific instance of MessageProcessor.
@@ -32,12 +34,17 @@ public interface MessageProcessor {
      *
      * @param invocation invocation to execute
      * @param view       state view
+     * @param metadata   metadata view. IMPORTANT: always refers to the tip, not the current view
      * @param context    contextual information accessible during execution. It contains also the consensus epoch number
      * @return return data on successful execution
      * @throws ExecutionRevertedException revert-and-keep-gas-left, also mark the message as "failed"
      * @throws ExecutionFailedException   revert-and-consume-all-gas, also mark the message as "failed"
      * @throws RuntimeException           any other exceptions are considered as "invalid message"
      */
-    byte[] process(Invocation invocation, BaseAccountStateView view, ExecutionContext context)
-        throws ExecutionFailedException;
+    byte[] process(
+        Invocation invocation,
+        BaseAccountStateView view,
+        MsgProcessorMetadataStorageReader metadata,
+        ExecutionContext context
+    ) throws ExecutionFailedException;
 }

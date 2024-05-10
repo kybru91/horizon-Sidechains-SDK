@@ -13,7 +13,7 @@ import io.horizen.account.storage.AccountStateMetadataStorage
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.Secp256k1.generateContractAddress
 import io.horizen.account.utils.ZenWeiConverter.MAX_MONEY_IN_WEI
-import io.horizen.account.utils.{AccountBlockFeeInfo, AccountFeePaymentsUtils, AccountPayment, FeeUtils}
+import io.horizen.account.utils.{AccountBlockFeeInfo, AccountFeePaymentsUtils, AccountPayment, FeeUtils, ForgerIdentifier}
 import io.horizen.block.WithdrawalEpochCertificate
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof}
 import io.horizen.consensus.{ConsensusEpochInfo, ConsensusEpochNumber, ForgingStakeInfo, intToConsensusEpochNumber}
@@ -157,7 +157,7 @@ class AccountState(
       )
 
       for ((tx, txIndex) <- mod.sidechainTransactions.zipWithIndex) {
-        stateView.applyTransaction(tx, txIndex, blockGasPool, blockContext) match {
+        stateView.applyTransaction(tx, txIndex, blockGasPool, blockContext, stateView) match {
           case Success(consensusDataReceipt) =>
             val txGasUsed = consensusDataReceipt.cumulativeGasUsed.subtract(cumGasUsed)
             // update cumulative gas used so far
@@ -215,12 +215,20 @@ class AccountState(
             Some(mod.header.forgingStakeInfo.blockSignPublicKey),
             Some(mod.header.forgingStakeInfo.vrfPublicKey)
           ))
+
+        stateView.updateForgerBlockCounter(
+          ForgerIdentifier(mod.forgerPublicKey,
+            Some(mod.header.forgingStakeInfo.blockSignPublicKey),
+            Some(mod.header.forgingStakeInfo.vrfPublicKey)),
+            consensusEpochNumber
+        )
       } else {
         stateView.updateFeePaymentInfo(AccountBlockFeeInfo(cumBaseFee, cumForgerTips, mod.header.forgerAddress))
+
+        stateView.updateForgerBlockCounter(ForgerIdentifier(mod.forgerPublicKey), consensusEpochNumber)
       }
 
       // update block counters for forger pool fee distribution
-      stateView.updateForgerBlockCounter(mod.forgerPublicKey, consensusEpochNumber)
 
       // If SC block has reached the end of the withdrawal epoch reward the forgers.
       evalForgersReward(mod, modWithdrawalEpochInfo, consensusEpochNumber, stateView)
@@ -370,8 +378,7 @@ class AccountState(
   def getStateDbViewFromRoot(stateRoot: Array[Byte]): StateDbAccountStateView =
     new StateDbAccountStateView(
       new StateDB(stateDbStorage, new Hash(stateRoot)),
-      messageProcessors,
-      stateMetadataStorage.getView
+      messageProcessors
     )
 
   // Base getters
@@ -421,13 +428,16 @@ class AccountState(
         using(getView)(
           _.getForgersAndDelegatorsShares(
             AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards),
-            feePaymentInfoSeq,
             mcForgerPoolRewards
           )
         )
-      (feePayments ++ delegatorPayments.map(_.feePayment), poolBalanceDistributed)
+      val allPayments = AccountFeePaymentsUtils.groupAllPaymentsByAddress(feePayments, delegatorPayments)
+
+      (allPayments, poolBalanceDistributed)
     } else {
-      (AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards), poolBalanceDistributed)
+      val payments = AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards)
+        .map(fp => AccountPayment(fp.identifier.address, fp.value))
+      (payments, poolBalanceDistributed)
     }
   }
 

@@ -162,7 +162,7 @@ class CertificateKeyRotationMsgProcessorTest
       data = BytesUtils.fromHexString(SubmitKeyRotationReqCmdSig) ++ encodedInput,
       nonce = randomNonce
     )
-    withGas(TestContext.process(certificateKeyRotationMsgProcessor, msg, view, blockContext, _))
+    withGas(TestContext.process(certificateKeyRotationMsgProcessor, msg, view, blockContext, _, view))
   }
 
   private def processBadKeyRotationMessage(newKey: SchnorrSecret, keyRotationProof: KeyRotationProof, view: AccountStateView, epoch: Int = 0,
