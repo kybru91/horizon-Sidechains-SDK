@@ -299,8 +299,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val forgerKeys: ForgerPublicKeys = cmdInput.forgerPublicKeys
     val consensusEpochStart: Int = cmdInput.consensusEpochStart
     val maxNumOfEpoch: Int =
-      if (consensusEpochStart + cmdInput.maxNumOfEpoch - 1 > currentEpoch)
-        currentEpoch - consensusEpochStart - 1
+      if (consensusEpochStart + cmdInput.maxNumOfEpoch - 1 >= currentEpoch)
+        currentEpoch - consensusEpochStart
       else
         cmdInput.maxNumOfEpoch
 
