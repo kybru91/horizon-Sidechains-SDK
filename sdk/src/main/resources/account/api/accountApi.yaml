@@ -1531,10 +1531,41 @@ paths:
                   result:
                     type: object
                     properties:
-                      transactionId:
-                        type: string
-                  error:
-                    $ref: '#/components/schemas/SidechainApiErrorResponse'
+                      nextPos:
+                        type: integer
+                      stakes:
+                        type: array       
+                        items:
+                          type: object
+                          properties:
+                            forgerStakeData:
+                              type: object
+                              properties:
+                                forgerPublicKeys:
+                                  type: object
+                                  properties:
+                                    blockSignPublicKey:
+                                      type: object
+                                      properties:
+                                        publicKey:
+                                          type: string
+                                    vrfPublicKey:
+                                      type: object
+                                      properties:
+                                        publicKey:
+                                          type: string      
+                                ownerPublicKey:
+                                  type: object
+                                  properties:
+                                    address:
+                                      type: string
+                                stakedAmount:
+                                  type: integer
+           
+                              
+                            
+                        
+
         default:
           description: any kind of http error
           content:
@@ -1581,10 +1612,28 @@ paths:
                   result:
                     type: object
                     properties:
-                      transactionId:
-                        type: string
-                  error:
-                    $ref: '#/components/schemas/SidechainApiErrorResponse'
+                      nextPos:
+                        type: integer
+                      stakes:
+                        type: array       
+                        items:
+                          type: object
+                          properties:
+                              forgerPublicKeys:
+                                type: object
+                                properties:
+                                  blockSignPublicKey:
+                                    type: object
+                                    properties:
+                                      publicKey:
+                                        type: string
+                                  vrfPublicKey:
+                                    type: object
+                                    properties:
+                                      publicKey:
+                                        type: string      
+                              stakedAmount:
+                                type: integer
         default:
           description: any kind of http error
           content:
@@ -1634,10 +1683,20 @@ paths:
                   result:
                     type: object
                     properties:
-                      transactionId:
-                        type: string
-                  error:
-                    $ref: '#/components/schemas/SidechainApiErrorResponse'
+                      nextPos:
+                        type: integer
+                      stakes:
+                        type: array       
+                        items:
+                          type: object
+                          properties:
+                              delegator:
+                                type: object
+                                properties:
+                                  address:
+                                    type: string
+                              stakedAmount:
+                                type: integer
         default:
           description: any kind of http error
           content:
