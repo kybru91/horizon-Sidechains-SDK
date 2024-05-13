@@ -127,8 +127,13 @@ class AccountStateView(
         .flatMap(fp => getForgerInfo(ForgerPublicKeys(fp.identifier.blockSignPublicKey.get, fp.identifier.vrfPublicKey.get)))
         // split reward into forger and delegator shares
         .map(info => AccountFeePaymentsUtils.getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, info))
-        // for <1.4 fork all reward goes to forger, mc part is not calculated
-        .getOrElse((AccountPayment(feePayment.identifier.address, feePayment.value), None))
+        // for blocks <1.4 fork all reward goes to forger
+        .getOrElse {
+          val totalMcReward = mcForgerPoolRewards.getOrElse(feePayment.identifier, BigInteger.ZERO)
+          val totalFeeReward = feePayment.value.subtract(totalMcReward)
+          val forgerPayment = AccountPayment(feePayment.identifier.address, feePayment.value, Some(totalMcReward), Some(totalFeeReward))
+          (forgerPayment, None)
+        }
     }
     // this is to collapse delegator payments into a flat list
     (allPayments.map(_._1), allPayments.flatMap(_._2))
