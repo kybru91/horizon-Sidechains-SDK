@@ -64,6 +64,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         # transfer a small fund from MC to SC2 at a new evm address, do not mine mc block
         # this is for enabling SC 2 gas fee payment when sending txes
         evm_address_sc_node_2 = sc_node_2.wallet_createPrivateKeySecp256k1()["result"]["proposition"]["address"]
+        evm_address_sc_node_3 = sc_node_2.wallet_createPrivateKeySecp256k1()["result"]["proposition"]["address"]
 
         ft_amount_in_zen_2 = Decimal('500.0')
 
@@ -281,6 +282,19 @@ class SCEvmNativeForgerV2(AccountChainSetup):
             print("Expected exception thrown: {}".format(err))
             assert_true("Forger stake V2 has not been activated yet" in str(err))
 
+        # Check that stakeStart cannot be called before activate
+        method = 'stakeStart(bytes32,bytes32,bytes1,address)'
+        forger_1_vrf_pub_key_to_bytes = hex_str_to_bytes(vrf_pub_key_1)
+
+        try:
+            contract_function_static_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                                          evm_address_sc_node_1, method, forger_1_sign_key_to_bytes,
+                                          forger_1_vrf_pub_key_to_bytes[0:32], forger_1_vrf_pub_key_to_bytes[32:],
+                                          "0x" + evm_address_sc_node_1)
+            fail("stakeStart call should fail")
+        except RuntimeError as err:
+            logging.info("Expected exception thrown: {}".format(err))
+            assert_true("Forger stake V2 has not been activated yet" in str(err))
 
         # Check that after fork 1.4 but before activate, it is still possible to call makeForgerStake and
         # spendForgingStake
@@ -594,6 +608,36 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         except RuntimeError as err:
             logging.info("Expected exception thrown: {}".format(err))
             assert_true("Forger doesn't exist" in str(err))
+
+        # Check stakeStart
+        method_stake_start = "stakeStart(bytes32,bytes32,bytes1,address)"
+        data_input = forger_v2_native_contract.raw_encode_call(method_stake_start,
+                                                               forger_1_sign_key_to_bytes,
+                                                               forger_1_vrf_pub_key_to_bytes[0:32],
+                                                               forger_1_vrf_pub_key_to_bytes[32:],
+                                                               "0x" + evm_address_sc_node_1)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, "latest"
+        )
+        assert_equal(decode(['int32'], hex_str_to_bytes(result['result'][2:]))[0], VERSION_1_4_FORK_EPOCH)
+        # Check stakeStart value for address that did not delegated anything - should return -1
+        data_input = forger_v2_native_contract.raw_encode_call(method_stake_start,
+                                                               forger_1_sign_key_to_bytes,
+                                                               forger_1_vrf_pub_key_to_bytes[0:32],
+                                                               forger_1_vrf_pub_key_to_bytes[32:],
+                                                               "0x" + evm_address_sc_node_3)
+        result = sc_node_1.rpc_eth_call(
+            {
+                "to": "0x" + FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
+                "from": add_0x_prefix(evm_address_sc_node_1),
+                "input": data_input
+            }, "latest"
+        )
+        assert_equal(decode(['int32'], hex_str_to_bytes(result['result'][2:]))[0], -1)
 
         ################################
         # Withdrawal

@@ -2108,6 +2108,56 @@ class ForgerStakeV2MsgProcessorTest
     assertEquals("Wrong amount in data", expectedEvent.value.getValue, listOfDecodedData.get(1).getValue)
   }
 
+  @Test
+  def getStakeStartTest() = {
+    val blockSignerProposition = new PublicKey25519Proposition(BytesUtils.fromHexString("1122334455667788112233445566778811223344556677881122334455667788")) // 32 bytes
+    val vrfPublicKey = new VrfPublicKey(BytesUtils.fromHexString("d6b775fd4cefc7446236683fdde9d0464bba43cc565fa066b0b3ed1b888b9d1180")) // 33 bytes
+    val address1: Address = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8)).publicImage().address()
+
+    usingView(forgerStakeV2MessageProcessor) { view =>
+      forgerStakeV2MessageProcessor.init(view, view.getConsensusEpochNumberAsInt)
+      // Setup
+      val initialAmount = BigInteger.valueOf(100).multiply(validWeiAmount)
+      createSenderAccount(view, initialAmount)
+      val txHash1 = Keccak256.hash("first tx")
+      view.setupTxContext(txHash1, 10)
+
+      // assert invocation fails until stake v2 is active
+      val msg1 = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeStartCmd) ++ Array.emptyByteArray, randomNonce)
+      val gas1 = new GasPool(1000000000)
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg1, view, blockContextForkV1_4_plus10, gas1))
+      StakeStorage.setActive(view)
+
+      // assert default value -1 is returned if delegation does not exist
+      var stakeStartCmdInput = StakeStartCmdInput(ForgerPublicKeys(blockSignerProposition, vrfPublicKey), address1)
+      var data: Array[Byte] = stakeStartCmdInput.encode()
+      var msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeStartCmd) ++ data, randomNonce)
+      var returnData = assertGas(4200, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      var stakeStartResponse = StakeStartCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        -1,
+        stakeStartResponse.epoch
+      )
+
+      val stakeStartEpoch = V1_4_MOCK_FORK_POINT + 3
+      StakeStorage.addForger(view, blockSignerProposition, vrfPublicKey, 100, Address.ZERO, stakeStartEpoch, address1, BigInteger.TEN)
+      StakeStorage.addStake(view, blockSignerProposition, vrfPublicKey, stakeStartEpoch + 5, address1, BigInteger.TEN)
+
+      // get valid stateStart
+      stakeStartCmdInput = StakeStartCmdInput(ForgerPublicKeys(blockSignerProposition, vrfPublicKey), address1)
+      data = stakeStartCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeStartCmd) ++ data, randomNonce)
+      returnData = assertGas(6300, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      assertNotNull(returnData)
+      stakeStartResponse = StakeStartCmdOutputDecoder.decode(returnData)
+      assertEquals(
+        stakeStartEpoch,
+        stakeStartResponse.epoch
+      )
+    }
+  }
+
   private def addStakesV2(view: AccountStateView,
                         blockSignerProposition: PublicKey25519Proposition,
                         vrfPublicKey: VrfPublicKey,

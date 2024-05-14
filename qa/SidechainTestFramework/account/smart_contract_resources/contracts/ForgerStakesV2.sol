@@ -98,6 +98,13 @@ interface ForgerStakesV2 {
     function rewardsReceived(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 consensusEpochStart, uint32 maxNumOfEpoch) external view returns (uint256[] memory listOfRewards);
 
     /*
+       Returns the  first consensus epoch when a stake is present for a specific delegator.
+       signPubKey, vrf1, vrf2 and delegator parameters are mandatory.
+       If no stake has been found (the delegator never staked anything to this forger) the method returns -1
+    */
+    function stakeStart(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, address delegator) external view returns (int32 consensusEpochStart);
+
+    /*
       Returns the info of a specific registered forger.
     */
     function getForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2) external view returns (ForgerInfo memory forgerInfo);
