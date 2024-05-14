@@ -1,7 +1,6 @@
 package io.horizen.account.storage
 
 import com.google.common.primitives.{Bytes, Ints}
-import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.receipt.{EthereumReceipt, EthereumReceiptSerializer}
 import io.horizen.account.state.{ForgerBlockCountersSerializer, ForgerPublicKeys, McForgerPoolRewardsSerializer}
 import io.horizen.account.storage.AccountStateMetadataStorageView.DEFAULT_ACCOUNT_STATE_ROOT

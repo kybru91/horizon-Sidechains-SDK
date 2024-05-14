@@ -7,7 +7,7 @@ import io.horizen.account.state.events.ProxyInvocation
 import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.WellKnownAddresses.PROXY_SMART_CONTRACT_ADDRESS
 import io.horizen.evm.Address
-import io.horizen.params.{MainNetParams, NetworkParams, RegTestParams}
+import io.horizen.params.{NetworkParams, RegTestParams}
 import io.horizen.utils.BytesUtils
 import org.web3j.utils.Numeric
 import sparkz.crypto.hash.Keccak256

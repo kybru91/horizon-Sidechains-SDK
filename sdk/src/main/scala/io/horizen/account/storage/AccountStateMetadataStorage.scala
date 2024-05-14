@@ -1,6 +1,5 @@
 package io.horizen.account.storage
 
-import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.account.state.receipt.EthereumReceipt
 import io.horizen.account.utils.{AccountBlockFeeInfo, ForgerIdentifier}

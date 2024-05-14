@@ -51,7 +51,10 @@ case class RewardsReceivedCmdInput(
     new StaticStruct(listOfParams)
   }
 
-  override def toString: String =
-    "%s(forgerPubKeys: %s)"
-      .format(this.getClass.toString, forgerPublicKeys)
+  override def toString: String = {
+    s"RewardsReceivedCmdInput(" +
+      s"forgerPublicKeys: $forgerPublicKeys, " +
+      s"consensusEpochStart: $consensusEpochStart, " +
+      s"maxNumOfEpoch: $maxNumOfEpoch)"
+  }
 }
