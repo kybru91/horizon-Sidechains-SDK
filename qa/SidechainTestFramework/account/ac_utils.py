@@ -283,8 +283,8 @@ def ac_makeForgerStake(sc_node, owner_address, blockSignPubKey, vrf_public_key, 
 
     return sc_node.transaction_makeForgerStake(json.dumps(forgerStakes))
 
-
-def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount, reward_share=0, reward_address=None, nonce=None):
+def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount, reward_address=None, reward_share=0,
+                      nonce=None):
     parameters = {
         "blockSignPubKey": block_sign_pub_key,
         "vrfPubKey": vrf_public_key,
@@ -293,8 +293,17 @@ def ac_registerForger(sc_node, block_sign_pub_key, vrf_public_key, staked_amount
         "rewardAddress": reward_address,
         "nonce": nonce
     }
-
     return sc_node.transaction_registerForger(json.dumps(parameters))
+
+def ac_updateForger(sc_node, block_sign_pub_key, vrf_public_key,  reward_address, reward_share, nonce=None):
+    parameters = {
+        "blockSignPubKey": block_sign_pub_key,
+        "vrfPubKey": vrf_public_key,
+        "rewardShare": reward_share,
+        "rewardAddress": reward_address,
+        "nonce": nonce
+    }
+    return sc_node.transaction_updateForger(json.dumps(parameters))
 
 def ac_pagedForgersStakesByForger(sc_node, block_sign_pub_key, vrf_public_key, start_pos=0, size=10):
     parameters = {

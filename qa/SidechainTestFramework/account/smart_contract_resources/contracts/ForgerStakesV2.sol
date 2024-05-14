@@ -54,13 +54,14 @@ interface ForgerStakesV2 {
         address rewardAddress, bytes32 sign1_1, bytes32 sign1_2,
         bytes32 sign2_1, bytes32 sign2_2, bytes32 sign2_3, bytes1 sign2_4) external payable;
 
-
      /*
       Updates an existing forger.
       A forger can be updated just once and only if rewardAddress == 0x000..00 and rewardShare == 0.
-      Vrf key is split in two separate parameters, being longer than 32 bytes.
+      See above the registerForger command for the parameters meaning.
     */
-    function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare, address rewardAddress, bytes32 signature1, bytes32 signature2) external;
+    function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare,
+        address rewardAddress, bytes32 sign1_1, bytes32 sign1_2,
+        bytes32 sign2_1, bytes32 sign2_2, bytes32 sign2_3, bytes1 sign2_4) external;
 
     /*
       Delegate a stake to a previously registered forger.
@@ -95,6 +96,13 @@ interface ForgerStakesV2 {
        registered after consensusEpochStart.
     */
     function rewardsReceived(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 consensusEpochStart, uint32 maxNumOfEpoch) external view returns (uint256[] memory listOfRewards);
+
+    /*
+       Returns the  first consensus epoch when a stake is present for a specific delegator.
+       signPubKey, vrf1, vrf2 and delegator parameters are mandatory.
+       If no stake has been found (the delegator never staked anything to this forger) the method returns -1
+    */
+    function stakeStart(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, address delegator) external view returns (int32 consensusEpochStart);
 
     /*
       Returns the info of a specific registered forger.

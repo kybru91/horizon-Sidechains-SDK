@@ -64,7 +64,7 @@ object StakeStorage {
 
   }
 
-  def updateForger(view: AccountStateView, blockSignProposition: PublicKey25519Proposition, vrfPublicKey: VrfPublicKey, rewardShare: Int, rewardAddress: Address): Unit = {
+  def updateForger(view: BaseAccountStateView, blockSignProposition: PublicKey25519Proposition, vrfPublicKey: VrfPublicKey, rewardShare: Int, rewardAddress: Address): Unit = {
     val forgerKey = ForgerKey(blockSignProposition, vrfPublicKey)
     val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
     if ((forger.rewardShare > 0) || (forger.rewardAddress.address() != Address.ZERO))
@@ -167,6 +167,16 @@ object StakeStorage {
       }
       listOfStakes
     }
+  }
+
+  def getStakeStart(view: BaseAccountStateView, forgerKeys: ForgerPublicKeys, delegator: Address): StakeStartCmdOutput = {
+    val forgerKey = ForgerKey(forgerKeys.blockSignPublicKey, forgerKeys.vrfPublicKey)
+    val delegatorKey = DelegatorKey(delegator)
+    val stakeHistory = StakeHistory(forgerKey, delegatorKey)
+    if (stakeHistory.getSize(view) == 0)
+      StakeStartCmdOutput(-1)
+    else
+      StakeStartCmdOutput(stakeHistory.getCheckpoint(view, 0).fromEpochNumber)
   }
 
   def getStakeTotal(view: BaseAccountStateView,

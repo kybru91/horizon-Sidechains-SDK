@@ -1279,6 +1279,24 @@ class StakeStorageTest
     }
   }
 
+  @Test
+  def getStakeStartTest() = {
+    usingView { view =>
+      createSenderAccount(view, BigInteger.TEN, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS)
+      val rewardAddress = new Address(s"0xaaa0000123000000000011112222aaaa22222111")
+      val stakeAmount1 = BigInteger.valueOf(10000000000L)
+      // should return -1 if delegation does not exist
+      val doesNotExistsResponse = StakeStorage.getStakeStart(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), delegator1)
+      assertEquals(-1, doesNotExistsResponse.epoch)
+
+      StakeStorage.addForger(view, blockSignerProposition1, vrfPublicKey1, 1, rewardAddress, 5, delegator1, stakeAmount1)
+      StakeStorage.addStake(view, blockSignerProposition1, vrfPublicKey1, 15, delegator1, stakeAmount1)
+      StakeStorage.addStake(view, blockSignerProposition1, vrfPublicKey1, 25, delegator1, stakeAmount1)
+      val stakeStart = StakeStorage.getStakeStart(view, ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1), delegator1)
+      assertEquals(5, stakeStart.epoch)
+    }
+  }
+
   def checkStakeHistory(view: BaseAccountStateView, history: BaseStakeHistory, expectedCheckpoints: Seq[StakeCheckpoint]): Unit = {
     assertEquals(expectedCheckpoints.size, history.getSize(view))
     expectedCheckpoints.indices.foreach { idx =>
