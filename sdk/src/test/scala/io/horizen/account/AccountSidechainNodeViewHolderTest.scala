@@ -77,8 +77,8 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     baseStateReaderProvider = mock[BaseStateReaderProvider]
     mempool = AccountMemoryPool.createEmptyMempool(accountStateReaderProvider, baseStateReaderProvider,
       AccountMempoolSettings(), () => mock[AccountEventNotifier])
-    mockedNodeViewHolderRef = getMockedAccountSidechainNodeViewHolderRef(history, state, wallet, mempool)
     MetricsManager.init(mock[NetworkTimeProvider])
+    mockedNodeViewHolderRef = getMockedAccountSidechainNodeViewHolderRef(history, state, wallet, mempool)
   }
 
   @Test
