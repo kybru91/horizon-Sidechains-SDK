@@ -1403,7 +1403,7 @@ paths:
             schema:
               type: object
               required:
-                - blockSignPubKey, vrfPubKey ,rewardShare, rewarAddress, stakedAmount
+                - blockSignPubKey, vrfPubKey, rewardShare, rewardAddress, stakedAmount
               properties:
                 blockSignPubKey:
                   type: string
@@ -1414,7 +1414,7 @@ paths:
                 rewardShare:
                   type: integer
                   description: Reward to be redirected to a separate reward address (integer, range from 0 to 1000 - where 1000 represents 100%)
-                rewarAddress:
+                rewardAddress:
                   type: string
                   description: External reward address (may be a single EOA or (more likely) a smart contract handling rewards distribution to delegators) |
                 stakedAmount:
@@ -1457,7 +1457,7 @@ paths:
             schema:
               type: object
               required:
-                - blockSignPubKey, vrfPubKey ,rewardShare, rewarAddress
+                - blockSignPubKey, vrfPubKey, rewardShare, rewardAddress
               properties:
                 blockSignPubKey:
                   type: string
@@ -1467,8 +1467,8 @@ paths:
                   description: Vrfkey of this forger(private key must be in the local wallet)
                 rewardShare:
                   type: integer
-                  description: Reward to be redirected to a separate reward address (integer, range from 0 to 1000 - where 1000 represents 100%)
-                rewarAddress:
+                  description: Reward share to be redirected to the specified reward address (integer, range from 0 to 1000 - where 1000 represents 100%)
+                rewardAddress:
                   type: string
                   description: External reward address (may be a single EOA or (more likely) a smart contract handling rewards distribution to delegators) |
                 gasInfo:
@@ -1508,7 +1508,7 @@ paths:
             schema:
               type: object
               required:
-                - blockSignPubKey, vrfPubKey ,rewardShare, rewarAddress
+                - blockSignPubKey, vrfPubKey, rewardShare, rewardAddress
               properties:
                 startPos:
                   type: integer
@@ -1522,7 +1522,7 @@ paths:
                   $ref: '#/components/schemas/EIP1559GasInfo'
       responses:
         '200':
-          description: successful operation
+          description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
           content:
             application/json:
               schema:
@@ -1603,7 +1603,7 @@ paths:
                   $ref: '#/components/schemas/EIP1559GasInfo'
       responses:
         '200':
-          description: successful operation
+          description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
           content:
             application/json:
               schema:
@@ -1674,7 +1674,7 @@ paths:
                   $ref: '#/components/schemas/EIP1559GasInfo'
       responses:
         '200':
-          description: successful operation
+          description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
           content:
             application/json:
               schema:

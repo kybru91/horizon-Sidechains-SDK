@@ -1,7 +1,7 @@
 **0.12.0**
 1. Sparkz dependency updated to 2.4.0
     * Updates in EON forger nodes connection policy (see release notes for further info) 
-2. New stake managemet support (see release notes for further info)
+2. New stake management support (see release notes for further info)
 3. Reward from mainchain - new rules (see release notes for further info)
 4. Added metrics endpoint
 5. Minor fixes:
