@@ -89,6 +89,9 @@ abstract class AbstractForgeMessageBuilder[
       nextConsensusEpochNumber, nodeView.vault, nodeView.history, nodeView.state, branchPointInfo, nextBlockTimestamp)
       .sortWith(_.forgingStakeInfo.stakeAmount > _.forgingStakeInfo.stakeAmount)
 
+    // TODO uncomment here and line 113 for tracing intermediate lottery time
+    //val merklePathTime = metricsManager.currentMillis() - lotteryStart
+
     if (forgingStakeMerklePathInfoSeq.isEmpty) {
       NoOwnedForgingStake
     } else {
@@ -105,7 +108,10 @@ abstract class AbstractForgeMessageBuilder[
 
       val eligibleForgerOpt = eligibleForgingDataView.headOption //force all forging related calculations
 
-      metricsManager.lotteryDone(metricsManager.currentMillis() - lotteryStart)
+      val lotteryTime = metricsManager.currentMillis() - lotteryStart
+      metricsManager.lotteryDone(lotteryTime)
+  //    log.debug(s"Lottery times - Epoch, Merkle path and total lottery time: $nextConsensusEpochNumber, $merklePathTime, $lotteryTime")
+      log.debug(s"Lottery times - Epoch and total lottery time: $nextConsensusEpochNumber, $lotteryTime")
 
       val forgingResult = eligibleForgerOpt
         .map { case (forgingStakeMerklePathInfo, privateKey25519, vrfProof, vrfOutput) =>
