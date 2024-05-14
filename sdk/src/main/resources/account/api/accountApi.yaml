@@ -646,7 +646,7 @@ paths:
       tags:
         - transaction
       summary: creates transaction with forger stake
-      description: Creates transaction with forger stake.
+      description: Creates transaction with forger stake. It will be disabled after Forger Stake V2 will be activated.
       operationId: makeForgerStake
       security:
         - basicAuth: []
@@ -707,7 +707,7 @@ paths:
       tags:
         - transaction
       summary: creates and signs sidechain transaction for spending forging stake
-      description: Creates and signs sidechain transaction for spending forging stake.
+      description: Creates and signs sidechain transaction for spending forging stake. It will be disabled after Forger Stake V2 will be activated.
       operationId: spendForgingStake
       security:
         - basicAuth: []
@@ -1383,6 +1383,296 @@ paths:
                               format: int32
                   error:
                     $ref: '#/components/schemas/SidechainApiErrorResponse'
+        default:
+          description: any kind of http error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidechainApiError'
+                
+  /transaction/registerForger:
+    post:
+      tags:
+        - transaction
+      summary: Register a new forger
+      description: Register a new forger.
+      operationId: registerForger
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - blockSignPubKey, vrfPubKey, rewardShare, rewardAddress, stakedAmount
+              properties:
+                blockSignPubKey:
+                  type: string
+                  description: Key of this forger (private key must be in the local wallet)
+                vrfPubKey:
+                  type: string
+                  description: Vrfkey of this forger(private key must be in the local wallet)
+                rewardShare:
+                  type: integer
+                  description: Reward to be redirected to a separate reward address (integer, range from 0 to 1000 - where 1000 represents 100%)
+                rewardAddress:
+                  type: string
+                  description: External reward address (may be a single EOA or (more likely) a smart contract handling rewards distribution to delegators) |
+                stakedAmount:
+                  type: integer
+                  description: Amount to be assigned as first stake to this forger. Specified in zennies, and must be >= 10 ZEN
+                gasInfo:
+                  $ref: '#/components/schemas/EIP1559GasInfo'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      transactionId:
+                        type: string
+                  error:
+                    $ref: '#/components/schemas/SidechainApiErrorResponse'
+        default:
+          description: any kind of http error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidechainApiError'
+                
+  /transaction/updateForger:
+    post:
+      tags:
+        - transaction
+      summary: Update an existing forger
+      description: Update an existing forger. This action can be performed only for forgers with rewardShare = 0 and rewardAddress not set, and only to assign them a value.
+      operationId: updateForger
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - blockSignPubKey, vrfPubKey, rewardShare, rewardAddress
+              properties:
+                blockSignPubKey:
+                  type: string
+                  description: Key of this forger (private key must be in the local wallet)
+                vrfPubKey:
+                  type: string
+                  description: Vrfkey of this forger(private key must be in the local wallet)
+                rewardShare:
+                  type: integer
+                  description: Reward share to be redirected to the specified reward address (integer, range from 0 to 1000 - where 1000 represents 100%)
+                rewardAddress:
+                  type: string
+                  description: External reward address (may be a single EOA or (more likely) a smart contract handling rewards distribution to delegators) |
+                gasInfo:
+                  $ref: '#/components/schemas/EIP1559GasInfo'
+      responses:
+        '200':
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      transactionId:
+                        type: string
+                  error:
+                    $ref: '#/components/schemas/SidechainApiErrorResponse'
+        default:
+          description: any kind of http error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidechainApiError'
+                
+  /transaction/pagedForgingStakes:
+    post:
+      tags:
+        - transaction
+      summary:  Returns the paginated list of forging stakes.
+      description: Returns the paginated list of forging stakes.
+      operationId: pagedForgingStakes
+      responses:
+        '200':
+          description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      nextPos:
+                        type: integer
+                      stakes:
+                        type: array       
+                        items:
+                          type: object
+                          properties:
+                            forgerStakeData:
+                              type: object
+                              properties:
+                                forgerPublicKeys:
+                                  type: object
+                                  properties:
+                                    blockSignPublicKey:
+                                      type: object
+                                      properties:
+                                        publicKey:
+                                          type: string
+                                    vrfPublicKey:
+                                      type: object
+                                      properties:
+                                        publicKey:
+                                          type: string      
+                                ownerPublicKey:
+                                  type: object
+                                  properties:
+                                    address:
+                                      type: string
+                                stakedAmount:
+                                  type: integer
+
+        default:
+          description: any kind of http error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidechainApiError'
+                
+  /transaction/pagedForgerStakesByDelegator:
+    post:
+      tags:
+        - transaction
+      summary: Returns the paginated list of forging stakes, filtered by a specific delegator.
+      description: Returns the paginated list of forging stakes, filtered by a specific delegator.
+      operationId: pagedForgerStakesByDelegator
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - delegatorAddress
+              properties:
+                delegatorAddress:
+                  type: string
+                  description: Delegator address
+                startPos:
+                  type: integer
+                  description: Start position in the paginated list
+                  default: 0
+                size:
+                  type: integer
+                  description: Number of records to return
+                  default: 10
+
+      responses:
+        '200':
+          description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      nextPos:
+                        type: integer
+                      stakes:
+                        type: array       
+                        items:
+                          type: object
+                          properties:
+                              forgerPublicKeys:
+                                type: object
+                                properties:
+                                  blockSignPublicKey:
+                                    type: object
+                                    properties:
+                                      publicKey:
+                                        type: string
+                                  vrfPublicKey:
+                                    type: object
+                                    properties:
+                                      publicKey:
+                                        type: string      
+                              stakedAmount:
+                                type: integer
+        default:
+          description: any kind of http error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SidechainApiError'
+                
+  /transaction/pagedForgerStakesByForger:
+    post:
+      tags:
+        - transaction
+      summary: Returns the paginated list of forging stakes, filtered by a specific forger.
+      description: Returns the paginated list of forging stakes, filtered by a specific forger.
+      operationId: pagedForgerStakesByForger
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - blockSignPubKey, vrfPubKey 
+              properties:
+                blockSignPubKey:
+                  type: string
+                  description: blockSignPubKey identifying the forger
+                vrfPubKey:
+                  type: string
+                  description: vrfPubKey identifying the forger
+                startPos:
+                  type: integer
+                  description: Start position in the paginated list
+                  default: 0
+                size:
+                  type: integer
+                  description: Number of records to return
+                  default: 10
+
+      responses:
+        '200':
+          description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  result:
+                    type: object
+                    properties:
+                      nextPos:
+                        type: integer
+                      stakes:
+                        type: array       
+                        items:
+                          type: object
+                          properties:
+                              delegator:
+                                type: object
+                                properties:
+                                  address:
+                                    type: string
+                              stakedAmount:
+                                type: integer
         default:
           description: any kind of http error
           content:
@@ -3618,6 +3908,7 @@ components:
         stakeId:
           type: string
           format: byte
+          nullable: true
         forgerStakeData:
           type: object
           properties:
