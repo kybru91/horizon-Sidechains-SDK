@@ -920,7 +920,9 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         assert_equal(0, forger_pool_balance)
 
         payments = http_block_getFeePayments(sc_node_1, sc_last_we_block_id)['feePayments']
-        print(payments)
+        assert_equal(forger_stake_list[0]['forgerStakeData']['ownerPublicKey']['address'], payments[0]['address']['address'])
+        assert_equal(ft_pool_amount_wei, payments[0]['valueFromMainchain'])
+        assert_equal(payments[0]['value'], payments[0]['valueFromMainchain'] + payments[0]['valueFromFees'])
 
 
 def decode_paged_list_of_forgers(result):

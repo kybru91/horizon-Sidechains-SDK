@@ -3,5 +3,6 @@ import java.math.BigInteger
 
 case class ForgerPayment(
   identifier: ForgerIdentifier,
-  value: BigInteger
+  value: BigInteger,
+  valueFromMainchain: BigInteger
 )

@@ -226,17 +226,10 @@ class AccountFeePaymentsUtilsTest extends JUnitSuite with SidechainRelatedMainch
     val forgerPublicKeys = ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
     val rewardAddress: AddressProposition = PrivateKeySecp256k1Creator.getInstance().generateSecret("nativemsgprocessortest1".getBytes(StandardCharsets.UTF_8)).publicImage()
 
-    val mcForgerPoolRewards = Map(
-      ForgerIdentifier(forgerAddr_a) -> BigInteger.valueOf(10),
-      ForgerIdentifier(forgerAddr_b) -> BigInteger.valueOf(10),
-      ForgerIdentifier(forgerAddr_c) -> BigInteger.valueOf(10),
-      ForgerIdentifier(forgerAddr_d) -> BigInteger.valueOf(10),
-    )
-
-    val feePayment = ForgerPayment(ForgerIdentifier(forgerAddr_a), BigInteger.valueOf(100))
+    val feePayment = ForgerPayment(ForgerIdentifier(forgerAddr_a), BigInteger.valueOf(100), BigInteger.valueOf(10))
     val forgerInfo = ForgerInfo(forgerPublicKeys, 100, rewardAddress)
 
-    val (forgerPayment, Some(delegatorPayment)) = getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, forgerInfo)
+    val (forgerPayment, Some(delegatorPayment)) = getForgerAndDelegatorShares(feePayment, forgerInfo)
 
     assertEquals(forgerPayment.address, forgerAddr_a)
     assertEquals(forgerPayment.value, BigInteger.valueOf(90))

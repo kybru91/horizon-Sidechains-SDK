@@ -1,7 +1,6 @@
 package io.horizen.account.state
 
 import io.horizen.account.state.receipt.EthereumConsensusDataLog
-import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.evm.Address
 
 import java.math.BigInteger

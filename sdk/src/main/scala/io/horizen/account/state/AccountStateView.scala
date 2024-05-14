@@ -98,14 +98,11 @@ class AccountStateView(
     val poolBalanceDistributed = mcForgerPoolRewards.values.foldLeft(BigInteger.ZERO)((a, b) => a.add(b))
     metadataStorageView.updateMcForgerPoolRewards(mcForgerPoolRewards)
     if (Version1_4_0Fork.get(consensusEpochNumber).active) {
-      val (feePayments, delegatorPayments) =
-        getForgersAndDelegatorsShares(
-          AccountFeePaymentsUtils.getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards),
-          mcForgerPoolRewards,
-        )
+      val forgerRewards = AccountFeePaymentsUtils.getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards)
+      val (forgerPayments, delegatorPayments) = getForgersAndDelegatorsShares(forgerRewards)
       metadataStorageView.updateForgerDelegatorPayments(delegatorPayments, consensusEpochNumber)
 
-      val allPayments = AccountFeePaymentsUtils.groupAllPaymentsByAddress(feePayments, delegatorPayments)
+      val allPayments = AccountFeePaymentsUtils.groupAllPaymentsByAddress(forgerPayments, delegatorPayments)
 
       (allPayments, poolBalanceDistributed)
     } else {
@@ -115,10 +112,7 @@ class AccountStateView(
     }
   }
 
-  private[horizen] def getForgersAndDelegatorsShares(
-    feePayments: Seq[ForgerPayment],
-    mcForgerPoolRewards: Map[ForgerIdentifier, BigInteger],
-  ): (Seq[AccountPayment], Seq[DelegatorFeePayment]) = {
+  private[horizen] def getForgersAndDelegatorsShares(feePayments: Seq[ForgerPayment]): (Seq[AccountPayment], Seq[DelegatorFeePayment]) = {
     val allPayments = feePayments.map { feePayment =>
       Some(feePayment)
         // after fork 1.4 blockSignPublicKey and vrfPublicKey are mandatory
@@ -126,12 +120,11 @@ class AccountStateView(
         // try get ForgerInfo from StakeStorageV2
         .flatMap(fp => getForgerInfo(ForgerPublicKeys(fp.identifier.blockSignPublicKey.get, fp.identifier.vrfPublicKey.get)))
         // split reward into forger and delegator shares
-        .map(info => AccountFeePaymentsUtils.getForgerAndDelegatorShares(mcForgerPoolRewards, feePayment, info))
+        .map(info => AccountFeePaymentsUtils.getForgerAndDelegatorShares(feePayment, info))
         // for blocks <1.4 fork all reward goes to forger
         .getOrElse {
-          val totalMcReward = mcForgerPoolRewards.getOrElse(feePayment.identifier, BigInteger.ZERO)
-          val totalFeeReward = feePayment.value.subtract(totalMcReward)
-          val forgerPayment = AccountPayment(feePayment.identifier.address, feePayment.value, Some(totalMcReward), Some(totalFeeReward))
+          val totalFeeReward = feePayment.value.subtract(feePayment.valueFromMainchain)
+          val forgerPayment = AccountPayment(feePayment.identifier.address, feePayment.value, Some(feePayment.valueFromMainchain), Some(totalFeeReward))
           (forgerPayment, None)
         }
     }

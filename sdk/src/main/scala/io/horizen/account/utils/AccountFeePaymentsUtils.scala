@@ -27,13 +27,13 @@ object AccountFeePaymentsUtils {
     mcForgerPoolRewards: Map[ForgerIdentifier, BigInteger] = Map.empty,
   ): Seq[ForgerPayment] = {
     if (blockFeeInfoSeq.isEmpty)
-      return mcForgerPoolRewards.map(reward => ForgerPayment(reward._1, reward._2)).toSeq
+      return mcForgerPoolRewards.map(reward => ForgerPayment(reward._1, reward._2, reward._2)).toSeq
 
     var poolFee: BigInteger = BigInteger.ZERO
     val forgersBlockRewards: Seq[ForgerPayment] = blockFeeInfoSeq.map(feeInfo => {
       poolFee = poolFee.add(feeInfo.baseFee)
       val forgerIdentifier = ForgerIdentifier(feeInfo.forgerAddress, feeInfo.blockSignPublicKey, feeInfo.vrfPublicKey)
-      ForgerPayment(forgerIdentifier, feeInfo.forgerTips)
+      ForgerPayment(forgerIdentifier, feeInfo.forgerTips, BigInteger.ZERO)
     })
 
     // Split poolFee in equal parts to be paid to forgers.
@@ -47,7 +47,7 @@ object AccountFeePaymentsUtils {
       case (forgerBlockReward: ForgerPayment, index: Int) =>
         val finalForgerFee =
           forgerBlockReward.value.add(forgerPoolFee).add(if (index < rest) BigInteger.ONE else BigInteger.ZERO)
-        ForgerPayment(forgerBlockReward.identifier, finalForgerFee)
+        ForgerPayment(forgerBlockReward.identifier, finalForgerFee, BigInteger.ZERO)
     }
 
     // Get all unique forger addresses
@@ -61,23 +61,23 @@ object AccountFeePaymentsUtils {
       // add mcForgerPoolReward if exists
       val mcForgerPoolReward = mcForgerPoolRewards.getOrElse(forgerKey, BigInteger.ZERO)
       // return the resulting entry
-      ForgerPayment(forgerKey, forgerTotalFee.add(mcForgerPoolReward))
+      ForgerPayment(forgerKey, forgerTotalFee.add(mcForgerPoolReward), mcForgerPoolReward)
     }
   }
 
   def getForgerAndDelegatorShares(
-    mcForgerPoolRewards: Map[ForgerIdentifier, BigInteger],
     feePayment: ForgerPayment,
     forgerInfo: ForgerInfo,
   ): (AccountPayment, Option[DelegatorFeePayment]) = {
-    val rewardAddress = feePayment.identifier.address
+    val forgerRewardAddress = feePayment.identifier.address
     val delegatorShare = BigInteger.valueOf(forgerInfo.rewardShare)
-    val totalMcReward = mcForgerPoolRewards.getOrElse(feePayment.identifier, BigInteger.ZERO)
+    val totalMcReward = feePayment.valueFromMainchain
 
     if (delegatorShare.compareTo(BigInteger.ZERO) == 0) {
       // No delegator share, all reward goes to the forger
       val totalFeeReward = feePayment.value.subtract(totalMcReward)
-      val forgerPayment = AccountPayment(rewardAddress, feePayment.value, Some(totalMcReward), Some(totalFeeReward))
+      val forgerPayment =
+        AccountPayment(forgerRewardAddress, feePayment.value, Some(totalMcReward), Some(totalFeeReward))
       return (forgerPayment, None)
     }
 
@@ -89,7 +89,7 @@ object AccountFeePaymentsUtils {
     val forgerMcReward = totalMcReward.subtract(delegatorMcReward)
     val forgerFeeReward = forgerReward.subtract(forgerMcReward)
 
-    val forgerPayment = AccountPayment(rewardAddress, forgerReward, Some(forgerMcReward), Some(forgerFeeReward))
+    val forgerPayment = AccountPayment(forgerRewardAddress, forgerReward, Some(forgerMcReward), Some(forgerFeeReward))
     val delegatorPayment = DelegatorFeePayment(
       AccountPayment(forgerInfo.rewardAddress, delegatorReward, Some(delegatorMcReward), Some(delegatorFeeReward)),
       forgerInfo.forgerPublicKeys,

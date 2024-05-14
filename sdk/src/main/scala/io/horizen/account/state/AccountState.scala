@@ -424,13 +424,8 @@ class AccountState(
     val mcForgerPoolRewards = stateMetadataStorage.getMcForgerPoolRewards
     val poolBalanceDistributed = mcForgerPoolRewards.values.foldLeft(BigInteger.ZERO)((a, b) => a.add(b))
     if (Version1_4_0Fork.get(consensusEpochNumber).active) {
-      val (feePayments, delegatorPayments) =
-        using(getView)(
-          _.getForgersAndDelegatorsShares(
-            AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards),
-            mcForgerPoolRewards
-          )
-        )
+      val forgerRewards = AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards)
+      val (feePayments, delegatorPayments) = using(getView)(_.getForgersAndDelegatorsShares(forgerRewards))
       val allPayments = AccountFeePaymentsUtils.groupAllPaymentsByAddress(feePayments, delegatorPayments)
 
       (allPayments, poolBalanceDistributed)

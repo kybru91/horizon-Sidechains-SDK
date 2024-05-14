@@ -411,13 +411,6 @@ class ScEvmForgingFeePayments(AccountChainSetup):
         assert_equal(node_1_fees, [f for f in fee_payments_api_response if f['address']['address'] != self.FORGER_REWARD_ADDRESS][0]['value'])
         assert_equal(node_2_fees, [f for f in fee_payments_api_response if f['address']['address'] == self.FORGER_REWARD_ADDRESS][0]['value'])
 
-        # reach the VERSION_1_3_FORK_EPOCH fork and upgrade the forger stakes to the new format
-        current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
-
-        for i in range(0, VERSION_1_3_FORK_EPOCH - current_best_epoch):
-            generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
-            self.sc_sync_all()
-
         '''
         #####################################################################################
         '''
