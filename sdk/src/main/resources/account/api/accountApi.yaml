@@ -1502,24 +1502,6 @@ paths:
       summary:  Returns the paginated list of forging stakes.
       description: Returns the paginated list of forging stakes.
       operationId: pagedForgingStakes
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - blockSignPubKey, vrfPubKey, rewardShare, rewardAddress
-              properties:
-                startPos:
-                  type: integer
-                  description: Start position in the paginated list
-                  default: 0
-                size:
-                  type: integer
-                  description: Number of records to return
-                  default: 10
-                gasInfo:
-                  $ref: '#/components/schemas/EIP1559GasInfo'
       responses:
         '200':
           description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
@@ -1561,10 +1543,6 @@ paths:
                                       type: string
                                 stakedAmount:
                                   type: integer
-           
-                              
-                            
-                        
 
         default:
           description: any kind of http error
@@ -1599,8 +1577,7 @@ paths:
                   type: integer
                   description: Number of records to return
                   default: 10
-                gasInfo:
-                  $ref: '#/components/schemas/EIP1559GasInfo'
+
       responses:
         '200':
           description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
@@ -1670,8 +1647,7 @@ paths:
                   type: integer
                   description: Number of records to return
                   default: 10
-                gasInfo:
-                  $ref: '#/components/schemas/EIP1559GasInfo'
+
       responses:
         '200':
           description: successful operation. If nextPos is == -1 means no additional records, otherwise it is the starting index of the remaining elements.
