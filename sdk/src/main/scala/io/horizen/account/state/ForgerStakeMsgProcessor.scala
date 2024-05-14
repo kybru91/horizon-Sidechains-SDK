@@ -14,6 +14,7 @@ import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_
 import io.horizen.account.state.events._
 import io.horizen.account.utils.{AccountPayment, WellKnownAddresses}
 import io.horizen.account.state.events.{DelegateForgerStake, OpenForgerList, StakeUpgrade, WithdrawForgerStake}
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.WellKnownAddresses.FORGER_STAKE_SMART_CONTRACT_ADDRESS
 import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
 import io.horizen.evm.Address
@@ -469,7 +470,7 @@ case class ForgerStakeMsgProcessor(params: NetworkParams) extends NativeSmartCon
   }
 
     @throws(classOf[ExecutionFailedException])
-    override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+    override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
       val gasView = view.getGasTrackedView(invocation.gasPool)
       if (Version1_4_0Fork.get(context.blockContext.consensusEpochNumber).active && ForgerStakeStorage.isDisabled(gasView)) {
         getFunctionSignature(invocation.input) match {

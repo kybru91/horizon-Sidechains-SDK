@@ -2,10 +2,12 @@ package io.horizen.account.state
 
 import io.horizen.SidechainTypes
 import io.horizen.account.fork.{Version1_3_0Fork, Version1_4_0Fork}
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt.ReceiptStatus
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumConsensusDataReceipt}
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.{BigIntegerUtil, MainchainTxCrosschainOutputAddressUtil, ZenWeiConverter}
 import io.horizen.block.{MainchainBlockReferenceData, MainchainTxForwardTransferCrosschainOutput, MainchainTxSidechainCreationCrosschainOutput}
@@ -90,6 +92,10 @@ class StateDbAccountStateView(
 
   override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse =
     forgerStakesV2Provider.getPagedForgersStakesByDelegator(this, delegator, startPos, pageSize)
+
+  override def getForgerInfo(forger: ForgerPublicKeys): Option[ForgerInfo] = {
+    forgerStakesV2Provider.getForgerInfo(this, forger)
+  }
 
   override def getAllowedForgerList: Seq[Int] =
     forgerStakesProvider.getAllowedForgerListIndexes(this)
@@ -198,8 +204,13 @@ class StateDbAccountStateView(
 
   @throws(classOf[InvalidMessageException])
   @throws(classOf[ExecutionFailedException])
-  def applyMessage(msg: Message, blockGasPool: GasPool, blockContext: BlockContext): Array[Byte] = {
-    new StateTransition(this, messageProcessors, blockGasPool, blockContext, msg).transition()
+  def applyMessage(
+    msg: Message,
+    blockGasPool: GasPool,
+    blockContext: BlockContext,
+    metadata: MsgProcessorMetadataStorageReader
+  ): Array[Byte] = {
+    new StateTransition(this, messageProcessors, blockGasPool, blockContext, msg, metadata).transition()
   }
 
   /**
@@ -218,7 +229,8 @@ class StateDbAccountStateView(
                   tx: SidechainTypes#SCAT,
                   txIndex: Int,
                   blockGasPool: GasPool,
-                  blockContext: BlockContext
+                  blockContext: BlockContext,
+                  metadata: MsgProcessorMetadataStorageReader
                 ): Try[EthereumConsensusDataReceipt] = Try {
     if (!tx.isInstanceOf[EthereumTransaction])
       throw new IllegalArgumentException(s"Unsupported transaction type ${tx.getClass.getName}")
@@ -242,7 +254,7 @@ class StateDbAccountStateView(
     // apply message to state
     val status =
       try {
-        applyMessage(msg, blockGasPool, blockContext)
+        applyMessage(msg, blockGasPool, blockContext, metadata)
         ReceiptStatus.SUCCESSFUL
       } catch {
         // any other exception will bubble up and invalidate the block

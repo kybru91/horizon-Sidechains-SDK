@@ -249,7 +249,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
       val txHash2 = Keccak256.hash("second tx")
       view.setupTxContext(txHash2, 10)
       // try processing a msg with the same data (same msg), should fail
-      assertThrows[ExecutionRevertedException](withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _)))
+      assertThrows[ExecutionRevertedException](withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view)))
 
       // Checking that log doesn't change
       listOfLogs = view.getLogs(txHash2)
@@ -480,7 +480,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       var ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Could not verify multisig address against redeemScript"))
 
@@ -495,7 +495,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Could not verify multisig address against redeemScript"))
 
@@ -511,7 +511,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Could not verify multisig address against redeemScript"))
 
@@ -526,7 +526,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Signature 0 not valid"))
 
@@ -542,7 +542,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Signatures are not enough. Input has 1, needs at least 2"))
 
@@ -559,7 +559,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Signature 1 not valid"))
 
@@ -576,7 +576,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       // in this case we are giving up checking signatures because after the first fails we can not
       // reach the threshold with the second one even if it is valid
@@ -600,7 +600,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Unexpected format of redeemScript"))
 
@@ -620,7 +620,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       // in this case we are giving up checking signatures after we have an invalid one
       assertTrue(ex.getMessage.contains("Signature 1 not valid"))
@@ -654,7 +654,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         listOfAllExpectedData.add(McAddrOwnershipData(scAddrStr1.toLowerCase(), mcAddr))
         listOfScAddress1ExpectedData.add(McAddrOwnershipData(scAddrStr1.toLowerCase(), mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -674,7 +674,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         listOfAllExpectedData.add(McAddrOwnershipData(scAddrStr2.toLowerCase(), mcAddr))
         listOfScAddress2ExpectedData.add(McAddrOwnershipData(scAddrStr2.toLowerCase(), mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -735,7 +735,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
 
         listOfExpectedData.add(McAddrOwnershipData(scAddrStr1, mcAddr))
 
-        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _))
+        val returnData = withGas(TestContext.process(messageProcessor, msg, view, defaultBlockContext, _, view))
         assertNotNull(returnData)
       }
 
@@ -801,7 +801,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce, scAddressObj1
       )
       var ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Value must be zero"))
 
@@ -815,7 +815,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1)
 
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Wrong message data field length"))
 
@@ -828,7 +828,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1)
 
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("already associated"))
 
@@ -841,7 +841,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce,
         origin)
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Invalid mc signature"))
 
@@ -856,7 +856,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce,
         scAddressObj1)
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Invalid mc signature"))
 
@@ -871,7 +871,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce,
         scAddressObj1)
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Invalid mc signature"))
 
@@ -900,7 +900,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
       )
 
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msg2, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msg2, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains(s"already associated to sc address ${scAddrStr1.toLowerCase()}"))
     }
@@ -939,7 +939,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce, scAddressObj1
       )
       var ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Value must be zero"))
 
@@ -949,7 +949,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce, scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Value must be zero"))
 
@@ -960,7 +960,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce, scAddressObj1
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("Wrong message data field length"))
 
@@ -970,7 +970,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce, origin
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("account does not exist"))
 
@@ -981,7 +981,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         randomNonce, origin
       )
       ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       assertTrue(ex.getMessage.contains("is not the owner"))
 
@@ -1063,7 +1063,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
     )
 
     // try processing the removal of ownership, should succeed
-    val returnData = withGas(TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, _))
+    val returnData = withGas(TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, _, stateView))
     assertNotNull(returnData)
     assertArrayEquals(getOwnershipId(mcTransparentAddress), returnData)
   }
@@ -1072,7 +1072,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
     val msg = getMessage(contractAddress, 0, BytesUtils.fromHexString(GetListOfAllOwnershipsCmd), randomNonce)
 
     val (returnData, usedGas) = withGas { gas =>
-      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas)
+      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas, stateView)
       (result, gas.getUsedGas)
     }
     // gas consumption depends on the number of items in the list
@@ -1091,7 +1091,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
       contractAddress, 0,
       BytesUtils.fromHexString(GetListOfOwnershipsCmd) ++ data, randomNonce)
     val (returnData, usedGas) = withGas { gas =>
-      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas)
+      val result = TestContext.process(messageProcessor, msg, stateView, defaultBlockContext, gas, stateView)
       (result, gas.getUsedGas)
     }
     // gas consumption depends on the number of items in the list
@@ -1134,7 +1134,7 @@ class McAddrOwnershipMsgProcessorMultisigTest
         scAddressObj1
       )
       val ex = intercept[ExecutionRevertedException] {
-        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _))
+        withGas(TestContext.process(messageProcessor, msgBad, view, defaultBlockContext, _, view))
       }
       // the signature has been applied on a different message
       assertTrue(ex.getMessage.contains("Invalid mc signature"))

@@ -1,5 +1,7 @@
 package io.horizen.account.state
 
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
+
 case class TestContext(msg: Message, blockContext: BlockContext) extends ExecutionContext {
   override var depth = 0
   override def execute(invocation: Invocation): Array[Byte] = ???
@@ -22,8 +24,9 @@ object TestContext {
       msg: Message,
       view: BaseAccountStateView,
       blockContext: BlockContext,
-      gasPool: GasPool
+      gasPool: GasPool,
+      metadata: MsgProcessorMetadataStorageReader
   ): Array[Byte] = {
-    processor.process(Invocation.fromMessage(msg, gasPool), view, TestContext(msg, blockContext))
+    processor.process(Invocation.fromMessage(msg, gasPool), view, metadata, TestContext(msg, blockContext))
   }
 }

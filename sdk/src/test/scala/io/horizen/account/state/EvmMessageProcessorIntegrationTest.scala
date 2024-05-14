@@ -92,7 +92,7 @@ class EvmMessageProcessorIntegrationTest extends EvmMessageProcessorTestBase {
       //Try with a smart contract compiled for Shanghai
       msg = getMessage(null, data = deployCodeShanghai ++ initialValue)
       val ex = intercept[ExecutionFailedException] {
-        withGas(TestContext.process(evmMessageProcessor, msg, stateView, defaultBlockContext, _))
+        withGas(TestContext.process(evmMessageProcessor, msg, stateView, defaultBlockContext, _, stateView))
       }
       assertTrue(ex.getMessage.contains("PUSH0"))
 

@@ -4,6 +4,7 @@ import com.google.common.primitives.Bytes
 import io.horizen.account.abi.ABIEncodable
 import io.horizen.account.abi.ABIUtil.{getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.state.ContractInteropTestBase._
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.BigIntegerUtil.toUint256Bytes
 import io.horizen.account.utils.{FeeUtils, Secp256k1}
 import io.horizen.evm._
@@ -50,6 +51,7 @@ class ContractInteropCallTest extends ContractInteropTestBase {
     override def process(
                           invocation: Invocation,
                           view: BaseAccountStateView,
+                          metadata: MsgProcessorMetadataStorageReader,
                           context: ExecutionContext
                         ): Array[Byte] = {
       val gasView = view.getGasTrackedView(invocation.gasPool)
