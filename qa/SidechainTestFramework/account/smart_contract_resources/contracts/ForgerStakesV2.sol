@@ -86,8 +86,7 @@ interface ForgerStakesV2 {
        Be aware that following convention apply when we talk about 'null' values: for bytes parameters, as addresses of key etc., a byte array of the expected length with all 0 values is interpreted as null, eg "0x0000000000000000000000000000000000000000" for addresses.
        For consensusEpochStart and maxNumOfEpoch, it is 0.
        Returned array contains also elements with 0 value. Returned values are ordered by epoch, and the array length may
-       be < maxNumOfEpoch if the current consensus epoch is < (consensusEpochStart + maxNumOfEpoch) or if the forger was
-       registered after consensusEpochStart.
+       be < maxNumOfEpoch if the current consensus epoch is < (consensusEpochStart + maxNumOfEpoch).
     */
     function stakeTotal(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, address delegator, uint32 consensusEpochStart, uint32 maxNumOfEpoch) external view returns (uint256[] memory listOfStakes);
 
