@@ -166,9 +166,9 @@ class AccountStateViewTest extends JUnitSuite with MockitoSugar with MessageProc
     val addr2 = getPrivateKeySecp256k1(1001).publicImage()
     val addr3 = getPrivateKeySecp256k1(1002).publicImage()
     val blockCounters = Map(
-      ForgerIdentifier(addr1) -> 2L,
-      ForgerIdentifier(addr2) -> 3L,
-      ForgerIdentifier(addr3) -> 5L,
+      new ForgerIdentifier(addr1) -> 2L,
+      new ForgerIdentifier(addr2) -> 3L,
+      new ForgerIdentifier(addr3) -> 5L,
     )
 
     when(stateDb.getBalance(FORGER_POOL_RECIPIENT_ADDRESS)).thenReturn(BigInteger.valueOf(1000L))
@@ -179,9 +179,9 @@ class AccountStateViewTest extends JUnitSuite with MockitoSugar with MessageProc
     when(metadataStorageView.getConsensusEpochNumber).thenAnswer(_ => Some(36))
     val rewardsAfterFork = stateView.getMcForgerPoolRewards(intToConsensusEpochNumber(36), MAX_MONEY_IN_WEI)
     assertEquals(3, rewardsAfterFork.size)
-    assertEquals(BigInteger.valueOf(200L), rewardsAfterFork(ForgerIdentifier(addr1)))
-    assertEquals(BigInteger.valueOf(300L), rewardsAfterFork(ForgerIdentifier(addr2)))
-    assertEquals(BigInteger.valueOf(500L), rewardsAfterFork(ForgerIdentifier(addr3)))
+    assertEquals(BigInteger.valueOf(200L), rewardsAfterFork(new ForgerIdentifier(addr1)))
+    assertEquals(BigInteger.valueOf(300L), rewardsAfterFork(new ForgerIdentifier(addr2)))
+    assertEquals(BigInteger.valueOf(500L), rewardsAfterFork(new ForgerIdentifier(addr3)))
 
   }
 

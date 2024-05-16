@@ -18,11 +18,13 @@ object McForgerPoolRewardsSerializer extends SparkzSerializer[Map[ForgerIdentifi
   override def serialize(forgerPoolRewards: Map[ForgerIdentifier, BigInteger], w: Writer): Unit = {
     w.putInt(forgerPoolRewards.size)
     forgerPoolRewards.foreach { case (forgerIdentifier, reward) =>
-      addressSerializer.serialize(forgerIdentifier.address, w)
-      if (forgerIdentifier.blockSignPublicKey.isDefined && forgerIdentifier.vrfPublicKey.isDefined) {
+      addressSerializer.serialize(forgerIdentifier.getAddress, w)
+      if (forgerIdentifier.getForgerKeys.isDefined) {
         w.putInt(SERIALIZATION_FORMAT_1_4_FLAG) //flag to indicate new serialization format is used
-        forgerIdentifier.blockSignPublicKey.foreach(p => signPubKeySerializer.serialize(p, w))
-        forgerIdentifier.vrfPublicKey.foreach(p => vrfPubKeySerializer.serialize(p, w))
+        forgerIdentifier.getForgerKeys.foreach { keys =>
+          signPubKeySerializer.serialize(keys.blockSignPublicKey, w)
+          vrfPubKeySerializer.serialize(keys.vrfPublicKey, w)
+        }
         w.putInt(reward.toByteArray.length)
         w.putBytes(reward.toByteArray)
       }
@@ -43,11 +45,11 @@ object McForgerPoolRewardsSerializer extends SparkzSerializer[Map[ForgerIdentifi
         val vrfPublicKey = vrfPubKeySerializer.parse(r)
         val rewardLength: Int = r.getInt
         val reward: BigInteger = new BigInteger(r.getBytes(rewardLength))
-        (ForgerIdentifier(address, Some(blockSignPublicKey), Some(vrfPublicKey)), reward)
+        (new ForgerIdentifier(address, Some(ForgerPublicKeys(blockSignPublicKey, vrfPublicKey))), reward)
       }
       else {
         val reward: BigInteger = new BigInteger(r.getBytes(valueLength))
-        (ForgerIdentifier(address), reward)
+        (new ForgerIdentifier(address), reward)
       }
     }.toMap
   }

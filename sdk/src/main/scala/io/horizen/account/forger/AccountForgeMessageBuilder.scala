@@ -252,14 +252,14 @@ class AccountForgeMessageBuilder(
             val fork_1_4_active = Version1_4_0Fork.get(consensusEpochNumber).active
             if (fork_1_4_active) {
               dummyView.updateForgerBlockCounter(
-                ForgerIdentifier(
+                new ForgerIdentifier(
                   forgerAddress,
-                  Some(forgingStakeInfo.blockSignPublicKey),
-                  Some(forgingStakeInfo.vrfPublicKey)),
+                  Some(ForgerPublicKeys(forgingStakeInfo.blockSignPublicKey, forgingStakeInfo.vrfPublicKey))
+                ),
                 consensusEpochNumber
               )
             } else {
-              dummyView.updateForgerBlockCounter(ForgerIdentifier(forgerAddress), consensusEpochNumber)
+              dummyView.updateForgerBlockCounter(new ForgerIdentifier(forgerAddress), consensusEpochNumber)
             }
 
             val feePayments = if (isWithdrawalEpochLastBlock) {
@@ -276,7 +276,7 @@ class AccountForgeMessageBuilder(
                 AccountFeePaymentsUtils.getMainchainWithdrawalEpochDistributionCap(mcLastBlockHeight, params)
               } else MAX_MONEY_IN_WEI
               val blockToAppendFeeInfo = if (fork_1_4_active) {
-                Some(currentBlockPayments.copy(blockSignPublicKey = Some(forgingStakeInfo.blockSignPublicKey), vrfPublicKey = Some(forgingStakeInfo.vrfPublicKey)))
+                Some(currentBlockPayments.copy(forgerKeys = Some(ForgerPublicKeys(forgingStakeInfo.blockSignPublicKey, forgingStakeInfo.vrfPublicKey))))
               } else {
                 Some(currentBlockPayments)
               }
