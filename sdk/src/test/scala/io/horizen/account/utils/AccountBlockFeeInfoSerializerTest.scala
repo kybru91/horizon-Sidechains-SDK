@@ -1,6 +1,7 @@
 package io.horizen.account.utils
 
 import io.horizen.account.proposition.AddressProposition
+import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.fixtures.SecretFixture
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.secret.PrivateKey25519Creator
@@ -33,7 +34,7 @@ class AccountBlockFeeInfoSerializerTest extends SecretFixture {
     val vrfPublicKey: VrfPublicKey = VrfGeneratedDataProvider.getVrfSecretKey(1).publicImage()
     val baseFee: BigInteger = BigInteger.valueOf(1234567890L)
     val forgerTips: BigInteger = BigInteger.valueOf(1234567890L)
-    val feeInto: AccountBlockFeeInfo = AccountBlockFeeInfo(baseFee, forgerTips, address, Some(proposition), Some(vrfPublicKey))
+    val feeInto: AccountBlockFeeInfo = AccountBlockFeeInfo(baseFee, forgerTips, address, Some(ForgerPublicKeys(proposition, vrfPublicKey)))
 
     val serializedBytes: Array[Byte] = AccountBlockFeeInfoSerializer.toBytes(feeInto)
 

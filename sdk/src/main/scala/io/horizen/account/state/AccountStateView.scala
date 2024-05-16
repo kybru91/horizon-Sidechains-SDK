@@ -107,7 +107,7 @@ class AccountStateView(
       (allPayments, poolBalanceDistributed)
     } else {
       val payments = AccountFeePaymentsUtils.getForgersRewards(blockFeeInfoSeq, mcForgerPoolRewards)
-          .map(fp => AccountPayment(fp.identifier.address, fp.value))
+          .map(fp => AccountPayment(fp.identifier.getAddress, fp.value))
       (payments, poolBalanceDistributed)
     }
   }
@@ -116,15 +116,15 @@ class AccountStateView(
     val allPayments = feePayments.map { feePayment =>
       Some(feePayment)
         // after fork 1.4 blockSignPublicKey and vrfPublicKey are mandatory
-        .filter(_.identifier.blockSignPublicKey.isDefined).filter(_.identifier.vrfPublicKey.isDefined)
+        .filter(_.identifier.getForgerKeys.isDefined)
         // try get ForgerInfo from StakeStorageV2
-        .flatMap(fp => getForgerInfo(ForgerPublicKeys(fp.identifier.blockSignPublicKey.get, fp.identifier.vrfPublicKey.get)))
+        .flatMap(fp => getForgerInfo(fp.identifier.getForgerKeys.get))
         // split reward into forger and delegator shares
         .map(info => AccountFeePaymentsUtils.getForgerAndDelegatorShares(feePayment, info))
         // for blocks <1.4 fork all reward goes to forger
         .getOrElse {
           val totalFeeReward = feePayment.value.subtract(feePayment.valueFromMainchain)
-          val forgerPayment = AccountPayment(feePayment.identifier.address, feePayment.value, Some(feePayment.valueFromMainchain), Some(totalFeeReward))
+          val forgerPayment = AccountPayment(feePayment.identifier.getAddress, feePayment.value, Some(feePayment.valueFromMainchain), Some(totalFeeReward))
           (forgerPayment, None)
         }
     }
