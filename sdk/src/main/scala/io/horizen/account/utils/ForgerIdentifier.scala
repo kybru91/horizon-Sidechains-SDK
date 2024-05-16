@@ -16,7 +16,7 @@ class ForgerIdentifier(
         if (forgerKeys.isDefined) {
           address.equals(that.getAddress) && that.getForgerKeys.isDefined && forgerKeys.get.equals(that.getForgerKeys.get)
         } else {
-          address.equals(that.getAddress)
+          that.getForgerKeys.isEmpty && address.equals(that.getAddress)
         }
       case _ => false
     }
