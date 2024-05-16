@@ -752,7 +752,7 @@ class ForgerStakeV2MsgProcessorTest
       checkRegisterForgerEvent(expectedEvent_f2, listOfLogs_f2(0))
 
       // Try getForger, with first forger
-      var getForgerCmdInput = GetForgerCmdInput(
+      var getForgerCmdInput = SelectByForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition_f1, vrfPublicKey_f1)
       )
 
@@ -766,7 +766,7 @@ class ForgerStakeV2MsgProcessorTest
       assertEquals(Address.ZERO, getForgerOutput.rewardAddress.address())
 
       // Try getForger, with second forger
-      getForgerCmdInput = GetForgerCmdInput(
+      getForgerCmdInput = SelectByForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition_f2, vrfPublicKey_f2)
       )
 
@@ -985,7 +985,7 @@ class ForgerStakeV2MsgProcessorTest
       //  Before activate tests
       /////////////////////////////////////////////////////////////////////////////////////////////
 
-      val delegateCmdInput = DelegateCmdInput(
+      val delegateCmdInput = SelectByForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
       )
 
@@ -1559,7 +1559,7 @@ class ForgerStakeV2MsgProcessorTest
       var stakeTotalCmdInput = StakeTotalCmdInput(Some(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1)), Some(address3), None, None)
       var data: Array[Byte] = stakeTotalCmdInput.encode()
       var msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
-      var returnData = assertGas(6500, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      var returnData = assertGas(15000, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
       assertNotNull(returnData)
       var stakeTotalResponse = StakeTotalCmdOutputDecoder.decode(returnData)
       assertEquals(
@@ -1571,7 +1571,7 @@ class ForgerStakeV2MsgProcessorTest
       stakeTotalCmdInput = StakeTotalCmdInput(Some(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey1)), None, None, None)
       data= stakeTotalCmdInput.encode()
       msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
-      returnData = assertGas(10600, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
+      returnData = assertGas(19100, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4_plus10)
       assertNotNull(returnData)
       stakeTotalResponse = StakeTotalCmdOutputDecoder.decode(returnData)
       assertEquals(
@@ -1608,6 +1608,14 @@ class ForgerStakeV2MsgProcessorTest
       data= stakeTotalCmdInput.encode()
       msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
       assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas, view))
+
+      // negative - not existing forger
+      stakeTotalCmdInput = StakeTotalCmdInput(Some(ForgerPublicKeys(blockSignerProposition1, vrfPublicKey2)), None, None, None)
+      data= stakeTotalCmdInput.encode()
+      msg = getMessage(contractAddress, BigInteger.ZERO, BytesUtils.fromHexString(StakeTotalCmd) ++ data, randomNonce)
+      assertThrows[ExecutionRevertedException](TestContext.process(forgerStakeV2MessageProcessor, msg, view, blockContextForkV1_4_plus10, gas, view))
+
+
     }
   }
 
@@ -1668,7 +1676,7 @@ class ForgerStakeV2MsgProcessorTest
 
       // Check that getForger and getPagedForgers cannot be called before activate
 
-      var getForgerCmdInput = GetForgerCmdInput(
+      var getForgerCmdInput = SelectByForgerCmdInput(
         ForgerPublicKeys(blockSignerProposition, vrfPublicKey)
       )
 
@@ -1804,7 +1812,7 @@ class ForgerStakeV2MsgProcessorTest
 
      // Try getForger
       listOfExpectedForgers.foreach { expForgerInfo =>
-        getForgerCmdInput = GetForgerCmdInput(expForgerInfo.forgerPublicKeys)
+        getForgerCmdInput = SelectByForgerCmdInput(expForgerInfo.forgerPublicKeys)
         getForgerData = BytesUtils.fromHexString(GetForgerCmd) ++ getForgerCmdInput.encode()
         msg = getMessage(contractAddress, BigInteger.ZERO, getForgerData, randomNonce)
         res = assertGas(10600, msg, view, forgerStakeV2MessageProcessor, blockContextForkV1_4)

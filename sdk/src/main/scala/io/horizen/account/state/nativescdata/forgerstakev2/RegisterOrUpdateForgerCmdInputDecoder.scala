@@ -3,7 +3,7 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.account.state.ForgerStakeV2MsgProcessor.MAX_REWARD_SHARE
-import io.horizen.account.state.nativescdata.forgerstakev2.DelegateCmdInputDecoder.vrfPublicKeyToAbi
+import io.horizen.account.state.nativescdata.forgerstakev2.SelectByForgerCmdInputDecoder.vrfPublicKeyToAbi
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.PublicKey25519Proposition
@@ -53,7 +53,7 @@ object RegisterOrUpdateForgerCmdInputDecoder
 }
 
 case class RegisterOrUpdateForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, rewardShare: Int,
-                                          smartContractAddress: Address,
+                                          rewardAddress: Address,
                                           signature25519: Signature25519, signatureVrf: VrfProof) extends ABIEncodable[StaticStruct] {
   require(rewardShare >= 0, "reward share expected to be non negative.")
   require(rewardShare <= MAX_REWARD_SHARE, s"reward share expected to be $MAX_REWARD_SHARE at most")
@@ -70,7 +70,7 @@ case class RegisterOrUpdateForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, re
     listOfParams.add(vrfPublicKeyBytes._1)
     listOfParams.add(vrfPublicKeyBytes._2)
     listOfParams.add(new Uint32(rewardShare))
-    listOfParams.add(new AbiAddress(smartContractAddress.toString))
+    listOfParams.add(new AbiAddress(rewardAddress.toString))
     listOfParams.add(new Bytes32(util.Arrays.copyOfRange(sign1Bytes, 0, 32)))
     listOfParams.add(new Bytes32(util.Arrays.copyOfRange(sign1Bytes, 32, Ed25519.signatureLength())))
     listOfParams.add(new Bytes32(util.Arrays.copyOfRange(sign2Bytes, 0, 32)))
@@ -81,6 +81,6 @@ case class RegisterOrUpdateForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, re
     new StaticStruct(listOfParams)
   }
 
-  override def toString: String = "%s(forgerPubKeys: %s, rewardShare: %d, smartContractAddress: %s, sign1: %s, sign2: %s)"
-    .format(this.getClass.toString, forgerPublicKeys, rewardShare, smartContractAddress, signature25519, signatureVrf)
+  override def toString: String = "%s(forgerPubKeys: %s, rewardShare: %d, rewardsAddress: %s, sign1: %s, sign2: %s)"
+    .format(this.getClass.toString, forgerPublicKeys, rewardShare, rewardAddress, signature25519, signatureVrf)
 }

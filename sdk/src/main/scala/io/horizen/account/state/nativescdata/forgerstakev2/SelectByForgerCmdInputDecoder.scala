@@ -9,9 +9,9 @@ import org.web3j.abi.datatypes.{StaticStruct, Type}
 
 import java.util
 
-object GetForgerCmdInputDecoder
-  extends ABIDecoder[GetForgerCmdInput]
-    with MsgProcessorInputDecoder[GetForgerCmdInput]
+object SelectByForgerCmdInputDecoder
+  extends ABIDecoder[SelectByForgerCmdInput]
+    with MsgProcessorInputDecoder[SelectByForgerCmdInput]
     with VRFDecoder{
 
   override val getListOfABIParamTypes: util.List[TypeReference[Type[_]]] =
@@ -21,16 +21,16 @@ object GetForgerCmdInputDecoder
       new TypeReference[Bytes1]() {},
     ))
 
-  override def createType(listOfParams: util.List[Type[_]]): GetForgerCmdInput = {
+  override def createType(listOfParams: util.List[Type[_]]): SelectByForgerCmdInput = {
     val forgerPublicKey = new PublicKey25519Proposition(listOfParams.get(0).asInstanceOf[Bytes32].getValue)
     val vrfKey = decodeVrfKey(listOfParams.get(1).asInstanceOf[Bytes32], listOfParams.get(2).asInstanceOf[Bytes1])
     val forgerPublicKeys = ForgerPublicKeys(forgerPublicKey, vrfKey)
-    GetForgerCmdInput(forgerPublicKeys)
+    SelectByForgerCmdInput(forgerPublicKeys)
   }
 
 }
 
-case class GetForgerCmdInput(forgerPublicKeys: ForgerPublicKeys) extends ABIEncodable[StaticStruct] {
+case class SelectByForgerCmdInput(forgerPublicKeys: ForgerPublicKeys) extends ABIEncodable[StaticStruct] {
 
   override def asABIType(): StaticStruct = {
     val forgerPublicKeysAbi = forgerPublicKeys.asABIType()

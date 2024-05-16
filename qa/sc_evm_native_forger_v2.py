@@ -625,7 +625,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                 "input": data_input
             }, "latest"
         )
-        assert_equal(decode(['int32'], hex_str_to_bytes(result['result'][2:]))[0], VERSION_1_4_FORK_EPOCH)
+        assert_equal(VERSION_1_4_FORK_EPOCH, decode(['int32'], hex_str_to_bytes(result['result'][2:]))[0])
         # Check stakeStart value for address that did not delegated anything - should return -1
         data_input = forger_v2_native_contract.raw_encode_call(method_stake_start,
                                                                forger_1_sign_key_to_bytes,
@@ -639,7 +639,7 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                 "input": data_input
             }, "latest"
         )
-        assert_equal(decode(['int32'], hex_str_to_bytes(result['result'][2:]))[0], -1)
+        assert_equal(-1, decode(['int32'], hex_str_to_bytes(result['result'][2:]))[0])
 
         ################################
         # Withdrawal
@@ -995,10 +995,6 @@ def decode_forger_info(result):
                    raw_stake[3], raw_stake[4])
 
     return forger_info
-
-
-def sum_stakes(exp_stake_own):
-    return sum(map(lambda stake: stake['forgerStakeData']['stakedAmount'], exp_stake_own))
 
 
 def check_delegate_event(delegate_event, sender, vrf_pub_key, block_sign_pub_key, staked_amount):

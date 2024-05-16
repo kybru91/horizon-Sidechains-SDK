@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, ABIListEncoder, MsgProcessorInputDecoder}
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
-import io.horizen.account.state.nativescdata.forgerstakev2.DelegateCmdInputDecoder.vrfPublicKeyToAbi
+import io.horizen.account.state.nativescdata.forgerstakev2.SelectByForgerCmdInputDecoder.vrfPublicKeyToAbi
 import io.horizen.account.utils.BigIntegerUInt256.getUnsignedByteArray
 import io.horizen.account.utils.{BigIntegerUInt256, Secp256k1}
 import io.horizen.evm.Address

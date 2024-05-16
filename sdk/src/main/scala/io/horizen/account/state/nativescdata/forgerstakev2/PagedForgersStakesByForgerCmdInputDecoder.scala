@@ -44,6 +44,6 @@ case class PagedForgersStakesByForgerCmdInput(forgerPublicKeys: ForgerPublicKeys
     new StaticStruct(listOfParams)
   }
 
-  override def toString: String = "%s(forgerPubKeys: %s)"
-    .format(this.getClass.toString, forgerPublicKeys)
+  override def toString: String = "%s(forgerPubKeys: %s, startIndex: %s, pageSize: %s)"
+    .format(this.getClass.toString, forgerPublicKeys, startIndex, pageSize)
 }

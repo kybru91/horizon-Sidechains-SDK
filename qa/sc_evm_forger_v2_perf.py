@@ -19,11 +19,11 @@ from test_framework.util import (
 
 """
 This is a script for testing performance of the Forgers Lottery and of stakeTotal method.
-For the Lottery, it it needs to enable sidechain logging level to debug and --nocleanup, for saving the logging files.
+For the Lottery, it needs to enable sidechain logging level to debug and --nocleanup, for saving the logging files.
 Then using grep command, retrieve all the lines with "Lottery times". The first
 value is the epoch, the second one is the time taken to create the Merkle path, the third one is the lottery total time,
  i.e. Merkle path + vrfProofCheckAgainstStake. Retrieve the data from both nodes, sc_node_1 has 99 forgers while 
- sc_node_2 has just one forger, so it can evaluated the time taken by vrfProofCheckAgainstStake that it is executed for 
+ sc_node_2 has just one forger, so it can evaluate the time taken by vrfProofCheckAgainstStake that it is executed for 
  each forger.
 For the stakeTotal, grep in the test log file (sc_test.log) "Checkpoint, time and gas". The first value is the epoch 
 number, the second one is the time taken for executing the stakeTotal and the third one is the used gas.
@@ -68,7 +68,6 @@ class SCEvmForgerV2Perf(AccountChainSetup):
 
         time.sleep(2)  # MC needs this
 
-        # transfer some fund from MC to SC1 at a new evm address, then mine mc block
         evm_address_sc_node_1 = sc_node_1.wallet_createPrivateKeySecp256k1()["result"]["proposition"]["address"]
 
         ft_amount_in_zen = Decimal('2000.0')
@@ -93,7 +92,6 @@ class SCEvmForgerV2Perf(AccountChainSetup):
         vrf_pub_key_genesis = forger_stake_list[0]['forgerStakeData']["forgerPublicKeys"]["vrfPublicKey"]["publicKey"]
         delegator_address_genesis = forger_stake_list[0]['forgerStakeData']["ownerPublicKey"]["address"]
 
-        # Reach fork point 1.4
         current_best_epoch = sc_node_1.block_forgingInfo()["result"]["bestBlockEpochNumber"]
         for i in range(0, VERSION_1_3_FORK_EPOCH - current_best_epoch):
             generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)

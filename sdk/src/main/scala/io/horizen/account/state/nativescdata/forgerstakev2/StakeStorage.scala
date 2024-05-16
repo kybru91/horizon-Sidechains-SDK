@@ -427,14 +427,13 @@ object StakeStorage {
   case class DelegatorKey(address: Address)
     extends Address(new AddressProposition(address).checksumAddress())
 
-  case class ForgerKey(forgerKey: Array[Byte]) {
-    val bytes: Array[Byte] = forgerKey
+  case class ForgerKey(bytes: Array[Byte]) {
 
     override def hashCode(): Int = java.util.Arrays.hashCode(bytes)
 
     override def equals(obj: Any): Boolean = {
       obj match {
-        case forgerKey: ForgerKey => bytes.sameElements(forgerKey.bytes)
+        case obj: ForgerKey => bytes.sameElements(obj.bytes)
         case _ => false
       }
     }
@@ -545,8 +544,7 @@ object ForgerMap {
   }
 
   def getForgerOption(view: BaseAccountStateView, forgerKey: ForgerKey): Option[ForgerInfo] = {
-    val forgerData = view.getAccountStorage(ACCOUNT, forgerKey.bytes)
-    if (!forgerData.sameElements(NULL_HEX_STRING_32))
+    if (existsForger(view, forgerKey))
       Some(ForgerInfoSerializer.parseBytes(view.getAccountStorageBytes(ACCOUNT, forgerKey.bytes)))
     else
       None

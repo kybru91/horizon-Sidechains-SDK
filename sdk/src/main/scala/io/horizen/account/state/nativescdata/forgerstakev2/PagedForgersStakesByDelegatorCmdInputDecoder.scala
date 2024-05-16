@@ -37,6 +37,6 @@ case class PagedForgersStakesByDelegatorCmdInput(delegator: Address, startIndex:
     new StaticStruct(listOfParams)
   }
 
-  override def toString: String = "%s(delegator: %s)"
-    .format(this.getClass.toString, delegator)
+  override def toString: String = "%s(delegator: %s, startIndex: %s, pageSize: %s)"
+    .format(this.getClass.toString, delegator, startIndex, pageSize)
 }

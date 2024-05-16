@@ -3,7 +3,7 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import org.web3j.abi.TypeReference
 import org.web3j.abi.datatypes.generated.Int32
-import org.web3j.abi.datatypes.{DynamicStruct, StaticStruct, Type}
+import org.web3j.abi.datatypes.{StaticStruct, Type}
 
 import java.util
 
@@ -11,6 +11,7 @@ case class StakeStartCmdOutput(epoch: Int) extends ABIEncodable[StaticStruct] {
 
   override def asABIType(): StaticStruct = {
     val listOfParams: util.List[Type[_]] = new util.ArrayList()
+    // must be Int (with signum) because it carries the samantic 'not there' with the '-1' value
     listOfParams.add(new Int32(epoch))
     new StaticStruct(listOfParams)
   }

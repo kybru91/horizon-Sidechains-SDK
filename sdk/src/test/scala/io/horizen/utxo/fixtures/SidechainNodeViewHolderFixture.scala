@@ -26,7 +26,6 @@ import io.horizen.utxo.state.{ApplicationState, SidechainUtxoMerkleTreeProviderC
 import io.horizen.utxo.storage._
 import io.horizen.utxo.wallet.{ApplicationWallet, SidechainWalletCswDataProvider, SidechainWalletCswDataProviderCSWEnabled}
 import io.horizen.{SidechainSettings, SidechainSettingsReader, SidechainTypes}
-import org.scalatestplus.mockito.MockitoSugar.mock
 import sparkz.core.api.http.ApiRejectionHandler
 import sparkz.core.utils.NetworkTimeProvider
 

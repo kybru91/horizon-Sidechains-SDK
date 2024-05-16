@@ -216,6 +216,7 @@ class AccountState(
             Some(mod.header.forgingStakeInfo.vrfPublicKey)
           ))
 
+        // update block counters for forger pool fee distribution
         stateView.updateForgerBlockCounter(
           ForgerIdentifier(mod.forgerPublicKey,
             Some(mod.header.forgingStakeInfo.blockSignPublicKey),
@@ -225,10 +226,9 @@ class AccountState(
       } else {
         stateView.updateFeePaymentInfo(AccountBlockFeeInfo(cumBaseFee, cumForgerTips, mod.header.forgerAddress))
 
+        // update block counters for forger pool fee distribution
         stateView.updateForgerBlockCounter(ForgerIdentifier(mod.forgerPublicKey), consensusEpochNumber)
       }
-
-      // update block counters for forger pool fee distribution
 
       // If SC block has reached the end of the withdrawal epoch reward the forgers.
       evalForgersReward(mod, modWithdrawalEpochInfo, consensusEpochNumber, stateView)

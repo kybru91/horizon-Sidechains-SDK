@@ -128,8 +128,8 @@ class AccountStateView(
           (forgerPayment, None)
         }
     }
-    // this is to collapse delegator payments into a flat list
-    (allPayments.map(_._1), allPayments.flatMap(_._2))
+    // this is to collapse delegator payments into a flat list. Also null payments are filtered out.
+    (allPayments.withFilter(_._1.value.signum()==1).map(_._1), allPayments.flatMap(_._2))
   }
 
   override def getAccountStateRoot: Array[Byte] = metadataStorageView.getAccountStateRoot

@@ -16,7 +16,7 @@ import io.horizen.account.node.{AccountNodeView, NodeAccountHistory, NodeAccount
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.PrivateKeySecp256k1
-import io.horizen.account.state.ForgerStakeV2MsgProcessor.MAX_REWARD_SHARE
+import io.horizen.account.state.ForgerStakeV2MsgProcessor.{MAX_REWARD_SHARE, MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI}
 import io.horizen.account.state.McAddrOwnershipMsgProcessor._
 import io.horizen.account.state._
 import io.horizen.account.state.nativescdata.forgerstakev2.RegisterOrUpdateForgerCmdInputDecoder.NULL_ADDRESS_WITH_PREFIX_HEX_STRING
@@ -115,12 +115,12 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     val wallet = nodeView.getNodeWallet
 
     val signature25519 = wallet.secretByPublicKey25519Proposition(blockSignPubKey).toScala match {
-      case None => throw new IllegalArgumentException("No matching secrete for input blockSignPubKey")
+      case None => throw new IllegalArgumentException("No matching secret for input blockSignPubKey")
       case Some(secret) => secret.sign(messageToSign)
     }
 
     val signatureVrf = wallet.secretByVrfPublicKey(vrfPublicKey).toScala match {
-      case None => throw new IllegalArgumentException("No matching secrete for input vrfPublicKey")
+      case None => throw new IllegalArgumentException("No matching secret for input vrfPublicKey")
       case Some(secret) => secret.sign(messageToSign)
     }
 
@@ -591,8 +591,9 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         entity(as[ReqRegisterForger]) { body =>
           // lock the view and try to create CoreTransaction
           applyOnNodeView { sidechainNodeView =>
+            val rewardShare = body.rewardShare.getOrElse(0)
 
-            if (body.rewardShare < 0 || body.rewardShare > MAX_REWARD_SHARE) {
+            if (rewardShare < 0 || rewardShare > MAX_REWARD_SHARE) {
               val msg = s"Reward share must be in the range [0, $MAX_REWARD_SHARE]"
               ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
             }
@@ -601,17 +602,22 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
 
               addressStringIsValid(rewardAddress) match {
                 case Success(_) =>
-                  if (!addressIsNull(rewardAddress) && body.rewardShare == 0) {
+                  if (!addressIsNull(rewardAddress) && rewardShare == 0) {
                     val msg = s"Reward share cannot be 0 if reward address is defined - Reward share = ${body.rewardShare}, reward address = $rewardAddress"
                     ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
                   }
-                  else if (addressIsNull(rewardAddress) && body.rewardShare != 0) {
+                  else if (addressIsNull(rewardAddress) && rewardShare != 0) {
                     val msg = s"Reward share cannot be different from 0 if reward address is null - Reward share = ${body.rewardShare}, reward address = $rewardAddress"
                     ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
                   }
                   else {
                     val valueInWei = ZenWeiConverter.convertZenniesToWei(body.stakedAmount)
-                    doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.RegisterForgerCmd, sidechainNodeView, valueInWei, body, rewardAddress)
+                    if (valueInWei.compareTo(MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI) < 0) {
+                      val msg = s"Value ${valueInWei.toString()} is below the minimum stake amount threshold: $MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI "
+                      ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
+                    }
+                    else
+                      doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.RegisterForgerCmd, sidechainNodeView, valueInWei, body, rewardShare, rewardAddress)
                   }
                 case Failure(ex) =>
                   ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(s"Invalid address: ${ex.getMessage}"))
@@ -640,7 +646,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
                     ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(msg))
                   } else {
                     val valueInWei = BigInteger.ZERO
-                    doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.UpdateForgerCmd, sidechainNodeView, valueInWei, body, body.rewardAddress)
+                    doRegisterOrUpdateForger(ForgerStakeV2MsgProcessor.UpdateForgerCmd, sidechainNodeView, valueInWei, body, body.rewardShare, body.rewardAddress)
                   }
                 case Failure(ex) =>
                   ApiResponseUtil.toResponse(ErrorRegisterForgerInvalidRewardParams(s"Invalid address: ${ex.getMessage}"))
@@ -652,7 +658,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
     }
   }
 
-  private def doRegisterOrUpdateForger(operation: String, sidechainNodeView: AccountNodeView, valueInWei: BigInteger, body: ReqBaseForger, rewardAddress: String) = {
+  private def doRegisterOrUpdateForger(operation: String, sidechainNodeView: AccountNodeView, valueInWei: BigInteger, body: ReqBaseForger, rewardShare: Int, rewardAddress: String) = {
 
     val accountState = sidechainNodeView.getNodeState
     val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
@@ -689,10 +695,10 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
           val vrfPubKey = VrfPublicKeySerializer.getSerializer.parseBytesAndCheck(BytesUtils.fromHexString(body.vrfPubKey))
 
           Try {
-            val msg = ForgerStakeV2MsgProcessor.getHashedMessageToSign(body.blockSignPubKey, body.vrfPubKey, body.rewardShare, rewardAddress)
+            val msg = ForgerStakeV2MsgProcessor.getHashedMessageToSign(body.blockSignPubKey, body.vrfPubKey, rewardShare, rewardAddress)
             val signatures = signMessageWithSecrets(sidechainNodeView, blockSignPubKey, vrfPubKey, msg)
 
-            encodeRegisterOrUpdateForgerCmdRequest(operation, blockSignPubKey, vrfPubKey, body.rewardShare, new AddressProposition(hexStringToByteArray(rewardAddress)), signatures._1, signatures._2)
+            encodeRegisterOrUpdateForgerCmdRequest(operation, blockSignPubKey, vrfPubKey, rewardShare, new AddressProposition(hexStringToByteArray(rewardAddress)), signatures._1, signatures._2)
           } match {
             case Success(dataBytes) =>
 
@@ -1685,11 +1691,7 @@ object AccountTransactionRestScheme {
 
 
   @JsonView(Array(classOf[Views.Default]))
-  private[horizen] case class ReqPagedForgingStakes(
-                                                     nonce: Option[BigInteger],
-                                                     startPos: Int = 0,
-                                                     size: Int = 10,
-                                                     gasInfo: Option[EIP1559GasInfo]) {
+  private[horizen] case class ReqPagedForgingStakes(startPos: Int = 0, size: Int = 10) {
     require(size > 0 , "Size must be positive")
   }
 
@@ -1698,7 +1700,6 @@ object AccountTransactionRestScheme {
     def nonce: Option[BigInteger]
     def blockSignPubKey: String
     def vrfPubKey: String
-    def  rewardShare: Int
     def gasInfo: Option[EIP1559GasInfo]
   }
 
@@ -1708,7 +1709,7 @@ object AccountTransactionRestScheme {
                                                  nonce: Option[BigInteger],
                                                  blockSignPubKey: String,
                                                  vrfPubKey: String,
-                                                 rewardShare: Int,
+                                                 rewardShare: Option[Int],
                                                  rewardAddress: Option[String],
                                                  stakedAmount: Long, // in zennies
                                                  gasInfo: Option[EIP1559GasInfo]) extends ReqBaseForger {
@@ -1737,11 +1738,9 @@ object AccountTransactionRestScheme {
 
   @JsonView(Array(classOf[Views.Default]))
   private[horizen] case class ReqPagedForgerStakesByDelegator(
-                                                            nonce: Option[BigInteger],
-                                                            delegatorAddress: String,
-                                                            startPos: Int = 0,
-                                                            size: Int = 10,
-                                                            gasInfo: Option[EIP1559GasInfo]) {
+                                                               delegatorAddress: String,
+                                                               startPos: Int = 0,
+                                                               size: Int = 10) {
     require(size > 0 , "Size must be positive")
   }
 
