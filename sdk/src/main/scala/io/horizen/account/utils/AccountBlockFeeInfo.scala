@@ -2,8 +2,9 @@ package io.horizen.account.utils
 
 import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
+import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.json.Views
-import io.horizen.proposition.{PublicKey25519Proposition, PublicKey25519PropositionSerializer, VrfPublicKey, VrfPublicKeySerializer}
+import io.horizen.proposition.{PublicKey25519PropositionSerializer, VrfPublicKeySerializer}
 import sparkz.core.serialization.{BytesSerializable, SparkzSerializer}
 import sparkz.util.serialization.{Reader, Writer}
 
@@ -14,8 +15,7 @@ case class AccountBlockFeeInfo(
   baseFee: BigInteger,
   forgerTips: BigInteger,
   forgerAddress: AddressProposition,
-  blockSignPublicKey: Option[PublicKey25519Proposition] = None,
-  vrfPublicKey: Option[VrfPublicKey] = None,
+  forgerKeys: Option[ForgerPublicKeys] = None,
 ) extends BytesSerializable {
   override type M = AccountBlockFeeInfo
   override def serializer: SparkzSerializer[AccountBlockFeeInfo] = AccountBlockFeeInfoSerializer
@@ -30,8 +30,10 @@ object AccountBlockFeeInfoSerializer extends SparkzSerializer[AccountBlockFeeInf
     w.putInt(forgerTipsByteArray.length)
     w.putBytes(forgerTipsByteArray)
     AddressPropositionSerializer.getSerializer.serialize(obj.forgerAddress, w)
-    obj.blockSignPublicKey.foreach(p => PublicKey25519PropositionSerializer.getSerializer.serialize(p, w))
-    obj.vrfPublicKey.foreach(p => VrfPublicKeySerializer.getSerializer.serialize(p, w))
+    obj.forgerKeys.foreach { keys =>
+      PublicKey25519PropositionSerializer.getSerializer.serialize(keys.blockSignPublicKey, w)
+      VrfPublicKeySerializer.getSerializer.serialize(keys.vrfPublicKey, w)
+    }
   }
 
   override def parse(r: Reader): AccountBlockFeeInfo = {
@@ -47,7 +49,7 @@ object AccountBlockFeeInfoSerializer extends SparkzSerializer[AccountBlockFeeInf
       case _ =>
         val blockSignPublicKey = PublicKey25519PropositionSerializer.getSerializer.parse(r)
         val vrfPublicKey = VrfPublicKeySerializer.getSerializer.parse(r)
-        AccountBlockFeeInfo(baseFee, forgerTips, forgerRewardKey, Some(blockSignPublicKey), Some(vrfPublicKey))
+        AccountBlockFeeInfo(baseFee, forgerTips, forgerRewardKey, Some(ForgerPublicKeys(blockSignPublicKey,vrfPublicKey)))
     }
   }
 }

@@ -19,9 +19,9 @@ class ForgerBlockCountersSerializerTest {
     val addr2 = getPrivateKeySecp256k1(1001).publicImage()
     val addr3 = getPrivateKeySecp256k1(1002).publicImage()
     val forgerBlockCounters = Map(
-      ForgerIdentifier(addr1) -> 1L,
-      ForgerIdentifier(addr2) -> 100L,
-      ForgerIdentifier(addr3) -> 9999999L,
+      new ForgerIdentifier(addr1) -> 1L,
+      new ForgerIdentifier(addr2) -> 100L,
+      new ForgerIdentifier(addr3) -> 9999999L,
     )
 
     val bytes = ForgerBlockCountersSerializer.toBytes(forgerBlockCounters)
@@ -59,9 +59,9 @@ class ForgerBlockCountersSerializerTest {
       PrivateKey25519Creator.getInstance().generateSecret("test3".getBytes(StandardCharsets.UTF_8)).publicImage()
     val vrfPublicKey3: VrfPublicKey = VrfGeneratedDataProvider.getVrfSecretKey(3).publicImage()
     val forgerBlockCounters = Map(
-      ForgerIdentifier(addr1, Some(proposition1), Some(vrfPublicKey1)) -> 1L,
-      ForgerIdentifier(addr2, Some(proposition2), Some(vrfPublicKey2)) -> 100L,
-      ForgerIdentifier(addr3, Some(proposition3), Some(vrfPublicKey3)) -> 9999999L,
+      new ForgerIdentifier(addr1, Some(ForgerPublicKeys(proposition1, vrfPublicKey1))) -> 1L,
+      new ForgerIdentifier(addr2, Some(ForgerPublicKeys(proposition2, vrfPublicKey2))) -> 100L,
+      new ForgerIdentifier(addr3, Some(ForgerPublicKeys(proposition3, vrfPublicKey3))) -> 9999999L,
     )
 
     val bytes = ForgerBlockCountersSerializer.toBytes(forgerBlockCounters)

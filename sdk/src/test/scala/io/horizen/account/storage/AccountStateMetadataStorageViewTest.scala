@@ -19,7 +19,6 @@ import org.scalatestplus.mockito.MockitoSugar
 import sparkz.core._
 
 import java.math.BigInteger
-import java.nio.charset.StandardCharsets
 import java.util.Optional
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.io.Source
@@ -113,9 +112,9 @@ class AccountStateMetadataStorageViewTest
     assertTrue("receipts should not be in storage", stateMetadataStorage.getTransactionReceipt(receipt1.transactionHash).isEmpty)
 
     val addressProposition = new AddressProposition(BytesUtils.fromHexString("00000000000000000000000000000000000000aa"))
-    storageView.updateForgerBlockCounter(ForgerIdentifier(addressProposition))
-    assertTrue("Counter for forger does not exists",storageView.getForgerBlockCounters.contains(ForgerIdentifier(addressProposition)))
-    assertTrue("Counter for forger is incorrect",storageView.getForgerBlockCounters(ForgerIdentifier(addressProposition)) == 1)
+    storageView.updateForgerBlockCounter(new ForgerIdentifier(addressProposition))
+    assertTrue("Counter for forger does not exists",storageView.getForgerBlockCounters.contains(new ForgerIdentifier(addressProposition)))
+    assertTrue("Counter for forger is incorrect",storageView.getForgerBlockCounters(new ForgerIdentifier(addressProposition)) == 1)
 
     storageView.commit(bytesToVersion(getVersion.data()))
 
