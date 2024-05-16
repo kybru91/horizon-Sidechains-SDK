@@ -70,10 +70,9 @@ object AccountFeePaymentsUtils {
     forgerInfo: ForgerInfo,
   ): (AccountPayment, Option[DelegatorFeePayment]) = {
     val forgerRewardAddress = feePayment.identifier.address
-    val delegatorShare = BigInteger.valueOf(forgerInfo.rewardShare)
     val totalMcReward = feePayment.valueFromMainchain
 
-    if (delegatorShare.compareTo(BigInteger.ZERO) == 0) {
+    if (forgerInfo.rewardShare == 0) {
       // No delegator share, all reward goes to the forger
       val totalFeeReward = feePayment.value.subtract(totalMcReward)
       val forgerPayment =
@@ -81,6 +80,8 @@ object AccountFeePaymentsUtils {
       return (forgerPayment, None)
     }
 
+    val delegatorShare = BigInteger.valueOf(forgerInfo.rewardShare)
+    
     val delegatorReward = feePayment.value.multiply(delegatorShare).divide(TOTAL_SHARE)
     val delegatorMcReward = totalMcReward.multiply(delegatorShare).divide(TOTAL_SHARE)
     val delegatorFeeReward = delegatorReward.subtract(delegatorMcReward)
