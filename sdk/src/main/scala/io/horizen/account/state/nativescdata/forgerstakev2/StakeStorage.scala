@@ -346,7 +346,7 @@ object StakeStorage {
         val lastCheckpoint = getCheckpoint(view, lastElemIndex)
         val newAmount = op(lastCheckpoint.stakedAmount)
         if (lastCheckpoint.fromEpochNumber == epoch) {
-          // Let's check if the newAmount is the same og the previous checkpoint. In that case, this last checkpoint
+          // Let's check if the newAmount is the same of the previous checkpoint. In that case, this last checkpoint
           // is removed.
           val secondLastCheckpointIdx = lastElemIndex - 1
           if (secondLastCheckpointIdx > -1 && getCheckpoint(view, secondLastCheckpointIdx).stakedAmount == newAmount) {
@@ -545,8 +545,7 @@ object ForgerMap {
   }
 
   def getForgerOption(view: BaseAccountStateView, forgerKey: ForgerKey): Option[ForgerInfo] = {
-    val forgerData = view.getAccountStorage(ACCOUNT, forgerKey.bytes)
-    if (!forgerData.sameElements(NULL_HEX_STRING_32))
+    if (existsForger(view, forgerKey))
       Some(ForgerInfoSerializer.parseBytes(view.getAccountStorageBytes(ACCOUNT, forgerKey.bytes)))
     else
       None
