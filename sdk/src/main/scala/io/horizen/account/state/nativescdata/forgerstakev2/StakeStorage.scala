@@ -318,9 +318,9 @@ object StakeStorage {
 
     val resultList = (startPos until endPos).view.map(index => {
       val forgerKey = listOfForgers.getForgerKey(view, index)
+      val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
       val stakeHistory = StakeHistory(forgerKey, delegatorKey)
       val amount = stakeHistory.getLatestAmount(view)
-      val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
       StakeDataForger(forger.forgerPublicKeys, amount)
     }).filter(_.stakedAmount.signum() > 0).toList
 
