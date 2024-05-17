@@ -32,7 +32,7 @@ object AccountFeePaymentsUtils {
     var poolFee: BigInteger = BigInteger.ZERO
     val forgersBlockRewards: Seq[ForgerPayment] = blockFeeInfoSeq.map(feeInfo => {
       poolFee = poolFee.add(feeInfo.baseFee)
-      val forgerIdentifier = ForgerIdentifier(feeInfo.forgerAddress, feeInfo.blockSignPublicKey, feeInfo.vrfPublicKey)
+      val forgerIdentifier = new ForgerIdentifier(feeInfo.forgerAddress, feeInfo.forgerKeys)
       ForgerPayment(forgerIdentifier, feeInfo.forgerTips, BigInteger.ZERO)
     })
 
@@ -69,7 +69,7 @@ object AccountFeePaymentsUtils {
     feePayment: ForgerPayment,
     forgerInfo: ForgerInfo,
   ): (AccountPayment, Option[DelegatorFeePayment]) = {
-    val forgerRewardAddress = feePayment.identifier.address
+    val forgerRewardAddress = feePayment.identifier.getAddress
     val totalMcReward = feePayment.valueFromMainchain
 
     if (forgerInfo.rewardShare == 0) {
@@ -81,7 +81,7 @@ object AccountFeePaymentsUtils {
     }
 
     val delegatorShare = BigInteger.valueOf(forgerInfo.rewardShare)
-    
+
     val delegatorReward = feePayment.value.multiply(delegatorShare).divide(TOTAL_SHARE)
     val delegatorMcReward = totalMcReward.multiply(delegatorShare).divide(TOTAL_SHARE)
     val delegatorFeeReward = delegatorReward.subtract(delegatorMcReward)

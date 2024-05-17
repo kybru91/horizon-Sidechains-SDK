@@ -18,11 +18,13 @@ object ForgerBlockCountersSerializer extends SparkzSerializer[Map[ForgerIdentifi
     w.putInt(forgerBlockCounters.size)
     forgerBlockCounters.foreach {
       case (forgerIdentifier, counter) =>
-        addressSerializer.serialize(forgerIdentifier.address, w)
-        if (forgerIdentifier.blockSignPublicKey.isDefined && forgerIdentifier.vrfPublicKey.isDefined) {
+        addressSerializer.serialize(forgerIdentifier.getAddress, w)
+        if (forgerIdentifier.getForgerKeys.isDefined) {
           w.putLong(SERIALIZATION_FORMAT_1_4_FLAG) //flag to indicate new serialization format is used
-          forgerIdentifier.blockSignPublicKey.foreach(p => signPubKeySerializer.serialize(p, w))
-          forgerIdentifier.vrfPublicKey.foreach(p => vrfPubKeySerializer.serialize(p, w))
+          forgerIdentifier.getForgerKeys.foreach { keys =>
+            signPubKeySerializer.serialize(keys.blockSignPublicKey, w)
+            vrfPubKeySerializer.serialize(keys.vrfPublicKey, w)
+          }
         }
         w.putLong(counter)
     }
@@ -37,9 +39,9 @@ object ForgerBlockCountersSerializer extends SparkzSerializer[Map[ForgerIdentifi
         val blockSignPublicKey = signPubKeySerializer.parse(r)
         val vrfPublicKey = vrfPubKeySerializer.parse(r)
         val counter = r.getLong()
-        (ForgerIdentifier(address, Some(blockSignPublicKey), Some(vrfPublicKey)), counter)
+        (new ForgerIdentifier(address, Some(ForgerPublicKeys(blockSignPublicKey, vrfPublicKey))), counter)
       } else {
-        (ForgerIdentifier(address), counter)
+        (new ForgerIdentifier(address), counter)
       }
     }.toMap
   }
