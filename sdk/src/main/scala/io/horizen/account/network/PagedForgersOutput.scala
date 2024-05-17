@@ -3,8 +3,7 @@ package io.horizen.account.network
 import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
-import io.horizen.account.state.nativescdata.forgerstakev2.ForgerInfoABI
-import io.horizen.account.state.nativescdata.forgerstakev2.GetForgerCmdInputDecoder.decodeVrfKey
+import io.horizen.account.state.nativescdata.forgerstakev2.{ForgerInfoABI, VRFDecoder}
 import io.horizen.account.state.{ForgerPublicKeys, ForgerPublicKeysSerializer}
 import io.horizen.evm.Address
 import io.horizen.json.Views
@@ -65,14 +64,15 @@ object PagedForgersOutputDecoder
 
 object GetForgerOutputDecoder
   extends ABIDecoder[ForgerInfo]
-    with MsgProcessorInputDecoder[ForgerInfo]{
+    with MsgProcessorInputDecoder[ForgerInfo]
+    with VRFDecoder{
 
   override val getListOfABIParamTypes: util.List[TypeReference[Type[_]]] =
     org.web3j.abi.Utils.convert(util.Arrays.asList(
       new TypeReference[Bytes32]() {},
       new TypeReference[Bytes32]() {},
       new TypeReference[Bytes1]() {},
-      new TypeReference[Int32]() {},
+      new TypeReference[Uint32]() {},
       new TypeReference[AbiAddress]() {}
     ))
 
@@ -80,7 +80,7 @@ object GetForgerOutputDecoder
     val forgerPublicKey = new PublicKey25519Proposition(listOfParams.get(0).asInstanceOf[Bytes32].getValue)
     val vrfKey = decodeVrfKey(listOfParams.get(1).asInstanceOf[Bytes32], listOfParams.get(2).asInstanceOf[Bytes1])
     val forgerPublicKeys = ForgerPublicKeys(forgerPublicKey, vrfKey)
-    val rewardShare = listOfParams.get(3).asInstanceOf[Int32].getValue.intValueExact()
+    val rewardShare = listOfParams.get(3).asInstanceOf[Uint32].getValue.intValueExact()
     val rewardAddress = new Address(listOfParams.get(4).asInstanceOf[AbiAddress].toString)
 
     ForgerInfo(forgerPublicKeys, rewardShare, new AddressProposition(rewardAddress))

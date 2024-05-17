@@ -59,6 +59,6 @@ case class StakeTotalCmdInput(forgerPublicKeys: Option[ForgerPublicKeys], delega
     new StaticStruct(listOfParams)
   }
 
-  override def toString: String = "%s(forgerPubKeys: %s)"
-    .format(this.getClass.toString, forgerPublicKeys)
+  override def toString: String = "%s(forgerPubKeys: %s, delegator: %s, consensusEpochStart: %s, maxNumOfEpoch: %s)"
+    .format(this.getClass.toString, forgerPublicKeys, delegator, consensusEpochStart, maxNumOfEpoch)
 }

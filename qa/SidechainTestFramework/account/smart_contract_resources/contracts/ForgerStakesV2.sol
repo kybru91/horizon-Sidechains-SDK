@@ -45,8 +45,9 @@ interface ForgerStakesV2 {
       rewardShare can range in [0..1000] and can be 0 if and only if rewardAddress == 0x000..00.
       Vrf key and signatures are split in two or more separate parameters, being longer than 32 bytes.
       sign1_x are the 25519 signature chunks and sign2_x are the Vfr signature chunks.
-      The message to sign is a string concatenation of signPubKey+vrfKey+rewardShare+rewardAddress, where rewardAddress
-      is represented in the Eip55 checksum format.
+      The message to sign is the first 31 bytes of Keccak256 hash of a string formed by the concatenation
+      of signPubKey+vrfKey+rewardShare+rewardAddress. rewardAddress is represented in the Eip55
+      checksum format and hex strings are lowercase with no prefix.
       The method accepts WEI value: the sent value will be converted to the initial stake assigned to the forger.
       The initial stake amount must be >= min threshold (10 Zen)
     */
