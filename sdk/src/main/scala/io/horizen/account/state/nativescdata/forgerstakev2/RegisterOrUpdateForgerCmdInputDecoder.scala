@@ -3,14 +3,13 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.state.ForgerPublicKeys
 import io.horizen.account.state.ForgerStakeV2MsgProcessor.MAX_REWARD_SHARE
-import io.horizen.account.state.nativescdata.forgerstakev2.SelectByForgerCmdInputDecoder.vrfPublicKeyToAbi
 import io.horizen.evm.Address
 import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.PublicKey25519Proposition
 import io.horizen.utils.Ed25519
 import org.web3j.abi.TypeReference
-import org.web3j.abi.datatypes.{StaticStruct, Type, Address => AbiAddress}
 import org.web3j.abi.datatypes.generated.{Bytes1, Bytes32, Uint32}
+import org.web3j.abi.datatypes.{StaticStruct, Type, Address => AbiAddress}
 
 import java.util
 
@@ -54,7 +53,9 @@ object RegisterOrUpdateForgerCmdInputDecoder
 
 case class RegisterOrUpdateForgerCmdInput(forgerPublicKeys: ForgerPublicKeys, rewardShare: Int,
                                           rewardAddress: Address,
-                                          signature25519: Signature25519, signatureVrf: VrfProof) extends ABIEncodable[StaticStruct] {
+                                          signature25519: Signature25519, signatureVrf: VrfProof)
+  extends ABIEncodable[StaticStruct]
+    with VRFDecoder{
   require(rewardShare >= 0, "reward share expected to be non negative.")
   require(rewardShare <= MAX_REWARD_SHARE, s"reward share expected to be $MAX_REWARD_SHARE at most")
 

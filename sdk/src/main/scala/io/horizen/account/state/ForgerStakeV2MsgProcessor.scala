@@ -384,7 +384,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val forgerKeys: ForgerPublicKeys = cmdInput.forgerPublicKeys
     val consensusEpochStart: Int = cmdInput.consensusEpochStart
 
-    if (consensusEpochStart > currentEpoch) {
+    if (consensusEpochStart >= currentEpoch) {
       val msgStr = s"Illegal argument - consensus epoch start $consensusEpochStart can not be greater than currentEpoch $currentEpoch"
       throw new ExecutionRevertedException(msgStr)
     }

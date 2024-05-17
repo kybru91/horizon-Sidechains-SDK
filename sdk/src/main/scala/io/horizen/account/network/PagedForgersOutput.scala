@@ -3,8 +3,7 @@ package io.horizen.account.network
 import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
-import io.horizen.account.state.nativescdata.forgerstakev2.ForgerInfoABI
-import io.horizen.account.state.nativescdata.forgerstakev2.SelectByForgerCmdInputDecoder.decodeVrfKey
+import io.horizen.account.state.nativescdata.forgerstakev2.{ForgerInfoABI, VRFDecoder}
 import io.horizen.account.state.{ForgerPublicKeys, ForgerPublicKeysSerializer}
 import io.horizen.evm.Address
 import io.horizen.json.Views
@@ -65,7 +64,8 @@ object PagedForgersOutputDecoder
 
 object GetForgerOutputDecoder
   extends ABIDecoder[ForgerInfo]
-    with MsgProcessorInputDecoder[ForgerInfo]{
+    with MsgProcessorInputDecoder[ForgerInfo]
+    with VRFDecoder{
 
   override val getListOfABIParamTypes: util.List[TypeReference[Type[_]]] =
     org.web3j.abi.Utils.convert(util.Arrays.asList(

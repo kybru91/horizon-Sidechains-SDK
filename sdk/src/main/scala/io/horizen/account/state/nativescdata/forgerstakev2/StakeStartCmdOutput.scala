@@ -11,7 +11,7 @@ case class StakeStartCmdOutput(epoch: Int) extends ABIEncodable[StaticStruct] {
 
   override def asABIType(): StaticStruct = {
     val listOfParams: util.List[Type[_]] = new util.ArrayList()
-    // must be Int (with signum) because it carries the samantic 'not there' with the '-1' value
+    // must be Int (with signum) because it carries the semantic 'not there' with the '-1' value
     listOfParams.add(new Int32(epoch))
     new StaticStruct(listOfParams)
   }

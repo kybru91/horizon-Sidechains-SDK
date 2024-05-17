@@ -4,7 +4,7 @@ import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, ABIListEncoder, MsgProcessorInputDecoder}
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
-import io.horizen.account.state.nativescdata.forgerstakev2.SelectByForgerCmdInputDecoder.vrfPublicKeyToAbi
+import io.horizen.account.state.nativescdata.forgerstakev2.VRFDecoder
 import io.horizen.account.utils.BigIntegerUInt256.getUnsignedByteArray
 import io.horizen.account.utils.{BigIntegerUInt256, Secp256k1}
 import io.horizen.evm.Address
@@ -128,7 +128,8 @@ object AccountForgingStakeInfoSerializer extends SparkzSerializer[AccountForging
 case class ForgerPublicKeys(
                              blockSignPublicKey: PublicKey25519Proposition,
                              vrfPublicKey: VrfPublicKey)
-  extends BytesSerializable with ABIEncodable[StaticStruct] {
+  extends BytesSerializable with ABIEncodable[StaticStruct]
+  with VRFDecoder{
   override type M = ForgerPublicKeys
 
   override def asABIType(): StaticStruct = {
