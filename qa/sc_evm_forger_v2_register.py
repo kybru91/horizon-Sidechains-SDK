@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import time
+import logging
 from decimal import Decimal
 
 from eth_abi import decode
@@ -43,6 +44,9 @@ class SCEvmForgerV2register(AccountChainSetup):
                          block_timestamp_rewind=1500 * EVM_APP_SLOT_TIME * VERSION_1_3_FORK_EPOCH)
 
     def run_test(self):
+        if self.options.all_forks:
+            logging.info("This test cannot be executed with --allforks")
+            exit()
 
         mc_node = self.nodes[0]
         sc_node_1 = self.sc_nodes[0]
