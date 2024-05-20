@@ -100,7 +100,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
     DELEGATOR_ADDRESS_7 = FORGER_REWARD_ADDRESS_7
 
     def __init__(self):
-        super().__init__(number_of_sidechain_nodes=7, withdrawalEpochLength=20, forward_amount=13,
+        super().__init__(number_of_sidechain_nodes=7, withdrawalEpochLength=20, forward_amount=50,
                          block_timestamp_rewind=SLOTS_IN_EPOCH * EVM_APP_SLOT_TIME * 100)
 
     def run_test(self):
@@ -227,7 +227,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         self.sc_sync_all()
 
         # Generate some blocks for fee distribution calculation
-        generate_next_block(sc_node_2, "second", force_switch_to_next_epoch=True)  # 80
+        generate_next_block(sc_node_1, "first", force_switch_to_next_epoch=True)  # 80
         ft_pool_amount = 100
         forward_transfer_to_sidechain(self.sc_nodes_bootstrap_info.sidechain_id,
                                       mc_node,
@@ -236,7 +236,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
                                       mc_return_address=mc_node.getnewaddress(),
                                       generate_block=False)
         # Activate forger stake v2
-        forger_pool_fee_1, node_1_tip_1 = self.activate_stake_v2(evm_address_sc_node_1, sc_node_1, sc_node_2)
+        forger_pool_fee_1, node_1_tip_1 = self.activate_stake_v2(evm_address_sc_node_1, sc_node_1)
 
         # update forger
         update_tx_1 = ac_updateForger(sc_node_1, forger_1_blockSignPubKey, forger_1_vrfPubKey, reward_address=self.DELEGATOR_ADDRESS_1, reward_share=500)['result']['transactionId']
@@ -247,13 +247,13 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         update_tx_7 = ac_updateForger(sc_node_7, forger_7_blockSignPubKey, forger_7_vrfPubKey, reward_address=self.DELEGATOR_ADDRESS_7, reward_share=500)['result']['transactionId']
 
         self.sc_sync_all()
-        generate_next_block(sc_node_1, "first")
-        _, forger_pool_fee_2, node_1_tip_2 = computeForgedTxFee(sc_node_1, update_tx_1)
-        _, forger_pool_fee_3, node_1_tip_3 = computeForgedTxFee(sc_node_1, update_tx_2)
-        _, forger_pool_fee_4, node_1_tip_4 = computeForgedTxFee(sc_node_1, update_tx_3)
-        _, forger_pool_fee_5, node_1_tip_5 = computeForgedTxFee(sc_node_1, update_tx_4)
-        _, forger_pool_fee_6, node_1_tip_6 = computeForgedTxFee(sc_node_1, update_tx_6)
-        _, forger_pool_fee_7, node_1_tip_7 = computeForgedTxFee(sc_node_1, update_tx_7)
+        generate_next_block(sc_node_2, "second")
+        _, forger_pool_fee_2, node_2_tip_2 = computeForgedTxFee(sc_node_1, update_tx_1)
+        _, forger_pool_fee_3, node_2_tip_3 = computeForgedTxFee(sc_node_1, update_tx_2)
+        _, forger_pool_fee_4, node_2_tip_4 = computeForgedTxFee(sc_node_1, update_tx_3)
+        _, forger_pool_fee_5, node_2_tip_5 = computeForgedTxFee(sc_node_1, update_tx_4)
+        _, forger_pool_fee_6, node_2_tip_6 = computeForgedTxFee(sc_node_1, update_tx_6)
+        _, forger_pool_fee_7, node_2_tip_7 = computeForgedTxFee(sc_node_1, update_tx_7)
         generate_next_blocks(sc_node_2, "second", 1)
         generate_next_blocks(sc_node_3, "third", 2)
         generate_next_blocks(sc_node_4, "fourth", 2)
@@ -262,45 +262,52 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         generate_next_blocks(sc_node_7, "seventh", 1)
 
         mc_node.generate(self.withdrawalEpochLength - 1)
-        sc_last_we_block_id = generate_next_block(sc_node_1, "first node")
-        api_fee_payments = http_block_getFeePayments(sc_node_1, sc_last_we_block_id)['feePayments']
-        assert_equal(9, len(api_fee_payments))
 
         # Fee calculations
         total_block_fee = forger_pool_fee_1 + forger_pool_fee_2 + forger_pool_fee_3 + forger_pool_fee_4 + forger_pool_fee_5 + forger_pool_fee_6 + forger_pool_fee_7
-        per_block_fee = total_block_fee // 16  # 17,272,282 + 6 remainder, added manually later
-        block_fee_remainder = total_block_fee % 16  # 6
-        total_node_1_tips = node_1_tip_1 + node_1_tip_2 + node_1_tip_3 + node_1_tip_4 + node_1_tip_5 + node_1_tip_6 + node_1_tip_7
+        per_block_fee = total_block_fee // 16
+        block_fee_remainder = total_block_fee % 16
+        node_1_before_fork_remainder, node_1_after_fork_remainder, node_2_remainder, \
+            node_3_remainder, node_4_remainder, node_5_remainder, node_6_remainder, node_7_remainder = self.calculate_remainders(block_fee_remainder)
+
+        total_node_1_tips = node_1_tip_1
+        total_node_2_tips = node_2_tip_2 + node_2_tip_3 + node_2_tip_4 + node_2_tip_5 + node_2_tip_6 + node_2_tip_7
         per_block_mc_reward = convertZenniesToWei(2500000000) // 16  # 1,562,500,000,000,000,000
 
         forger_1_before_fork_rewards_mc = per_block_mc_reward * 2
-        forger_1_before_fork_rewards_fee = per_block_fee * 2 + 2  # 2 from remainder
+        forger_1_before_fork_rewards_fee = per_block_fee * 2 + node_1_before_fork_remainder
         forger_1_before_fork_rewards = forger_1_before_fork_rewards_mc + forger_1_before_fork_rewards_fee
         forger_1_after_fork_rewards_mc = per_block_mc_reward * 3
-        forger_1_after_fork_rewards_fee = per_block_fee * 3 + total_node_1_tips + 2  # 2 from remainder
+        forger_1_after_fork_rewards_fee = per_block_fee * 3 + total_node_1_tips + node_1_after_fork_remainder
         forger_1_after_fork_rewards = forger_1_after_fork_rewards_mc + forger_1_after_fork_rewards_fee
         forger_2_rewards_mc = per_block_mc_reward * 3
-        forger_2_rewards_fee = per_block_fee * 3 + 2  # 2 from remainder
+        forger_2_rewards_fee = per_block_fee * 3 + total_node_2_tips + node_2_remainder
         forger_2_rewards = forger_2_rewards_mc + forger_2_rewards_fee
         forger_3_rewards_mc = per_block_mc_reward * 2
-        forger_3_rewards_fee = per_block_fee * 2
+        forger_3_rewards_fee = per_block_fee * 2 + node_3_remainder
         forger_3_rewards = forger_3_rewards_mc + forger_3_rewards_fee
         forger_4_rewards_mc = per_block_mc_reward * 2
-        forger_4_rewards_fee = per_block_fee * 2
+        forger_4_rewards_fee = per_block_fee * 2 + node_4_remainder
         forger_4_rewards = forger_4_rewards_mc + forger_4_rewards_fee
         forger_5_rewards_mc = per_block_mc_reward * 2
-        forger_5_rewards_fee = per_block_fee * 2
+        forger_5_rewards_fee = per_block_fee * 2 + node_5_remainder
         forger_5_rewards = forger_5_rewards_mc + forger_5_rewards_fee
         forger_6_rewards_mc = per_block_mc_reward * 1
-        forger_6_rewards_fee = per_block_fee * 1
+        forger_6_rewards_fee = per_block_fee * 1 + node_6_remainder
         forger_6_rewards = forger_6_rewards_mc + forger_6_rewards_fee
         forger_7_rewards_mc = per_block_mc_reward * 1
-        forger_7_rewards_fee = per_block_fee * 1
+        forger_7_rewards_fee = per_block_fee * 1 + node_7_remainder
         forger_7_rewards = forger_7_rewards_mc + forger_7_rewards_fee
 
-        reward_address_1_rewards = forger_1_before_fork_rewards + (forger_1_after_fork_rewards // 2) + (forger_2_rewards // 2)
-        reward_address_3_rewards = forger_3_rewards // 2
-        reward_address_4_rewards = forger_4_rewards // 2
+        reward_address_1_rewards = forger_1_before_fork_rewards + (forger_1_after_fork_rewards // 2) + (forger_2_rewards // 2) + (forger_1_after_fork_rewards % 2) + (forger_2_rewards % 2)
+        reward_address_1_rewards_mc = forger_1_before_fork_rewards_mc + (forger_1_after_fork_rewards_mc // 2) + (forger_2_rewards_mc // 2) + (forger_1_after_fork_rewards_mc % 2) + (forger_2_rewards_mc % 2)
+        reward_address_1_rewards_fee = forger_1_before_fork_rewards_fee + (forger_1_after_fork_rewards_fee // 2) + (forger_2_rewards_fee // 2) + (forger_1_after_fork_rewards_fee % 2) + (forger_2_rewards_fee % 2)
+        reward_address_3_rewards = forger_3_rewards // 2 + forger_3_rewards % 2
+        reward_address_3_rewards_mc = forger_3_rewards_mc // 2 + forger_3_rewards_mc % 2
+        reward_address_3_rewards_fee = forger_3_rewards_fee // 2 + forger_3_rewards_fee % 2
+        reward_address_4_rewards = forger_4_rewards // 2 + forger_4_rewards % 2
+        reward_address_4_rewards_mc = forger_4_rewards_mc // 2 + forger_4_rewards_mc % 2
+        reward_address_4_rewards_fee = forger_4_rewards_fee // 2 + forger_4_rewards_fee % 2
         reward_address_5_rewards = forger_5_rewards
         reward_address_7_rewards = forger_7_rewards
 
@@ -309,20 +316,24 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         delegator_address_3_rewards = (forger_3_rewards // 2) + (forger_4_rewards // 2)
         delegator_address_6_rewards = forger_6_rewards
 
+        sc_last_we_block_id = generate_next_block(sc_node_2, "second")
+        api_fee_payments = http_block_getFeePayments(sc_node_1, sc_last_we_block_id)['feePayments']
+        assert_equal(9, len(api_fee_payments))
+
         api_fee_payments_reward_1 = [f for f in api_fee_payments if f['address']['address'] == self.FORGER_REWARD_ADDRESS_1][0]
         assert_equal(reward_address_1_rewards, api_fee_payments_reward_1['value'])
-        assert_equal(forger_1_before_fork_rewards_mc + (forger_1_after_fork_rewards_mc + forger_2_rewards_mc) // 2, api_fee_payments_reward_1['valueFromMainchain'])
-        assert_equal(forger_1_before_fork_rewards_fee + (forger_1_after_fork_rewards_fee + forger_2_rewards_fee) // 2, api_fee_payments_reward_1['valueFromFees'])
+        assert_equal(reward_address_1_rewards_mc, api_fee_payments_reward_1['valueFromMainchain'])
+        assert_equal(reward_address_1_rewards_fee, api_fee_payments_reward_1['valueFromFees'])
 
         api_fee_payments_reward_3 = [f for f in api_fee_payments if f['address']['address'] == self.FORGER_REWARD_ADDRESS_3][0]
         assert_equal(reward_address_3_rewards, api_fee_payments_reward_3['value'])
-        assert_equal(forger_3_rewards_mc // 2, api_fee_payments_reward_3['valueFromMainchain'])
-        assert_equal(forger_3_rewards_fee // 2, api_fee_payments_reward_3['valueFromFees'])
+        assert_equal(reward_address_3_rewards_mc, api_fee_payments_reward_3['valueFromMainchain'])
+        assert_equal(reward_address_3_rewards_fee, api_fee_payments_reward_3['valueFromFees'])
 
         api_fee_payments_reward_4 = [f for f in api_fee_payments if f['address']['address'] == self.FORGER_REWARD_ADDRESS_4][0]
         assert_equal(reward_address_4_rewards, api_fee_payments_reward_4['value'])
-        assert_equal(forger_4_rewards_mc // 2, api_fee_payments_reward_4['valueFromMainchain'])
-        assert_equal(forger_4_rewards_fee // 2, api_fee_payments_reward_4['valueFromFees'])
+        assert_equal(reward_address_4_rewards_mc, api_fee_payments_reward_4['valueFromMainchain'])
+        assert_equal(reward_address_4_rewards_fee, api_fee_payments_reward_4['valueFromFees'])
 
         api_fee_payments_reward_5 = [f for f in api_fee_payments if f['address']['address'] == self.FORGER_REWARD_ADDRESS_5][0]
         assert_equal(reward_address_5_rewards, api_fee_payments_reward_5['value'])
@@ -356,7 +367,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
 
         self.sc_sync_all()
 
-    def activate_stake_v2(self, evm_address_sc_node_1, sc_node_1, sc_node_2):
+    def activate_stake_v2(self, evm_address_sc_node_1, sc_node_1):
         forger_v2_native_contract = SmartContract("ForgerStakesV2")
         method = 'activate()'
         tx_hash = contract_function_call(sc_node_1, forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
@@ -364,8 +375,8 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         generate_next_block(sc_node_1, "first node")
         _, forgersPoolFee, forgerTip = computeForgedTxFee(sc_node_1, tx_hash)
         self.sc_sync_all()
-        generate_next_block(sc_node_2, "second node")
-        tx_receipt = sc_node_2.rpc_eth_getTransactionReceipt(tx_hash)['result']
+        generate_next_block(sc_node_1, "second node")
+        tx_receipt = sc_node_1.rpc_eth_getTransactionReceipt(tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
         intrinsic_gas = 21000 + 4 * 16  # activate signature are 4 non-zero bytes
         assert_equal(intrinsic_gas, int(tx_receipt['gasUsed'], 16), "wrong used gas")
@@ -489,6 +500,25 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
             bootstrap_sidechain_nodes(self.options, network,
                                       block_timestamp_rewind=SLOTS_IN_EPOCH * EVM_APP_SLOT_TIME * 100,
                                       model=AccountModel)
+
+    def calculate_remainders(self, block_fee_remainder):
+        # block order: 1^, 1^, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 2
+        if block_fee_remainder <= 2:
+            return block_fee_remainder, 0, 0, 0, 0, 0, 0, 0
+        if block_fee_remainder <= 5:
+            return 2, block_fee_remainder - 2, 0, 0, 0, 0, 0, 0
+        elif block_fee_remainder <= 7:
+            return 2, 3, block_fee_remainder - 5, 0, 0, 0, 0, 0
+        elif block_fee_remainder <= 9:
+            return 2, 3, 2, block_fee_remainder - 7, 0, 0, 0, 0
+        elif block_fee_remainder <= 11:
+            return 2, 3, 2, 2, block_fee_remainder - 9, 0, 0, 0
+        elif block_fee_remainder <= 13:
+            return 2, 3, 2, 2, 2, block_fee_remainder - 11, 0, 0
+        elif block_fee_remainder == 14:
+            return 2, 3, 2, 2, 2, 2, 1, 0
+        elif block_fee_remainder == 15:
+            return 2, 3, 2, 2, 2, 2, 1, 1
 
 
 if __name__ == "__main__":
