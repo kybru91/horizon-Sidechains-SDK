@@ -172,16 +172,12 @@ class SCEvmForgerV2register(AccountChainSetup):
         assert_equal(0, status, "adding an existing forger should result in a reverted tx")
 
         # - try staking an invalid amount (too low)
-        result = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount - 1,
+        errored_res = ac_registerForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2, staked_amount - 1,
                                    reward_address=None, reward_share=0, nonce=None)
-        self.sc_sync_all()
-        generate_next_block(sc_node_1, "first node")
-        self.sc_sync_all()
-        # Checking the receipt
-        tx_id = result['result']['transactionId']
-        receipt = sc_node_2.rpc_eth_getTransactionReceipt(add_0x_prefix(tx_id))
-        status = int(receipt['result']['status'], 16)
-        assert_equal(0, status, "registering with an invalid stake amount should result in a reverted tx")
+        if 'error' not in errored_res:
+            fail("Should not be able to create a valid staking")
+        else:
+            assert_true("below the minimum stake amount threshold" in errored_res['error']['description'])
 
         # - try adding a forger with some illegal parameters
         #   . invalid signer key 25519 (key not in wallet)

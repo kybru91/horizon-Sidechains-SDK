@@ -47,6 +47,6 @@ case class StakeStartCmdInput(forgerPublicKeys: ForgerPublicKeys, delegator: Add
   }
 
   override def toString: String =
-    "%s(forgerPubKeys: %s)"
-      .format(this.getClass.toString, forgerPublicKeys)
+    "%s(forgerPubKeys: %s, delegator: %s)"
+      .format(this.getClass.toString, forgerPublicKeys, delegator)
 }

@@ -2,11 +2,10 @@ package io.horizen.account.state.nativescdata.forgerstakev2
 
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, MsgProcessorInputDecoder}
 import org.web3j.abi.TypeReference
-import org.web3j.abi.datatypes.generated.{Uint256, Uint32}
-import org.web3j.abi.datatypes.{DynamicArray, DynamicStruct, StaticStruct, Type}
+import org.web3j.abi.datatypes.generated.Uint32
+import org.web3j.abi.datatypes.{StaticStruct, Type}
 
 import java.util
-import scala.jdk.CollectionConverters.asScalaBufferConverter
 
 
 case class ConsensusEpochCmdOutput(epoch: Int) extends ABIEncodable[StaticStruct] {

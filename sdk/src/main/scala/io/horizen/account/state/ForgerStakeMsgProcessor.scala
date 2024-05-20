@@ -12,9 +12,8 @@ import io.horizen.account.state.ForgerStakeStorageV1.LinkedListTipKey
 import io.horizen.account.state.ForgerStakeStorageVersion.ForgerStakeStorageVersion
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
 import io.horizen.account.state.events._
-import io.horizen.account.utils.{AccountPayment, WellKnownAddresses}
-import io.horizen.account.state.events.{DelegateForgerStake, OpenForgerList, StakeUpgrade, WithdrawForgerStake}
 import io.horizen.account.storage.MsgProcessorMetadataStorageReader
+import io.horizen.account.utils.WellKnownAddresses
 import io.horizen.account.utils.WellKnownAddresses.FORGER_STAKE_SMART_CONTRACT_ADDRESS
 import io.horizen.account.utils.ZenWeiConverter.isValidZenAmount
 import io.horizen.evm.Address

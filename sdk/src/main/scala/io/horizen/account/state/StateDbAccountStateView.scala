@@ -72,7 +72,7 @@ class StateDbAccountStateView(
   }
 
   override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = {
-    if (isForkV1_4Active && forgerStakesV2Provider.isActive(this)) {
+    if (isForkV1_4Active && forgerStakesV2IsActive) {
       forgerStakesV2Provider.getListOfForgersStakes(this)
         .map(AccountForgingStakeInfo(null, _))
     } else {
@@ -171,7 +171,7 @@ class StateDbAccountStateView(
       _ => true
     }
 
-    if (forkV1_4Active && forgerStakesV2Provider.isActive(this)) {
+    if (forkV1_4Active && forgerStakesV2IsActive) {
       // V2 Stake storage provides stakes per forger
       forgerStakesV2Provider.getForgingStakes(this)
     } else {

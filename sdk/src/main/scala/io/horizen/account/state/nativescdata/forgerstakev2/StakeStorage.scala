@@ -416,14 +416,13 @@ object StakeStorage {
   case class DelegatorKey(address: Address)
     extends Address(new AddressProposition(address).checksumAddress())
 
-  case class ForgerKey(forgerKey: Array[Byte]) {
-    val bytes: Array[Byte] = forgerKey
+  case class ForgerKey(bytes: Array[Byte]) {
 
     override def hashCode(): Int = java.util.Arrays.hashCode(bytes)
 
     override def equals(obj: Any): Boolean = {
       obj match {
-        case forgerKey: ForgerKey => bytes.sameElements(forgerKey.bytes)
+        case obj: ForgerKey => bytes.sameElements(obj.bytes)
         case _ => false
       }
     }

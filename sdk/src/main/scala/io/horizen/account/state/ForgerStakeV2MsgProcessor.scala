@@ -15,10 +15,12 @@ import io.horizen.proof.{Signature25519, VrfProof}
 import io.horizen.proposition.{PublicKey25519Proposition, VrfPublicKey}
 import io.horizen.utils.BytesUtils
 import org.web3j.crypto.Keys
+import org.web3j.utils.Numeric.cleanHexPrefix
 import sparkz.crypto.hash.Keccak256
 
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
+import scala.util.{Failure, Success, Try}
 
 trait ForgerStakesV2Provider {
   private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
@@ -44,7 +46,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
-    if (!Version1_4_0Fork.get(context.blockContext.consensusEpochNumber).active)
+    if (!isForkActive(context.blockContext.consensusEpochNumber))
       throw new ExecutionRevertedException(s"fork not active")
     val gasView = view.getGasTrackedView(invocation.gasPool)
     getFunctionSignature(invocation.input) match {
@@ -82,13 +84,13 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   def verifySignatures(msgToSign: Array[Byte], blockSignPubKey: PublicKey25519Proposition, vrfPubKey: VrfPublicKey, sign25519: Signature25519, signVrf: VrfProof): Unit = {
     if (!sign25519.isValid(blockSignPubKey, msgToSign)) {
       val errMsg = s"Invalid signature, could not validate against blockSignerProposition=$blockSignPubKey (sign=$sign25519)"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
     if (!signVrf.isValid(vrfPubKey, msgToSign)) {
       val errMsg = s"Invalid signature, could not validate against vrfKey=$vrfPubKey (sign=$signVrf)"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
   }
@@ -103,12 +105,12 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     // it is over the minimum threshold
     if (!isValidZenAmount(stakedAmount)) {
       val errMsg = s"Value is not a legal wei amount: ${stakedAmount.toString()}, maximum 10 decimals accepted"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
     if (stakedAmount.compareTo(MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI) < 0) {
       val errMsg = s"Value ${stakedAmount.toString()} is below the minimum stake amount threshold: $MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI "
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
@@ -119,32 +121,32 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val blockSignPubKey = cmdInput.forgerPublicKeys.blockSignPublicKey
     val vrfPubKey = cmdInput.forgerPublicKeys.vrfPublicKey
     val rewardShare = cmdInput.rewardShare
-    val smartContractAddr = cmdInput.smartContractAddress
+    val smartContractAddr = cmdInput.rewardAddress
     val sign25519 = cmdInput.signature25519
     val signVrf = cmdInput.signatureVrf
 
 
     if (gasView.getBalance(invocation.caller).subtract(stakedAmount).signum() < 0) {
-      val errMsg = s"Not enough balance: ${ForgerPublicKeys(blockSignPubKey, vrfPubKey).toString}"
-      log.warn(errMsg)
+      val errMsg = s"Not enough balance: ${cmdInput.forgerPublicKeys.toString}"
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
     // check that rewardShare is in legal range
     if (rewardShare < 0 || rewardShare > MAX_REWARD_SHARE) {
       val errMsg = s"Illegal reward share value: = $rewardShare"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
     if (rewardShare == 0 && smartContractAddr != Address.ZERO) {
       val errMsg = s"Reward share cannot be 0 if reward address is defined - Reward share = $rewardShare, reward address = $smartContractAddr"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
     else if (rewardShare != 0 && smartContractAddr == Address.ZERO) {
       val errMsg = s"Reward share cannot be different from 0 if reward address is not defined - Reward share = $rewardShare, reward address = $smartContractAddr"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
@@ -153,7 +155,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     // check we do not have this forger yet. This is an early check, addForger will do it as well
     if (getForger(gasView, blockSignPubKey, vrfPubKey).isDefined) {
       val errMsg = s"Can not register an already existing forger: ${ForgerPublicKeys(blockSignPubKey, vrfPubKey).toString}"
-      log.warn(errMsg)
+      log.debug(errMsg)
       throw new ExecutionRevertedException(errMsg)
     }
 
@@ -193,7 +195,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val blockSignPubKey = cmdInput.forgerPublicKeys.blockSignPublicKey
     val vrfPubKey = cmdInput.forgerPublicKeys.vrfPublicKey
     val rewardShare = cmdInput.rewardShare
-    val rewardAddress = cmdInput.smartContractAddress
+    val rewardAddress = cmdInput.rewardAddress
     val sign25519 = cmdInput.signature25519
     val signVrf = cmdInput.signatureVrf
 
@@ -249,7 +251,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
     checkForgerStakesV2IsActive(view)
     val inputParams = getArgumentsFromData(invocation.input)
-    val DelegateCmdInput(forgerPublicKeys) = DelegateCmdInputDecoder.decode(inputParams)
+    val SelectByForgerCmdInput(forgerPublicKeys) = SelectByForgerCmdInputDecoder.decode(inputParams)
 
     log.debug(s"delegate called - $forgerPublicKeys")
     val stakedAmount = invocation.value
@@ -337,16 +339,31 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = StakeTotalCmdInputDecoder.decode(inputParams)
 
+    if (cmdInput.consensusEpochStart.isDefined && (cmdInput.consensusEpochStart.get > currentEpoch)) {
+      val msgStr = s"Illegal argument - consensus epoch start ${cmdInput.consensusEpochStart.get} can not be greater than currentEpoch $currentEpoch"
+      throw new ExecutionRevertedException(msgStr)
+    }
+
     val forgerKeys = cmdInput.forgerPublicKeys
     val delegator = cmdInput.delegator
     val consensusEpochStart = if (cmdInput.consensusEpochStart.isEmpty) currentEpoch else cmdInput.consensusEpochStart.get
     val maxNumOfEpoch = cmdInput.maxNumOfEpoch
     log.info(s"stakeTotal called - $forgerKeys $delegator epochStart: $consensusEpochStart - maxNumOfEpoch: $maxNumOfEpoch")
 
-    if (forgerKeys.isEmpty && delegator.isDefined) {
-      val msgStr = s"Illegal argument - delegator is defined while forger keys are not"
-      throw new ExecutionRevertedException(msgStr)
+    if (forgerKeys.isEmpty) {
+      if (delegator.isDefined) {
+        val msgStr = s"Illegal argument - delegator is defined while forger keys are not"
+        throw new ExecutionRevertedException(msgStr)
+      }
+    } else {
+      // check we do have this forger
+      if (getForger(view, forgerKeys.get.blockSignPublicKey, forgerKeys.get.vrfPublicKey).isEmpty) {
+          val errMsg = s"Forger does not exist: ${forgerKeys.toString}"
+          log.debug(errMsg)
+          throw new ExecutionRevertedException(errMsg)
+      }
     }
+
     val consensusEpochEnd =
       if (maxNumOfEpoch.isEmpty) consensusEpochStart
       else if (consensusEpochStart + maxNumOfEpoch.get > currentEpoch) currentEpoch
@@ -366,6 +383,12 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
     val forgerKeys: ForgerPublicKeys = cmdInput.forgerPublicKeys
     val consensusEpochStart: Int = cmdInput.consensusEpochStart
+
+    if (consensusEpochStart >= currentEpoch) {
+      val msgStr = s"Illegal argument - consensus epoch start $consensusEpochStart can not be greater than currentEpoch $currentEpoch"
+      throw new ExecutionRevertedException(msgStr)
+    }
+
     val maxNumOfEpoch: Int =
       if (consensusEpochStart + cmdInput.maxNumOfEpoch - 1 >= currentEpoch)
         currentEpoch - consensusEpochStart
@@ -399,30 +422,40 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   def doPagedForgersStakesByDelegatorCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
     requireIsNotPayable(invocation)
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 is not activated"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
+
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByDelegatorCmdInputDecoder.decode(inputParams)
     log.debug(s"getPagedForgersStakesByDelegator called - ${cmdInput.delegator} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    val result = StakeStorage.getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
-    PagedForgersStakesByDelegatorOutput(result.nextStartPos, result.stakesData).encode()
+    val response = Try {
+      // We must trap any exception arising and return the execution reverted exception
+      StakeStorage.getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
+    } match {
+      case Success(response) => response
+      case Failure(ex) =>
+        throw new ExecutionRevertedException("Could not get paged result: " + ex.getMessage)
+    }
+
+    PagedForgersStakesByDelegatorOutput(response.nextStartPos, response.stakesData).encode()
   }
 
   def doPagedForgersStakesByForgerCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
     requireIsNotPayable(invocation)
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 is not activated"
-      throw new ExecutionRevertedException(msgStr)
-    }
+    checkForgerStakesV2IsActive(view)
 
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = PagedForgersStakesByForgerCmdInputDecoder.decode(inputParams)
     log.debug(s"getPagedForgersStakesByForger called - ${cmdInput.forgerPublicKeys} startIndex: ${cmdInput.startIndex} - pageSize: ${cmdInput.pageSize}")
 
-    val response = StakeStorage.getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
+    val response = Try {
+      // We must trap any exception arising and return the execution reverted exception
+      StakeStorage.getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
+    } match {
+      case Success(response) => response
+      case Failure(ex) =>
+        throw new ExecutionRevertedException("Could not get paged result: " + ex.getMessage)
+    }
     PagedForgersStakesByForgerOutput(response.nextStartPos, response.stakesData).encode()
   }
 
@@ -431,7 +464,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     checkForgerStakesV2IsActive(view)
 
     val inputParams = getArgumentsFromData(invocation.input)
-    val cmdInput = GetForgerCmdInputDecoder.decode(inputParams)
+    val cmdInput = SelectByForgerCmdInputDecoder.decode(inputParams)
 
     val forgerOpt = StakeStorage.getForger(view, cmdInput.forgerPublicKeys.blockSignPublicKey, cmdInput.forgerPublicKeys.vrfPublicKey)
     if (forgerOpt.isEmpty)
@@ -465,7 +498,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     requireIsNotPayable(invocation)
     checkInputDoesntContainParams(invocation)
 
-    //Check it cannot called twice
+    //Check it cannot be called twice
     if (StakeStorage.isActive(view)) {
       val msgStr = s"Forger stake V2 already activated"
       log.debug(msgStr)
@@ -552,8 +585,9 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       GetCurrentConsensusEpochCmd.length == 2 * METHOD_ID_LENGTH
   )
 
-  def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, smartcontract_address: String): Array[Byte] = {
-    val messageToSignString = blockSignPubKeyStr + vrfPublicKeyStr + rewardShare.toString + Keys.toChecksumAddress(smartcontract_address)
+  def getHashedMessageToSign(blockSignPubKeyStr: String, vrfPublicKeyStr: String, rewardShare: Int, rewardAddress: String): Array[Byte] = {
+    // we use lower case representation for hex strings and checksum format for address
+    val messageToSignString = cleanHexPrefix(blockSignPubKeyStr).toLowerCase + cleanHexPrefix(vrfPublicKeyStr).toLowerCase + rewardShare.toString + Keys.toChecksumAddress(rewardAddress)
     // we take only first 31 bytes since vrf signature is involved, and we must be on the safe side using less than a field element's modulus bits size (253 bites)
     Keccak256.hash(messageToSignString.getBytes(StandardCharsets.UTF_8)).take(31)
   }

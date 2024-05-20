@@ -33,7 +33,7 @@ trait AccountStateMetadataStorageReader {
   def getHeight: Int
 
   // zero bytes when storage is empty
-  def getAccountStateRoot: Array[Byte] // 32 bytes, kessack hash
+  def getAccountStateRoot: Array[Byte] // 32 bytes, keccak hash
 
   def getForgerBlockCounters: Map[ForgerIdentifier, Long]
 

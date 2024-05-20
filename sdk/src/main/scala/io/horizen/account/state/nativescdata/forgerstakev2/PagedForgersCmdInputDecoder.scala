@@ -9,8 +9,7 @@ import java.util
 
 object PagedForgersCmdInputDecoder
   extends ABIDecoder[PagedForgersCmdInput]
-    with MsgProcessorInputDecoder[PagedForgersCmdInput]
-    with VRFDecoder{
+    with MsgProcessorInputDecoder[PagedForgersCmdInput] {
 
   override val getListOfABIParamTypes: util.List[TypeReference[Type[_]]] =
     org.web3j.abi.Utils.convert(util.Arrays.asList(
