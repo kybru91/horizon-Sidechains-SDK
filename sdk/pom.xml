@@ -405,6 +405,7 @@
           <include>nonce_calculation_hex</include>
           <include>mcpublickeyhashproposition_hex</include>
           <include>boxmerklepathinfo_hex</include>
+          <include>block_fee_info_seq.dsv</include>
           <include>sidechaincoretransaction_hex</include>
           <include>ethereumtransaction_eoa2eoa_legacy_signed_hex</include>
           <include>ethereumtransaction_eoa2eoa_legacy_unsigned_hex</include>

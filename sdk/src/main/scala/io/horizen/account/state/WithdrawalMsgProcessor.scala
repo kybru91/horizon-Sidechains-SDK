@@ -4,6 +4,7 @@ import com.google.common.primitives.{Bytes, Ints}
 import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgumentsFromData, getFunctionSignature}
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, ABIListEncoder, MsgProcessorInputDecoder}
 import io.horizen.account.state.events.AddWithdrawalRequest
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.WellKnownAddresses.WITHDRAWAL_REQ_SMART_CONTRACT_ADDRESS
 import io.horizen.account.utils.ZenWeiConverter
 import io.horizen.proposition.MCPublicKeyHashProposition
@@ -35,7 +36,7 @@ object WithdrawalMsgProcessor extends NativeSmartContractMsgProcessor with Withd
   val DustThresholdInWei: BigInteger = ZenWeiConverter.convertZenniesToWei(ZenCoinsUtils.getMinDustThreshold(ZenCoinsUtils.MC_DEFAULT_FEE_RATE))
 
   @throws(classOf[ExecutionFailedException])
-  override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+  override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
     val gasView = view.getGasTrackedView(invocation.gasPool)
     getFunctionSignature(invocation.input) match {
       case GetListOfWithdrawalReqsCmdSig =>

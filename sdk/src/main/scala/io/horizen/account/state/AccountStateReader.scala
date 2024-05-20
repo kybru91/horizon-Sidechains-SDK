@@ -1,5 +1,7 @@
 package io.horizen.account.state
 
+import io.horizen.account.network.ForgerInfo
+import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.EthereumConsensusDataLog
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof}
 import io.horizen.evm.{Address, ResourceHandle}
@@ -22,8 +24,15 @@ trait AccountStateReader {
 
   def getWithdrawalRequests(withdrawalEpoch: Int): Seq[WithdrawalRequest]
 
-  def getListOfForgersStakes(isForkV1_3Active: Boolean): Seq[AccountForgingStakeInfo]
+  def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo]
   def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo])
+  def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse
+  def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse
+
+  def getForgerInfo(forger: ForgerPublicKeys): Option[ForgerInfo]
+
+  def isForgerStakeV1SmartContractDisabled(isForkV1_4Active: Boolean): Boolean
+
   def getForgerStakeData(stakeId: String, isForkV1_3Active: Boolean): Option[ForgerStakeData]
   def isForgingOpen: Boolean
   def isForgerStakeAvailable(isForkV1_3Active: Boolean): Boolean
@@ -39,4 +48,6 @@ trait AccountStateReader {
 
   def certifiersKeys(withdrawalEpoch: Int): Option[CertifiersKeys]
   def keyRotationProof(withdrawalEpoch: Int, indexOfSigner: Int, keyType: Int): Option[KeyRotationProof]
+
+  def forgerStakesV2IsActive: Boolean
 }

@@ -3,8 +3,8 @@ package io.horizen.account.state
 import io.horizen.account.AccountFixture
 import io.horizen.account.fork.GasFeeFork.DefaultGasFeeFork
 import io.horizen.account.storage.AccountStateMetadataStorageView
-import io.horizen.consensus.{ConsensusEpochInfo, intToConsensusEpochNumber}
-import io.horizen.evm.{Address, ForkRules, Hash, MemoryDatabase, StateDB}
+import io.horizen.consensus.intToConsensusEpochNumber
+import io.horizen.evm._
 import io.horizen.utils.{BytesUtils, ClosableResourceHandler}
 import org.junit.Assert.assertEquals
 import org.mockito.Mockito
@@ -15,7 +15,7 @@ import org.web3j.abi.{EventEncoder, FunctionReturnDecoder, TypeReference}
 import java.math.BigInteger
 import java.util.Optional
 import scala.language.implicitConversions
-import scala.util.{Failure, Success, Try}
+import scala.util.Try
 
 trait MessageProcessorFixture extends AccountFixture with ClosableResourceHandler {
   val metadataStorageView: AccountStateMetadataStorageView = mock[AccountStateMetadataStorageView]
@@ -85,11 +85,37 @@ trait MessageProcessorFixture extends AccountFixture with ClosableResourceHandle
   ): Array[Byte] = {
     view.setupAccessList(msg, ctx.forgerAddress, new ForkRules(true))
     val gas = new GasPool(1000000000)
-    val result = Try.apply(TestContext.process(processor, msg, view, ctx, gas))
+    val result = Try.apply(TestContext.process(processor, msg, view, ctx, gas, view))
+    if (expectedGas != gas.getUsedGas){
+      val msg = s"Unexpected gas consumption. Expected $expectedGas, actual: ${gas.getUsedGas}"
+      Console.err.println(msg)
+      throw new AssertionError(msg)
+    }
+//    assertEquals("Unexpected gas consumption", expectedGas, gas.getUsedGas)
+    // return result or rethrow any exception
+    result.get
+  }
+
+  /**
+   * Creates a large temporary gas pool and verifies the amount of total gas consumed.
+   * It uses StateTransition instead of TestContext in order to allow calls between smart contracts.
+   */
+  def assertGasInterop(
+                 expectedGas: BigInteger,
+                 msg: Message,
+                 view: AccountStateView,
+                 processors: Seq[MessageProcessor],
+                 ctx: BlockContext,
+               ): Array[Byte] = {
+    view.setupAccessList(msg, ctx.forgerAddress, new ForkRules(true))
+    val gas = new GasPool(1000000000)
+    val transition = new StateTransition(view, processors, gas, ctx, msg, view)
+    val result = Try.apply(transition.execute(Invocation.fromMessage(msg, gas)))
     assertEquals("Unexpected gas consumption", expectedGas, gas.getUsedGas)
     // return result or rethrow any exception
     result.get
   }
+
 
   def getEventSignature(eventABISignature: String): Array[Byte] =
     org.web3j.utils.Numeric.hexStringToByteArray(EventEncoder.buildEventSignature(eventABISignature))

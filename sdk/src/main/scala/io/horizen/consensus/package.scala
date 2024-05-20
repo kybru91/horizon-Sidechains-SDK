@@ -4,6 +4,7 @@ import com.google.common.primitives.{Bytes, Ints}
 import io.horizen.cryptolibprovider.CryptoLibProvider
 import io.horizen.cryptolibprovider.utils.FieldElementUtils
 import com.horizen.poseidonnative.PoseidonHash
+import io.horizen.utils.ZenCoinsUtils
 import io.horizen.vrf.VrfOutput
 import sparkz.util.ModifierId
 import supertagged.TaggedType
@@ -20,6 +21,7 @@ package object consensus {
   val consensusPreForkLength: Int = 4 + 8 + consensusHardcodedSaltString.length
   val forgerStakePercentPrecision: BigDecimal = BigDecimal.valueOf(1000000) // where 1 / forgerStakePercentPrecision -- minimal possible forger stake percentage to be able to forge
   val stakeConsensusDivideMathContext: MathContext = MathContext.DECIMAL128 //shall be used during dividing, otherwise ArithmeticException is thrown in case of irrational number as division result
+  val minForgerStake: Long = 10 * ZenCoinsUtils.COIN // after fork v 1.4.0 - min amount of zennies required to be a forger
 
   val minSecondsInSlot: Int = 10
   val maxSecondsInSlot:Int = 300
@@ -74,7 +76,7 @@ package object consensus {
       VrfMessage @@ resBytes
   }
 
-  private def generateHashAndCleanUp(elements: Array[Byte]*): Array[Byte] = {
+  def generateHashAndCleanUp(elements: Array[Byte]*): Array[Byte] = {
     val digest = PoseidonHash.getInstanceConstantLength(elements.length)
     elements.foreach { element =>
       val fieldElement = FieldElementUtils.elementToFieldElement(element)

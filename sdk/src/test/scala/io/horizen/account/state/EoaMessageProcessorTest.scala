@@ -111,7 +111,7 @@ class EoaMessageProcessorTest extends JUnitSuite with MockitoSugar with SecretFi
       .when(mockStateView.subBalance(ArgumentMatchers.any[Address], ArgumentMatchers.any[BigInteger]))
       .thenThrow(new ExecutionFailedException("something went error"))
     assertThrows[ExecutionFailedException](
-      withGas(TestContext.process(EoaMessageProcessor, msg, mockStateView, defaultBlockContext, _))
+      withGas(TestContext.process(EoaMessageProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     )
 
     // Test 3: Failure during addBalance
@@ -120,7 +120,7 @@ class EoaMessageProcessorTest extends JUnitSuite with MockitoSugar with SecretFi
       .when(mockStateView.addBalance(ArgumentMatchers.any[Address], ArgumentMatchers.any[BigInteger]))
       .thenThrow(new ExecutionFailedException("something went error"))
     assertThrows[ExecutionFailedException](
-      withGas(TestContext.process(EoaMessageProcessor, msg, mockStateView, defaultBlockContext, _))
+      withGas(TestContext.process(EoaMessageProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     )
   }
 }

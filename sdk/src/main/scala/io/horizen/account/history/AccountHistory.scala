@@ -48,6 +48,10 @@ extends AbstractHistory[
       if (!Version1_3_0Fork.get(consensusEpochNumber).active) {
         // fork is not active for computing the number of sc blocks without mc refs
         false
+      } else if (parentBlockId.equals("0b4383a95047e218d93e84cdf98f8daf1adf0cfa145230e17bd9cc795aed39b3")) {
+        // Porkaround for EON Pregobi testnet block 1563033
+        // it was accepted to the chain because this fix has been introduced after the 1.3 fork activation on Pregobi: https://github.com/HorizenOfficial/Sidechains-SDK/pull/996/files
+        false
       } else {
         storage.tooManyBlocksWithoutMcHeadersDataSince(parentBlockId)
       }

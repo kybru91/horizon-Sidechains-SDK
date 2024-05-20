@@ -4,9 +4,10 @@ import io.horizen.account.abi.ABIUtil.{METHOD_ID_LENGTH, getABIMethodId, getArgu
 import io.horizen.account.fork.ContractInteroperabilityFork
 import io.horizen.account.state.ProxyMsgProcessor._
 import io.horizen.account.state.events.ProxyInvocation
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.WellKnownAddresses.PROXY_SMART_CONTRACT_ADDRESS
 import io.horizen.evm.Address
-import io.horizen.params.{MainNetParams, NetworkParams, RegTestParams}
+import io.horizen.params.{NetworkParams, RegTestParams}
 import io.horizen.utils.BytesUtils
 import org.web3j.utils.Numeric
 import sparkz.crypto.hash.Keccak256
@@ -93,7 +94,7 @@ case class ProxyMsgProcessor(params: NetworkParams) extends NativeSmartContractW
 
 
   @throws(classOf[ExecutionFailedException])
-  override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+  override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
     log.debug(s"processing invocation: $invocation")
 
     val gasView = view.getGasTrackedView(invocation.gasPool)

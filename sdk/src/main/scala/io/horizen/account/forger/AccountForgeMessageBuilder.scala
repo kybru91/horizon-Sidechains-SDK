@@ -124,7 +124,7 @@ class AccountForgeMessageBuilder(
         priceAndNonceIter.removeAndSkipAccount()
       } else {
 
-        stateView.applyTransaction(tx, listOfTxsInBlock.size, blockGasPool, blockContext) match {
+        stateView.applyTransaction(tx, listOfTxsInBlock.size, blockGasPool, blockContext, stateView) match {
           case Success(consensusDataReceipt) =>
             val ethTx = tx.asInstanceOf[EthereumTransaction]
 
@@ -249,7 +249,18 @@ class AccountForgeMessageBuilder(
             val currentBlockPayments = resultTuple._3
 
             val consensusEpochNumber: ConsensusEpochNumber = intToConsensusEpochNumber(blockContext.consensusEpochNumber)
-            dummyView.updateForgerBlockCounter(forgerAddress, consensusEpochNumber)
+            val fork_1_4_active = Version1_4_0Fork.get(consensusEpochNumber).active
+            if (fork_1_4_active) {
+              dummyView.updateForgerBlockCounter(
+                new ForgerIdentifier(
+                  forgerAddress,
+                  Some(ForgerPublicKeys(forgingStakeInfo.blockSignPublicKey, forgingStakeInfo.vrfPublicKey))
+                ),
+                consensusEpochNumber
+              )
+            } else {
+              dummyView.updateForgerBlockCounter(new ForgerIdentifier(forgerAddress), consensusEpochNumber)
+            }
 
             val feePayments = if (isWithdrawalEpochLastBlock) {
               // Current block is expected to be the continuation of the current tip, so there are no ommers.
@@ -260,12 +271,17 @@ class AccountForgeMessageBuilder(
               require(ommers.isEmpty, "No Ommers allowed for the last block of the withdrawal epoch.")
 
               val withdrawalEpochNumber: Int = WithdrawalEpochUtils.getWithdrawalEpochInfo(mainchainBlockReferencesData.size, dummyView.getWithdrawalEpochInfo, params).epoch
-              val distributionCap = if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+              val distributionCap = if (fork_1_4_active) {
                 val mcLastBlockHeight = params.mainchainCreationBlockHeight + ((withdrawalEpochNumber + 1) * params.withdrawalEpochLength) - 1
                 AccountFeePaymentsUtils.getMainchainWithdrawalEpochDistributionCap(mcLastBlockHeight, params)
               } else MAX_MONEY_IN_WEI
+              val blockToAppendFeeInfo = if (fork_1_4_active) {
+                Some(currentBlockPayments.copy(forgerKeys = Some(ForgerPublicKeys(forgingStakeInfo.blockSignPublicKey, forgingStakeInfo.vrfPublicKey))))
+              } else {
+                Some(currentBlockPayments)
+              }
               // get all previous payments for current ending epoch and append the one of the current block
-              val (feePayments, poolBalanceDistributed) = dummyView.getFeePaymentsInfo(withdrawalEpochNumber, consensusEpochNumber, distributionCap, Some(currentBlockPayments))
+              val (feePayments, poolBalanceDistributed) = dummyView.getFeePaymentsInfo(withdrawalEpochNumber, consensusEpochNumber, distributionCap, blockToAppendFeeInfo)
 
               dummyView.subtractForgerPoolBalanceAndResetBlockCounters(consensusEpochNumber, poolBalanceDistributed)
 
@@ -413,7 +429,7 @@ class AccountForgeMessageBuilder(
     // 2. get from stateDb using root above the collection of all forger stakes (ordered)
     val forgingStakeInfoSeq: Seq[ForgingStakeInfo] = using(state.getStateDbViewFromRoot(stateRoot)) {
       stateViewFromRoot =>
-         stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber)
+        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber - 2)
     }
 
     // 3. using wallet secrets, filter out the not-mine forging stakes

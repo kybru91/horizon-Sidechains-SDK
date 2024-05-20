@@ -4,7 +4,6 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import io.horizen.EthServiceSettings
 import io.horizen.account.api.rpc.handler.RpcException
 import io.horizen.account.api.rpc.types._
@@ -50,7 +49,6 @@ import sparkz.util.{ModifierId, SparkzLogging}
 import java.lang.reflect.Method
 import java.math.BigInteger
 import java.nio.charset.StandardCharsets
-import java.util.Collections
 import scala.collection.JavaConverters.seqAsJavaListConverter
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.mutable.ListBuffer
@@ -59,7 +57,6 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, Future, TimeoutException}
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.ExecutionContext.Implicits.global
 
 class EthService(
     scNodeViewHolderRef: ActorRef,
@@ -227,7 +224,7 @@ class EthService(
   private def doCall(nodeView: NV, params: TransactionArgs, tag: String): Array[Byte] = {
     getStateViewAtTag(nodeView, tag) { (tagStateView, blockContext) =>
       val msg = params.toMessage(blockContext.baseFee, settings.globalRpcGasCap)
-      tagStateView.applyMessage(msg, new GasPool(msg.getGasLimit), blockContext)
+      tagStateView.applyMessage(msg, new GasPool(msg.getGasLimit), blockContext, nodeView.state.getView)
     }
   }
 
@@ -722,7 +719,7 @@ class EthService(
 
     // apply transactions
     for ((tx, i) <- block.transactions.zipWithIndex) {
-      pendingStateView.applyTransaction(tx, i, gasPool, getBlockContext(block, blockInfo, nodeView.history)) match {
+      pendingStateView.applyTransaction(tx, i, gasPool, getBlockContext(block, blockInfo, nodeView.history), nodeView.state.getView) match {
         case Success(consensusDataReceipt) =>
           val txGasUsed = consensusDataReceipt.cumulativeGasUsed.subtract(cumGasUsed)
 
@@ -890,7 +887,7 @@ class EthService(
       val traces = block.transactions.zipWithIndex.map({ case (tx, i) =>
         using(new Tracer(config)) { tracer =>
           blockContext.setTracer(tracer)
-          tagStateView.applyTransaction(tx, i, gasPool, blockContext)
+          tagStateView.applyTransaction(tx, i, gasPool, blockContext, nodeView.state.getView)
           tracer.getResult.result
         }
       })
@@ -953,14 +950,14 @@ class EthService(
 
         // apply previous transactions without tracing
         for ((tx, i) <- previousTransactions.zipWithIndex) {
-          tagStateView.applyTransaction(tx, i, gasPool, blockContext)
+          tagStateView.applyTransaction(tx, i, gasPool, blockContext, nodeView.state.getView)
         }
 
         using(new Tracer(config)) { tracer =>
           // enable tracing
           blockContext.setTracer(tracer)
           // apply requested transaction with tracing enabled
-          tagStateView.applyTransaction(requestedTx, previousTransactions.length, gasPool, blockContext)
+          tagStateView.applyTransaction(requestedTx, previousTransactions.length, gasPool, blockContext, nodeView.state.getView)
           // return the tracer result
           tracer.getResult.result
         }
@@ -983,7 +980,7 @@ class EthService(
             blockContext.setTracer(tracer)
             // apply requested message with tracing enabled
             val msg = params.toMessage(blockContext.baseFee, settings.globalRpcGasCap)
-            Try(tagStateView.applyMessage(msg, new GasPool(msg.getGasLimit), blockContext)) match {
+            Try(tagStateView.applyMessage(msg, new GasPool(msg.getGasLimit), blockContext, nodeView.state.getView)) match {
               case Failure(ex) if !ex.isInstanceOf[ExecutionFailedException] => throw ex
               case _ => tracer.getResult.result // return the tracer result
              }

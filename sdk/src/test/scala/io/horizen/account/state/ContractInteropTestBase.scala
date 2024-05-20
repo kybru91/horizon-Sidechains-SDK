@@ -80,7 +80,7 @@ abstract class ContractInteropTestBase extends MessageProcessorFixture {
   }
 
   protected def transition(msg: Message, blckContext: BlockContext = blockContext, gasLimit: BigInteger = gasLimit): Array[Byte] = {
-    val transition = new StateTransition(stateView, processors, new GasPool(gasLimit), blckContext, msg)
+    val transition = new StateTransition(stateView, processors, new GasPool(gasLimit), blckContext, msg, stateView)
     transition.execute(Invocation.fromMessage(msg, new GasPool(gasLimit)))
 
   }

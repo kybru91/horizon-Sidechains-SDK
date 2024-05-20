@@ -7,6 +7,7 @@ import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.state.McAddrOwnershipMsgProcessor.{AddNewMultisigOwnershipCmd, AddNewOwnershipCmd, GetListOfAllOwnershipsCmd, GetListOfOwnerScAddressesCmd, GetListOfOwnershipsCmd, OwnershipLinkedListNullValue, OwnershipsLinkedListTipKey, RemoveOwnershipCmd, ScAddressRefsLinkedListNullValue, ScAddressRefsLinkedListTipKey, checkMcRedeemScriptForMultisig, checkMultisigAddress, getMcSignature, getOwnershipId, isValidOwnershipSignature, verifySignaturesWithThreshold}
 import io.horizen.account.state.NativeSmartContractMsgProcessor.NULL_HEX_STRING_32
 import io.horizen.account.state.events.{AddMcAddrOwnership, RemoveMcAddrOwnership}
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.BigIntegerUInt256.getUnsignedByteArray
 import io.horizen.account.utils.Secp256k1.{PUBLIC_KEY_SIZE, SIGNATURE_RS_SIZE}
 import io.horizen.account.utils.WellKnownAddresses.MC_ADDR_OWNERSHIP_SMART_CONTRACT_ADDRESS
@@ -477,7 +478,7 @@ case class McAddrOwnershipMsgProcessor(networkParams: NetworkParams) extends Nat
   }
 
   @throws(classOf[ExecutionFailedException])
-  override def process(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
+  override def process(invocation: Invocation, view: BaseAccountStateView, metadata: MsgProcessorMetadataStorageReader, context: ExecutionContext): Array[Byte] = {
     if (!isForkActive(context.blockContext.consensusEpochNumber)) {
       throw new ExecutionRevertedException(s"zenDao fork not active")
     }

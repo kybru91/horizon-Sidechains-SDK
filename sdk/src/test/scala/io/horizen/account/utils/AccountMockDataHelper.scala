@@ -11,7 +11,7 @@ import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.secret.PrivateKeySecp256k1
 import io.horizen.account.state._
 import io.horizen.account.state.receipt.EthereumReceipt
-import io.horizen.account.storage.AccountStateMetadataStorageView
+import io.horizen.account.storage.{AccountStateMetadataStorageView, MsgProcessorMetadataStorageReader}
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.wallet.AccountWallet
 import io.horizen.block.SidechainBlockBase.GENESIS_BLOCK_PARENT_ID
@@ -380,6 +380,8 @@ case class AccountMockDataHelper(genesis: Boolean)
         msgProcessors.find(_.isInstanceOf[WithdrawalRequestProvider]).get.asInstanceOf[WithdrawalRequestProvider]
       override lazy val forgerStakesProvider: ForgerStakesProvider =
         msgProcessors.find(_.isInstanceOf[ForgerStakesProvider]).get.asInstanceOf[ForgerStakesProvider]
+      override lazy val forgerStakesV2Provider: ForgerStakesV2Provider =
+        msgProcessors.find(_.isInstanceOf[ForgerStakesV2Provider]).get.asInstanceOf[ForgerStakesV2Provider]
 
       override def getProof(address: Address, keys: Array[Array[Byte]], stateRoot: Hash): ProofAccountResult = {
         new ProofAccountResult(
@@ -455,7 +457,7 @@ case class AccountMockDataHelper(genesis: Boolean)
       .when(mockMsgProcessor.canProcess(any[Invocation], any[BaseAccountStateView], any[Int]))
       .thenReturn(true)
     Mockito
-      .when(mockMsgProcessor.process(any[Invocation], any[BaseAccountStateView], any[ExecutionContext]))
+      .when(mockMsgProcessor.process(any[Invocation], any[BaseAccountStateView], any[MsgProcessorMetadataStorageReader], any[ExecutionContext]))
       .thenReturn(Array.empty[Byte])
     mockMsgProcessor
   }

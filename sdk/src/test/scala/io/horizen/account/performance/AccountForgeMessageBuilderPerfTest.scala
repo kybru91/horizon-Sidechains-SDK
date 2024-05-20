@@ -8,6 +8,7 @@ import io.horizen.account.mempool.AccountMemoryPool
 import io.horizen.account.state._
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt
 import io.horizen.account.state.receipt.EthereumConsensusDataReceipt.ReceiptStatus
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.ZenWeiConverter
 import io.horizen.account.wallet.AccountWallet
 import io.horizen.block.MainchainBlockReferenceData
@@ -34,7 +35,8 @@ class AccountForgeMessageBuilderPerfTest extends MockitoSugar with EthereumTrans
         ArgumentMatchers.any[SidechainTypes#SCAT],
         ArgumentMatchers.any[Int],
         ArgumentMatchers.any[GasPool],
-        ArgumentMatchers.any[BlockContext]
+        ArgumentMatchers.any[BlockContext],
+        ArgumentMatchers.any[MsgProcessorMetadataStorageReader]
       )
     )
     .thenAnswer(asw => {

@@ -1,5 +1,6 @@
 package io.horizen.account.state
 
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.evm._
 import io.horizen.utils.BytesUtils
 import org.junit.Assert.assertEquals
@@ -18,6 +19,7 @@ class ContractInteropTransferTest extends ContractInteropTestBase {
     override def process(
         invocation: Invocation,
         view: BaseAccountStateView,
+        metadata: MsgProcessorMetadataStorageReader,
         context: ExecutionContext
     ): Array[Byte] = {
       // accept incoming value transfers

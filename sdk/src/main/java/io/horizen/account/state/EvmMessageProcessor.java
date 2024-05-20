@@ -2,6 +2,7 @@ package io.horizen.account.state;
 
 import io.horizen.account.fork.ContractInteroperabilityFork;
 import io.horizen.account.fork.Version1_3_0Fork;
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader;
 import io.horizen.evm.*;
 import io.horizen.evm.results.InvocationResult;
 import io.horizen.utils.BytesUtils;
@@ -49,7 +50,7 @@ public class EvmMessageProcessor implements MessageProcessor {
     }
 
     @Override
-    public byte[] process(Invocation invocation, BaseAccountStateView view, ExecutionContext context)
+    public byte[] process(Invocation invocation, BaseAccountStateView view, MsgProcessorMetadataStorageReader metadata, ExecutionContext context)
         throws ExecutionFailedException {
         // prepare context
         var block = context.blockContext();

@@ -1,6 +1,7 @@
 package io.horizen.account.state
 
 import io.horizen.account.fork.Version1_3_0Fork
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.account.utils.BigIntegerUtil
 import io.horizen.evm.{EvmContext, ForkRules}
 import sparkz.util.SparkzLogging
@@ -16,7 +17,8 @@ class StateTransition(
     blockGasPool: GasPool,
     val blockContext: BlockContext,
     val msg: Message,
-                     ) extends SparkzLogging with ExecutionContext {
+    metadata: MsgProcessorMetadataStorageReader
+  ) extends SparkzLogging with ExecutionContext {
 
   // the current stack of invocations
   private val invocationStack = new ListBuffer[Invocation]
@@ -241,7 +243,7 @@ class StateTransition(
     // create a snapshot before any changes are made by the processor
     val revert = view.snapshot
     // execute the message processor
-    val result = Try.apply(processor.process(invocation, view, this))
+    val result = Try.apply(processor.process(invocation, view, metadata, this))
     // handle errors
     result match {
       // if the processor throws ExecutionRevertedException we revert changes

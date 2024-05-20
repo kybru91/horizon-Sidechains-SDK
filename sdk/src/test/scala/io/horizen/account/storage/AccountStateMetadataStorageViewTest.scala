@@ -5,7 +5,7 @@ import io.horizen.SidechainTypes
 import io.horizen.account.proposition.AddressProposition
 import io.horizen.account.state.receipt.{EthereumReceipt, ReceiptFixture}
 import io.horizen.account.storage.AccountStateMetadataStorageView.DEFAULT_ACCOUNT_STATE_ROOT
-import io.horizen.account.utils.AccountBlockFeeInfo
+import io.horizen.account.utils.{AccountBlockFeeInfo, ForgerIdentifier}
 import io.horizen.block.{WithdrawalEpochCertificate, WithdrawalEpochCertificateFixture}
 import io.horizen.consensus.{ConsensusEpochNumber, intToConsensusEpochNumber}
 import io.horizen.fixtures.{SecretFixture, StoreFixture, TransactionFixture}
@@ -19,7 +19,6 @@ import org.scalatestplus.mockito.MockitoSugar
 import sparkz.core._
 
 import java.math.BigInteger
-import java.nio.charset.StandardCharsets
 import java.util.Optional
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.io.Source
@@ -113,9 +112,9 @@ class AccountStateMetadataStorageViewTest
     assertTrue("receipts should not be in storage", stateMetadataStorage.getTransactionReceipt(receipt1.transactionHash).isEmpty)
 
     val addressProposition = new AddressProposition(BytesUtils.fromHexString("00000000000000000000000000000000000000aa"))
-    storageView.updateForgerBlockCounter(addressProposition)
-    assertTrue("Counter for forger does not exists",storageView.getForgerBlockCounters.contains(addressProposition))
-    assertTrue("Counter for forger is incorrect",storageView.getForgerBlockCounters(addressProposition) == 1)
+    storageView.updateForgerBlockCounter(new ForgerIdentifier(addressProposition))
+    assertTrue("Counter for forger does not exists",storageView.getForgerBlockCounters.contains(new ForgerIdentifier(addressProposition)))
+    assertTrue("Counter for forger is incorrect",storageView.getForgerBlockCounters(new ForgerIdentifier(addressProposition)) == 1)
 
     storageView.commit(bytesToVersion(getVersion.data()))
 
