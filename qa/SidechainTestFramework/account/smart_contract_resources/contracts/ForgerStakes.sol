@@ -41,5 +41,5 @@ interface ForgerStakes {
     function getPagedForgersStakes(int32 startIndex, int32 pageSize) external view returns (int32, StakeInfo[] memory);
 
     // disableAndMigrate can be called only after fork point 1.4 and only by the ForgerStakesV2 smart contract
-    function disableAndMigrate() external view returns (StakeInfo[] memory);
+    function disableAndMigrate() external returns (StakeInfo[] memory);
 }
