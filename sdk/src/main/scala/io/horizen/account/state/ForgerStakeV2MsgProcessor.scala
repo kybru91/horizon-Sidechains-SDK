@@ -430,7 +430,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
     val response = Try {
       // We must trap any exception arising and return the execution reverted exception
-      getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
+      StakeStorage.getPagedForgersStakesByDelegator(view, cmdInput.delegator, cmdInput.startIndex, cmdInput.pageSize)
     } match {
       case Success(response) => response
       case Failure(ex) =>
@@ -450,7 +450,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
     val response = Try {
       // We must trap any exception arising and return the execution reverted exception
-      getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
+      StakeStorage.getPagedForgersStakesByForger(view, cmdInput.forgerPublicKeys, cmdInput.startIndex, cmdInput.pageSize)
     } match {
       case Success(response) => response
       case Failure(ex) =>
@@ -459,18 +459,9 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     PagedForgersStakesByForgerOutput(response.nextStartPos, response.stakesData).encode()
   }
 
-
-  override def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
-    StakeStorage.getPagedForgersStakesByForger(view, forger, startPos, pageSize)
-  }
-
-  override def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
-    StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
-  }
-
   def doGetForgerCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
-    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
+    checkForgerStakesV2IsActive(view)
 
     val inputParams = getArgumentsFromData(invocation.input)
     val cmdInput = SelectByForgerCmdInputDecoder.decode(inputParams)
@@ -483,9 +474,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doGetPagedForgersCmd(invocation: Invocation, view: BaseAccountStateView): Array[Byte] = {
-
-    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
+    checkForgerStakesV2IsActive(view)
 
     val inputParams = getArgumentsFromData(invocation.input)
     val PagedForgersCmdInput(startPos, pageSize) = PagedForgersCmdInputDecoder.decode(inputParams)
@@ -495,8 +485,8 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   def doGetCurrentConsensusEpochCmd(invocation: Invocation, view: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
-    checkForgerStakesV2IsActive(view)
     requireIsNotPayable(invocation)
+    checkForgerStakesV2IsActive(view)
     checkInputDoesntContainParams(invocation)
 
     ConsensusEpochCmdOutput(context.blockContext.consensusEpochNumber).encode()
@@ -610,6 +600,16 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     StakeStorage.getAllForgerStakes(view)
   }
 
+  override private[horizen] def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
+    checkForgerStakesV2IsActive(view)
+    StakeStorage.getPagedForgersStakesByForger(view, forger, startPos, pageSize)
+  }
+
+  override private[horizen] def getPagedForgersStakesByDelegator(view: BaseAccountStateView, delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
+    checkForgerStakesV2IsActive(view)
+    StakeStorage.getPagedForgersStakesByDelegator(view, delegator, startPos, pageSize)
+  }
+
   override private[horizen] def getForgingStakes(view: BaseAccountStateView): Seq[ForgingStakeInfo] = {
     StakeStorage.getForgingStakes(view)
   }
@@ -619,4 +619,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
   }
 
   override private[horizen] def isActive(view: BaseAccountStateView): Boolean = StakeStorage.isActive(view)
+
+
+
 }

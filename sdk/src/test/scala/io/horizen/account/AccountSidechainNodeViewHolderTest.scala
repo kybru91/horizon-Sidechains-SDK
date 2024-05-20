@@ -500,7 +500,7 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
       case m =>
         m match {
           case ModifiersProcessingResult(applied, cleared) => {
-            assertTrue("Applied block sequence is differ", applied.toSet.equals(correctSequence.toSet))
+            assertEquals("Applied block sequence is differ", correctSequence.toSet, applied.toSet)
             assertTrue("Cleared block sequence is not empty.", cleared.isEmpty)
             true
           }

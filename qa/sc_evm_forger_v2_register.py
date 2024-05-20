@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import time
+import logging
 from decimal import Decimal
 
 from eth_abi import decode
@@ -43,6 +44,9 @@ class SCEvmForgerV2register(AccountChainSetup):
                          block_timestamp_rewind=1500 * EVM_APP_SLOT_TIME * VERSION_1_3_FORK_EPOCH)
 
     def run_test(self):
+        if self.options.all_forks:
+            logging.info("This test cannot be executed with --allforks")
+            exit()
 
         mc_node = self.nodes[0]
         sc_node_1 = self.sc_nodes[0]
@@ -530,20 +534,22 @@ def check_register_event(register_forger_event, sender, vrf_pub_key, block_sign_
             event_signature_to_log_topic('RegisterForger(address,bytes32,bytes32,bytes1,uint256,uint32,address)')))
     assert_equal(event_signature, event_id, "Wrong event signature in topics")
 
-    pubKey25519 = decode(['bytes32'], hex_str_to_bytes(register_forger_event['topics'][1][2:]))[0]
-    assert_equal(block_sign_pub_key, bytes_to_hex_str(pubKey25519), "Wrong from address in topics")
+    from_addr = decode(['address'], hex_str_to_bytes(register_forger_event['topics'][1][2:]))[0][2:]
+    assert_equal(sender.lower(), from_addr.lower(), "Wrong from address in topics")
 
     vrf1 = decode(['bytes32'], hex_str_to_bytes(register_forger_event['topics'][2][2:]))[0]
     vrf2 = decode(['bytes1'], hex_str_to_bytes(register_forger_event['topics'][3][2:]))[0]
     assert_equal(vrf_pub_key,
                  bytes_to_hex_str(vrf1) + bytes_to_hex_str(vrf2), "wrong vrfPublicKey")
 
-    (from_addr, value, share, reward_contract_address) = decode(['address', 'uint256', 'uint32', 'address'],
-                                                                hex_str_to_bytes(register_forger_event['data'][2:]))
-    assert_equal(to_checksum_address(sender), to_checksum_address(from_addr), "Wrong sender in event")
+    (pubKey25519, value, share, reward_contract_address) = decode(['bytes32', 'uint256', 'uint32', 'address'],
+                                                         hex_str_to_bytes(register_forger_event['data'][2:]))
+
+    assert_equal(block_sign_pub_key, bytes_to_hex_str(pubKey25519), "Wrong from address in topics")
     assert_equal(staked_amount, value, "Wrong amount in event")
     assert_equal(rewards_share, share, "Wrong rewards_share in event")
     assert_equal(reward_address, reward_address, "Wrong reward_address in event")
+
 
 
 def check_update_event(update_forger_event, sender, vrf_pub_key, block_sign_pub_key, rewards_share,

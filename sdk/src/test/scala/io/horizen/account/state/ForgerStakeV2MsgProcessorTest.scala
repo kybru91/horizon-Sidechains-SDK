@@ -2079,18 +2079,18 @@ class ForgerStakeV2MsgProcessorTest
     assertEquals("Wrong address", contractAddress, actualEvent.address)
     assertEquals("Wrong number of topics", NumOfIndexedRegisterForgerEvtParams + 1, actualEvent.topics.length) //The first topic is the hash of the signature of the event
     assertArrayEquals("Wrong event signature", RegisterForgerEventSig, actualEvent.topics(0).toBytes)
-    assertEquals("Wrong signer key address in topic", expectedEvent.signPubKey, decodeEventTopic(actualEvent.topics(1), TypeReference.makeTypeReference(expectedEvent.signPubKey.getTypeAsString)))
+    assertEquals("Wrong sender address in topic", expectedEvent.sender, decodeEventTopic(actualEvent.topics(1), TypeReference.makeTypeReference(expectedEvent.sender.getTypeAsString)))
     assertEquals("Wrong vrfKey1 in topic", expectedEvent.vrf1, decodeEventTopic(actualEvent.topics(2), TypeReference.makeTypeReference(expectedEvent.vrf1.getTypeAsString)))
     assertEquals("Wrong vrfKey2 in topic", expectedEvent.vrf2, decodeEventTopic(actualEvent.topics(3), TypeReference.makeTypeReference(expectedEvent.vrf2.getTypeAsString)))
 
     val listOfRefs = util.Arrays.asList(
-      TypeReference.makeTypeReference(expectedEvent.sender.getTypeAsString),
+      TypeReference.makeTypeReference(expectedEvent.signPubKey.getTypeAsString),
       TypeReference.makeTypeReference(expectedEvent.value.getTypeAsString),
       TypeReference.makeTypeReference(expectedEvent.rewardShare.getTypeAsString),
       TypeReference.makeTypeReference(expectedEvent.rewardAddress.getTypeAsString))
       .asInstanceOf[util.List[TypeReference[Type[_]]]]
     val listOfDecodedData = FunctionReturnDecoder.decode(BytesUtils.toHexString(actualEvent.data), listOfRefs)
-    assertEquals("Wrong sender in data", expectedEvent.sender, listOfDecodedData.get(0))
+    assertEquals("Wrong signer key in data", expectedEvent.signPubKey, listOfDecodedData.get(0))
     assertEquals("Wrong amount in data", expectedEvent.value.getValue, listOfDecodedData.get(1).getValue)
     assertEquals("Wrong reward share in data", expectedEvent.rewardShare.getValue, listOfDecodedData.get(2).getValue)
     assertEquals("Wrong reward address in data", expectedEvent.rewardAddress, listOfDecodedData.get(3))

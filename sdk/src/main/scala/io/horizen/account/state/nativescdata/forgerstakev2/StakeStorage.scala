@@ -253,12 +253,6 @@ object StakeStorage {
   }
 
   def getPagedForgersStakesByForger(view: BaseAccountStateView, forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = {
-
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 is not activated"
-      throw new IllegalArgumentException(msgStr)
-    }
-
     if (startPos < 0)
       throw new IllegalArgumentException(s"Negative start position: $startPos can not be negative")
     if (pageSize <= 0)
@@ -293,11 +287,6 @@ object StakeStorage {
   }
 
   def getPagedForgersStakesByDelegator(view: BaseAccountStateView,  delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = {
-
-    if (!StakeStorage.isActive(view)) {
-      val msgStr = s"Forger stake V2 is not activated"
-      throw new IllegalArgumentException(msgStr)
-    }
     if (startPos < 0)
       throw new IllegalArgumentException(s"Negative start position: $startPos")
     if (pageSize <= 0)
@@ -318,9 +307,9 @@ object StakeStorage {
 
     val resultList = (startPos until endPos).view.map(index => {
       val forgerKey = listOfForgers.getForgerKey(view, index)
+      val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
       val stakeHistory = StakeHistory(forgerKey, delegatorKey)
       val amount = stakeHistory.getLatestAmount(view)
-      val forger = ForgerMap.getForgerOption(view, forgerKey).getOrElse(throw new ExecutionRevertedException("Forger doesn't exist."))
       StakeDataForger(forger.forgerPublicKeys, amount)
     }).filter(_.stakedAmount.signum() > 0).toList
 
@@ -346,7 +335,7 @@ object StakeStorage {
         val lastCheckpoint = getCheckpoint(view, lastElemIndex)
         val newAmount = op(lastCheckpoint.stakedAmount)
         if (lastCheckpoint.fromEpochNumber == epoch) {
-          // Let's check if the newAmount is the same og the previous checkpoint. In that case, this last checkpoint
+          // Let's check if the newAmount is the same of the previous checkpoint. In that case, this last checkpoint
           // is removed.
           val secondLastCheckpointIdx = lastElemIndex - 1
           if (secondLastCheckpointIdx > -1 && getCheckpoint(view, secondLastCheckpointIdx).stakedAmount == newAmount) {

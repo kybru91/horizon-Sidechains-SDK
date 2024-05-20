@@ -29,7 +29,6 @@ from test_framework.util import (
 NULL_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 """
-If it is run with --allforks, all the existing forks are enabled at epoch 2, so it will use Shanghai EVM.
 Configuration: 
     - 2 SC nodes connected with each other
     - 1 MC node
@@ -58,6 +57,9 @@ class SCEvmNativeForgerV2(AccountChainSetup):
                          block_timestamp_rewind=1500 * EVM_APP_SLOT_TIME * VERSION_1_4_FORK_EPOCH)
 
     def run_test(self):
+        if self.options.all_forks:
+            logging.info("This test cannot be executed with --allforks")
+            exit()
 
         mc_node = self.nodes[0]
         sc_node_1 = self.sc_nodes[0]

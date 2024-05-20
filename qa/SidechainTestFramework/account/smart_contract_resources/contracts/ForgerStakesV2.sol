@@ -10,8 +10,8 @@ interface ForgerStakesV2 {
     // Event declaration
     // Up to 3 parameters can be indexed.
     // Indexed parameters help you filter the logs by the indexed parameter
-    event RegisterForger(address  sender, bytes32 indexed signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value, uint32 rewardShare, address reward_address);
-    event UpdateForger(address indexed sender, bytes32 signPubKey,  bytes32 indexed vrf1, bytes1 indexed vrf2,  uint32 rewardShare, address reward_address);
+    event RegisterForger(address indexed sender, bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value, uint32 rewardShare, address reward_address);
+    event UpdateForger(address indexed sender, bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint32 rewardShare, address reward_address);
     event DelegateForgerStake(address indexed sender, bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value);
     event WithdrawForgerStake(address indexed sender, bytes32 signPubKey, bytes32 indexed vrf1, bytes1 indexed vrf2, uint256 value);
     event ActivateStakeV2();
@@ -121,6 +121,7 @@ interface ForgerStakesV2 {
       Returns the paginated list of stakes delegated to a specific forger, grouped by delegator address.
       Each element of the list is the total amount delegated by a specific address.
       nextIndex will contain the index of the next element not returned yet. If no element is still present, next will be -1.
+      The returned array length may be less than pageSize even if there are still additional elements because stakes with 0 amount are filtered out.
     */
     function getPagedForgersStakesByForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, int32 startIndex, int32 pageSize) external view returns (int32 nextIndex, StakeDataDelegator[] memory listOfDelegatorStakes);
 
@@ -128,6 +129,7 @@ interface ForgerStakesV2 {
       Returns the paginated list of stakes delegated by a specific address, grouped by forger.
       Each element of the list is the total amount delegated to  a specific forger.
       nextIndex will contain the index of the next element not returned yet. If no element is still present, next will be -1.
+      The returned array length may be less than pageSize even if there are still additional elements because stakes with 0 amount are filtered out.
     */
     function getPagedForgersStakesByDelegator(address delegator, int32 startIndex, int32 pageSize) external view returns (int32 nextIndex, StakeDataForger[] memory listOfForgerStakes);
 
