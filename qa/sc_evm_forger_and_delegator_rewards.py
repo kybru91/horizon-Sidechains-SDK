@@ -85,7 +85,7 @@ Test:
 """
 
 
-class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
+class ScEvmForgerAndDelegatorRewards(AccountChainSetup):
     FORGER_REWARD_ADDRESS_1 = '0000000000000000000012341234123412341111'
     FORGER_REWARD_ADDRESS_3 = '0000000000000000000012341234123412343333'
     FORGER_REWARD_ADDRESS_4 = '0000000000000000000012341234123412344444'
@@ -121,21 +121,6 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         self.advance_to_epoch(67)
         self.sync_all()
         self.sc_sync_all()
-
-        # mc_node.generate(self.withdrawalEpochLength)
-        # # trigger cert submission
-        # # Generate 2 SC blocks on SC node and start them automatic cert creation.
-        # generate_next_block(sc_node_1, "first node")  # 1 SC block to reach the end of WE
-        # generate_next_block(sc_node_1, "first node")  # 1 SC block to trigger Submitter logic
-        # # Wait for Certificates appearance
-        # time.sleep(10)
-        # while mc_node.getmempoolinfo()["size"] < 1 and sc_node_1.submitter_isCertGenerationActive()["result"][
-        #     "state"]:
-        #     logging.info("Wait for certificates in the MC mempool...")
-        #     if sc_node_1.submitter_isCertGenerationActive()["result"]["state"]:
-        #         logging.info("sc_node generating certificate now.")
-        #     time.sleep(2)
-        # assert_equal(1, mc_node.getmempoolinfo()["size"], "Certificates was not added to MC node mempool.")
 
         # transfer some fund from MC to SC1 at a new evm address, then mine mc block
         evm_address_sc_node_1 = sc_node_1.wallet_createPrivateKeySecp256k1()["result"]["proposition"]["address"]
@@ -201,7 +186,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         mc_node.generate(self.withdrawalEpochLength - 7)
         self.sync_all()
         self.sc_sync_all()
-        sc_last_we_block_id = generate_next_block(sc_node_1, "third node")
+        sc_last_we_block_id = generate_next_block(sc_node_1, "first node")
         self.sc_sync_all()
 
         # Check that the fee distribution took place, exact fees before 1.4 are not tested here
@@ -513,4 +498,4 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
 
 
 if __name__ == "__main__":
-    ScEvmForgerAndDelegetorRewards().main()
+    ScEvmForgerAndDelegatorRewards().main()
