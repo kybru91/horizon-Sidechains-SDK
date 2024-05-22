@@ -39,9 +39,9 @@ Test:
     - send some zen to 6 forgers, forge required blocks to create 6 new forger stakes
     - reach fork 1.3, execute upgrade
     - test block forging, reach epoch 79
-    - send 100 zen to mc_reward_pool
-    - distribute fees, ignore the results
     - send 1000 zen to mc_reward_pool
+    - distribute fees, ignore the results
+    - send 100 zen to mc_reward_pool
     - forger stake is activated
     - forgers are upgraded
     - distribute fees
@@ -211,7 +211,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
 
         # trigger cert submission
         # Generate 2 SC blocks on SC node and start them automatic cert creation.
-        generate_next_block(sc_node_1, "first node")  # 1 SC block to reach the end of WE
+        generate_next_block(sc_node_1, "first node")
         generate_next_block(sc_node_1, "first node")  # 1 SC block to trigger Submitter logic
         # Wait for Certificates appearance
         time.sleep(10)
@@ -236,6 +236,7 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
                                       mc_return_address=mc_node.getnewaddress(),
                                       generate_block=False)
         # Activate forger stake v2
+        # Generates 2 blocks by node 1
         forger_pool_fee_1, node_1_tip_1 = self.activate_stake_v2(evm_address_sc_node_1, sc_node_1)
 
         # update forger
@@ -375,22 +376,12 @@ class ScEvmForgerAndDelegetorRewards(AccountChainSetup):
         generate_next_block(sc_node_1, "first node")
         _, forgersPoolFee, forgerTip = computeForgedTxFee(sc_node_1, tx_hash)
         self.sc_sync_all()
-        generate_next_block(sc_node_1, "second node")
+        generate_next_block(sc_node_1, "first node")
         tx_receipt = sc_node_1.rpc_eth_getTransactionReceipt(tx_hash)['result']
         assert_equal('0x1', tx_receipt['status'], 'Transaction failed')
         intrinsic_gas = 21000 + 4 * 16  # activate signature are 4 non-zero bytes
         assert_equal(intrinsic_gas, int(tx_receipt['gasUsed'], 16), "wrong used gas")
         return forgersPoolFee, forgerTip
-
-    def delegate_stake(self, address, forger_sign_key, forger_vrf_key):
-        forger_v2_native_contract = SmartContract("ForgerStakesV2")
-        staked_amount = convertZenToWei(1)
-        delegate_method = 'delegate(bytes32,bytes32,bytes1)'
-
-        contract_function_call(self.sc_nodes[0], forger_v2_native_contract, FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS,
-                               address, delegate_method, forger_sign_key,
-                               forger_vrf_key[0:32], forger_vrf_key[32:],
-                               value=staked_amount)
 
     def create_forger_stake(
             self,
