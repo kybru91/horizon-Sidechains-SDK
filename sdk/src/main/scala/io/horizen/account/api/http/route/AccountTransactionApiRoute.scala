@@ -554,19 +554,23 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
           withNodeView { sidechainNodeView =>
             val accountState = sidechainNodeView.getNodeState
             val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-            if (Version1_3_0Fork.get(epochNumber).active) {
-              Try {
-                accountState.getPagedListOfForgersStakes(body.startPos, body.size)
-              } match {
-                case Success((nextPos, listOfForgerStakes)) =>
-                  ApiResponseUtil.toResponse(RespPagedForgerStakes(nextPos, listOfForgerStakes.toList))
-                case Failure(exception) =>
-                  ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
+            if (!sidechainNodeView.getNodeState.isForgerStakeV1SmartContractDisabled(Version1_4_0Fork.get(epochNumber).active)) {
+              if (Version1_3_0Fork.get(epochNumber).active) {
+                Try {
+                  accountState.getPagedListOfForgersStakes(body.startPos, body.size)
+                } match {
+                  case Success((nextPos, listOfForgerStakes)) =>
+                    ApiResponseUtil.toResponse(RespPagedForgerStakes(nextPos, listOfForgerStakes.toList))
+                  case Failure(exception) =>
+                    ApiResponseUtil.toResponse(GenericTransactionError(s"Invalid input parameters", JOptional.of(exception)))
+                }
+              } else {
+                ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.3 is not active, can not invoke this command",
+                  JOptional.empty()))
               }
-            } else {
-              ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.3 is not active, can not invoke this command",
-                JOptional.empty()))
             }
+            else
+              ApiResponseUtil.toResponse(ErrorDisabledMethod())
           }
         }
       }

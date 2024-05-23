@@ -1500,7 +1500,7 @@ paths:
       tags:
         - transaction
       summary:  Returns the paginated list of forging stakes.
-      description: Returns the paginated list of forging stakes.
+      description: Returns the paginated list of forging stakes. It will be disabled after Forger Stake V2 will be activated.
       operationId: pagedForgingStakes
       responses:
         '200':
