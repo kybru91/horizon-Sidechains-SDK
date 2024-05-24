@@ -489,8 +489,8 @@ class SidechainNodeViewHolderTest extends JUnitSuite
     val block5 = generateNextSidechainBlock(block4, sidechainTransactionsCompanion, params)
     val block6 = generateNextSidechainBlock(block5, sidechainTransactionsCompanion, params)
 
-    val firstRequestBlocks = Seq(block1, block2, block6)
-    val secondRequestBlocks = Seq(block3, block4, block5)
+    val firstRequestBlocks = Seq(block3, block2, block6)
+    val secondRequestBlocks = Seq(block1, block4, block5)
     val correctSequence = Array(block1, block2, block3, block4, block5, block6)
     var blockIndex = 0
 
@@ -524,7 +524,7 @@ class SidechainNodeViewHolderTest extends JUnitSuite
       case m =>
         m match {
           case ModifiersProcessingResult(applied, cleared) => {
-            assertTrue("Applied block sequence is differ", applied.toSet.equals(correctSequence.toSet))
+            assertEquals("Applied block sequence is differ", correctSequence.toSet, applied.toSet)
             assertTrue("Cleared block sequence is not empty.", cleared.isEmpty)
             true
           }
