@@ -447,7 +447,8 @@ class SCEvmNativeForgerV2(AccountChainSetup):
 
         generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=False)
 
-        # Check that after activate, calling makeForgerStake and spendForgingStake HTTP APIs is not possible anymore
+        # Check that after activate, calling makeForgerStake, spendForgingStake and pagedForgingStakes HTTP APIs is
+        # not possible anymore
         make_forger_stake_json_res = ac_makeForgerStake(sc_node_1, evm_address_5, block_sign_pub_key_1,
                                                         vrf_pub_key_1, convertZenToZennies(4))
 
@@ -462,9 +463,16 @@ class SCEvmNativeForgerV2(AccountChainSetup):
         spend_forger_stake_json_res = sc_node_1.transaction_spendForgingStake(
             json.dumps({"stakeId": stake_id}))
         if "error" not in spend_forger_stake_json_res:
-            fail("spend forger stake failed: " + json.dumps(spend_forger_stake_json_res))
+            fail("spendForgingStake with native smart contract v1 should fail after activate")
         assert_equal("Method is disabled after Fork 1.4. Use Forger Stakes Native Smart Contract V2",
                      spend_forger_stake_json_res['error']['description'])
+
+        paged_stakes_res = sc_node_1.transaction_pagedForgingStakes(json.dumps({"size": 10, "startPos": 0}))
+        if "error" not in paged_stakes_res:
+            fail("pagedForgingStakes native smart contract v1 should fail after activate")
+        assert_equal("Method is disabled after Fork 1.4. Use Forger Stakes Native Smart Contract V2",
+                     spend_forger_stake_json_res['error']['description'])
+
 
         # Check getPagedForgers
         method = 'getPagedForgers(int32,int32)'

@@ -646,7 +646,7 @@ paths:
       tags:
         - transaction
       summary: creates transaction with forger stake
-      description: Creates transaction with forger stake. It will be disabled after Forger Stake V2 will be activated.
+      description: Creates transaction with forger stake. This endpoint is disabled after Forger Stake V2 activation..
       operationId: makeForgerStake
       security:
         - basicAuth: []
@@ -707,7 +707,7 @@ paths:
       tags:
         - transaction
       summary: creates and signs sidechain transaction for spending forging stake
-      description: Creates and signs sidechain transaction for spending forging stake. It will be disabled after Forger Stake V2 will be activated.
+      description: Creates and signs sidechain transaction for spending forging stake. This endpoint is disabled after Forger Stake V2 activation..
       operationId: spendForgingStake
       security:
         - basicAuth: []
@@ -1500,7 +1500,7 @@ paths:
       tags:
         - transaction
       summary:  Returns the paginated list of forging stakes.
-      description: Returns the paginated list of forging stakes.
+      description: Returns the paginated list of forging stakes. This endpoint is disabled after Forger Stake V2 activation..
       operationId: pagedForgingStakes
       responses:
         '200':
