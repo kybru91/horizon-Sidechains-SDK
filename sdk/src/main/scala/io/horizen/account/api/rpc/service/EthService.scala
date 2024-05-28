@@ -873,7 +873,10 @@ class EthService(
     val (block, blockInfo) = getBlockById(nodeView, blockId)
 
     // get state at previous block
-    getStateViewAtTag(nodeView, (blockInfo.height - 1).toString) { (tagStateView, blockContext) =>
+    getStateViewAtTag(nodeView, (blockInfo.height - 1).toString) { (tagStateView, _) =>
+      // We don't use the blockContext of the parent block, because it must be the one of block containing the transaction
+      val blockContext = getBlockContext(block, blockInfo, nodeView.history)
+
       // apply mainchain references
       val epochNumber = TimeToEpochUtils.timeStampToEpochNumber(networkParams.sidechainGenesisBlockTimestamp, block.timestamp)
       val ftToSmartContractForkActive = Version1_2_0Fork.get(epochNumber).active
@@ -933,8 +936,14 @@ class EthService(
         throw new RpcException(RpcError.fromCode(RpcCode.InvalidParams, s"transaction not found: $transactionHash"))
       )
 
+
     applyOnAccountView { nodeView =>
-      getStateViewAtTag(nodeView, (blockNumber - 1).toString) { (tagStateView, blockContext) =>
+      getStateViewAtTag(nodeView, (blockNumber - 1).toString) { (tagStateView, _) =>
+
+        // We don't use the blockContext of the parent block, because it must be the one of block containing the transaction
+        val blockInfo = getBlockInfoById(nodeView, block.id)
+        val blockContext = getBlockContext(block, blockInfo, nodeView.history)
+
         // apply mainchain references
         val epochNumber = TimeToEpochUtils.timeStampToEpochNumber(networkParams.sidechainGenesisBlockTimestamp, block.timestamp)
         val ftToSmartContractForkActive = Version1_2_0Fork.get(epochNumber).active

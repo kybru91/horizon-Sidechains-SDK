@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import logging
 
+from eth_utils import remove_0x_prefix
+
 from SidechainTestFramework.account.ac_chain_setup import AccountChainSetup
 from SidechainTestFramework.account.ac_use_smart_contract import SmartContract
 from SidechainTestFramework.account.ac_utils import (
     contract_function_call, deploy_smart_contract,
     generate_block_and_get_tx_receipt,
 )
+from SidechainTestFramework.account.httpCalls.transaction.createLegacyTransaction import createLegacyTransaction
 from test_framework.util import assert_equal, assert_true
 
 """
@@ -27,6 +30,7 @@ Test:
         - Call traceCall method on current block
         - Generate a new block without transaction and call tracer methods
         - Call traceCall method on pending block
+        - Test for EON-1856 issue https://horizenlabs.atlassian.net/browse/EON-1856?atlOrigin=eyJpIjoiNDQzNDczZTkyMWVhNGExZTllMjlkNmVjNDkxMDgwNzkiLCJwIjoiaiJ9
 """
 
 
@@ -273,7 +277,39 @@ class SCEvmDebugMethods(AccountChainSetup):
         assert_true("output" not in trace_result)
         assert_equal("out of gas", trace_result["error"])
 
+        # Test for EON-1856 issue.
+        # Create a transaction and forge a block. This block will have a lower base fee than its parent. The tx is
+        # created with a max gas fee slightly smaller than the base fee of the parent block but greater than the base
+        # fee of its block, so it is correctly forged. The test will fail if the debug_trace* methods use the block
+        # context of the parent block instead of the correct one.
 
+        parent_block_base_fee = sc_node.block_best()["result"]['block']['header']['baseFee']
+
+        tx_hash = createLegacyTransaction(sc_node,
+                                          fromAddress=remove_0x_prefix(self.evm_address),
+                                          toAddress=remove_0x_prefix(self.evm_address),
+                                          value=1,
+                                          gasPrice=parent_block_base_fee - 1
+                                          )
+
+        tx_status = generate_block_and_get_tx_receipt(sc_node, "0x" + tx_hash, True)
+        assert_equal(1, tx_status, "Error in tx - unrelated to debug methods")
+
+        current_block_base_fee = sc_node.block_best()["result"]['block']['header']['baseFee']
+        assert_true(current_block_base_fee < parent_block_base_fee, "Test for EON-1856 requires current block "
+                                                                    "base fee {0} is lower than parent block's one {1}"
+                    .format(current_block_base_fee, parent_block_base_fee))
+
+        tx_trace = sc_node.rpc_debug_traceTransaction("0x" + tx_hash, {"tracer": "callTracer"})['result']
+        assert_equal("CALL", tx_trace['type'], "callTracer type not CALL")
+
+        block_number = sc_node.rpc_eth_blockNumber()["result"]
+        tx_trace_block = sc_node.rpc_debug_traceBlockByNumber(block_number, {"tracer": "callTracer"})["result"][0]
+        assert_equal(tx_trace, tx_trace_block)
+
+        block_hash = sc_node.rpc_eth_getBlockByNumber(block_number, False)['result']['hash']
+        tx_trace_block = sc_node.rpc_debug_traceBlockByHash(block_hash, {"tracer": "callTracer"})["result"][0]
+        assert_equal(tx_trace, tx_trace_block)
 
 
 if __name__ == "__main__":
