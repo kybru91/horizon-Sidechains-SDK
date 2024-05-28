@@ -2,7 +2,11 @@ package io.horizen.account.fork
 
 import io.horizen.fork.{ForkManager, OptionalSidechainFork}
 
-case class Version1_4_0Fork(active: Boolean = false) extends OptionalSidechainFork
+case class Version1_4_0Fork(active: Boolean = false,
+                            regtestActivationEpoch: Int = -1,
+                            testnetActivationEpoch: Int = -1,
+                            mainnetActivationEpoch: Int = -1
+                           ) extends OptionalSidechainFork
 
 /**
  * <p>This fork introduces the following major changes:</p>

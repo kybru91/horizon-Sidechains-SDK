@@ -352,8 +352,25 @@ class SCEvmForgerV2register(AccountChainSetup):
         reward_share_updated = 1
         reward_address_updated = "0x1111111122222222333333334444444455555555"
 
+        # switch to the next epoch
+        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
+        self.sc_sync_all()
+
         # negative tests
         # ==============================================================================================================
+        # - try updating a forger before 2 epochs pass by after the fork activation
+        res = ac_updateForger(sc_node_1, block_sign_pub_key_1_2, vrf_pub_key_1_2,
+                                 reward_address=reward_address_updated, reward_share=reward_share_updated)
+        self.sc_sync_all()
+
+        assert_true('error' in res)
+        assert_equal('0204', res['error']['code'])
+        assert_true(' 2 epochs must go by before invoking this command' in res['error']['description'])
+
+        # switch to the next epoch for the second time, now it is ok invoking update forger cmd
+        generate_next_block(sc_node_1, "first node", force_switch_to_next_epoch=True)
+        self.sc_sync_all()
+
         # - try updating a forger that does not exist
         result = ac_updateForger(sc_node_1, block_sign_pub_key_genesis, vrf_pub_key_1_2,
                                  reward_address=reward_address_updated, reward_share=reward_share_updated)

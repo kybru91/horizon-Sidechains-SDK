@@ -1449,7 +1449,7 @@ paths:
       tags:
         - transaction
       summary: Update an existing forger
-      description: Update an existing forger. This action can be performed only for forgers with rewardShare = 0 and rewardAddress not set, and only to assign them a value.
+      description: Update an existing forger. This action can be performed only for forgers with rewardShare = 0 and rewardAddress not set, and only to assign them a value. Moreover, in order to execute this command, at least 2 epoch must be gone by after the EON 1.4 fork activation.
       operationId: updateForger
       requestBody:
         content:

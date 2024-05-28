@@ -37,6 +37,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   val MAX_REWARD_SHARE = 1000
   val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = convertZenniesToWei(minForgerStake) // 10 Zen
+  val NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER: Int = 2
 
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
@@ -53,7 +54,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       case RegisterForgerCmd =>
         doRegisterForger(invocation, gasView, context)
       case UpdateForgerCmd =>
-        doUpdateForger(invocation, gasView)
+        doUpdateForger(invocation, gasView, context)
       case DelegateCmd =>
         doDelegateCmd(invocation, gasView, context)
       case WithdrawCmd =>
@@ -185,9 +186,17 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     Array.emptyByteArray
   }
 
-  def doUpdateForger(invocation: Invocation, gasView: BaseAccountStateView): Array[Byte] = {
+  def doUpdateForger(invocation: Invocation, gasView: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
     requireIsNotPayable(invocation)
     checkForgerStakesV2IsActive(gasView)
+
+    val currentEpoch = context.blockContext.consensusEpochNumber
+    val activationEpoch = Version1_4_0Fork.get(currentEpoch).mainnetActivationEpoch
+    if (currentEpoch < (activationEpoch + NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER) ) {
+      val errMsg = s"Fork 1.4 has been activated at epoch ${activationEpoch}, but 2 epochs must go by before invoking this command (current epoch: $currentEpoch)"
+      log.debug(errMsg)
+      throw new ExecutionRevertedException(errMsg)
+    }
 
     val inputParams = getArgumentsFromData(invocation.input)
 
