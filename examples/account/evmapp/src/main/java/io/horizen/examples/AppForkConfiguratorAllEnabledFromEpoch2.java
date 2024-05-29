@@ -58,7 +58,7 @@ public class AppForkConfiguratorAllEnabledFromEpoch2 extends ForkConfigurator {
             ),
             new Pair<>(
                     new SidechainForkConsensusEpoch(2, 2, 2),
-                    new Version1_4_0Fork(true, 2, 2, 2)
+                    new Version1_4_0Fork(true)
             )
         );
     }

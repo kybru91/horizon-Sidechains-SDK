@@ -666,8 +666,7 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
 
     val accountState = sidechainNodeView.getNodeState
     val epochNumber = accountState.getConsensusEpochNumber.getOrElse(0)
-    val fork14 = Version1_4_0Fork.get(epochNumber)
-    if (!fork14.active) {
+    if (!Version1_4_0Fork.get(epochNumber).active) {
       ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 is not active, can not invoke this command",
         JOptional.empty()))
     }
@@ -676,8 +675,8 @@ case class AccountTransactionApiRoute(override val settings: RESTApiSettings,
         JOptional.empty()))
     }
     else if (operation == ForgerStakeV2MsgProcessor.UpdateForgerCmd &&
-      epochNumber < (fork14.mainnetActivationEpoch + NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER) ) {
-      ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 has been activated at epoch ${fork14.mainnetActivationEpoch}, but 2 epochs must go by before invoking this command (current epoch: $epochNumber)",
+      epochNumber < (Version1_4_0Fork.getActivationEpoch() + NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER) ) {
+      ApiResponseUtil.toResponse(GenericTransactionError(s"Fork 1.4 has been activated at epoch ${Version1_4_0Fork.getActivationEpoch()}, but $NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER epochs must go by before invoking this command (current epoch: $epochNumber)",
         JOptional.empty()))
     } else {
         // default gas related params

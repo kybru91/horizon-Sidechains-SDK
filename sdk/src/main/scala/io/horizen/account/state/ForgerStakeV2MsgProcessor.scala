@@ -190,14 +190,6 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     requireIsNotPayable(invocation)
     checkForgerStakesV2IsActive(gasView)
 
-    val currentEpoch = context.blockContext.consensusEpochNumber
-    val activationEpoch = Version1_4_0Fork.get(currentEpoch).mainnetActivationEpoch
-    if (currentEpoch < (activationEpoch + NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER) ) {
-      val errMsg = s"Fork 1.4 has been activated at epoch ${activationEpoch}, but 2 epochs must go by before invoking this command (current epoch: $currentEpoch)"
-      log.debug(errMsg)
-      throw new ExecutionRevertedException(errMsg)
-    }
-
     val inputParams = getArgumentsFromData(invocation.input)
 
     val cmdInput = RegisterOrUpdateForgerCmdInputDecoder.decode(inputParams)

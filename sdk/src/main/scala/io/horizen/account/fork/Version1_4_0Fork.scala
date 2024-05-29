@@ -2,11 +2,7 @@ package io.horizen.account.fork
 
 import io.horizen.fork.{ForkManager, OptionalSidechainFork}
 
-case class Version1_4_0Fork(active: Boolean = false,
-                            regtestActivationEpoch: Int = -1,
-                            testnetActivationEpoch: Int = -1,
-                            mainnetActivationEpoch: Int = -1
-                           ) extends OptionalSidechainFork
+case class Version1_4_0Fork(active: Boolean = false) extends OptionalSidechainFork
 
 /**
  * <p>This fork introduces the following major changes:</p>
@@ -19,6 +15,10 @@ case class Version1_4_0Fork(active: Boolean = false,
 object Version1_4_0Fork {
   def get(epochNumber: Int): Version1_4_0Fork = {
     ForkManager.getOptionalSidechainFork[Version1_4_0Fork](epochNumber).getOrElse(DefaultFork)
+  }
+
+  def getActivationEpoch(): Int = {
+    ForkManager.getFirstActivationEpoch[Version1_4_0Fork]()
   }
 
   private val DefaultFork: Version1_4_0Fork = Version1_4_0Fork()
