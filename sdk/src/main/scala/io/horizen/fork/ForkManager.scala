@@ -48,6 +48,14 @@ object ForkManager {
     findActiveFork(forksOfTypeT, consensusEpoch)
   }
 
+  def getFirstActivationEpoch[T <: OptionalSidechainFork : Manifest](): Int = {
+    assertInitialized()
+    val forksOfTypeT = optionalSidechainForks.collect({ case (i, fork: T) => (i, fork) })
+    // head() throws an exception if the list is empty, which should not happen
+    val (activationEpoch, _) = forksOfTypeT.head
+    activationEpoch
+  }
+
   def init(forkConfigurator: ForkConfigurator, networkName: String): Unit = {
     if (initialized) throw new IllegalStateException("ForkManager is already initialized.")
 

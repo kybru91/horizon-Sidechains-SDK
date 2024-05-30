@@ -17,5 +17,9 @@ object Version1_4_0Fork {
     ForkManager.getOptionalSidechainFork[Version1_4_0Fork](epochNumber).getOrElse(DefaultFork)
   }
 
+  def getActivationEpoch(): Int = {
+    ForkManager.getFirstActivationEpoch[Version1_4_0Fork]()
+  }
+
   private val DefaultFork: Version1_4_0Fork = Version1_4_0Fork()
 }

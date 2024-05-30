@@ -37,6 +37,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
 
   val MAX_REWARD_SHARE = 1000
   val MIN_REGISTER_FORGER_STAKED_AMOUNT_IN_WEI: BigInteger = convertZenniesToWei(minForgerStake) // 10 Zen
+  val NUM_OF_EPOCHS_AFTER_FORK_ACTIVATION_FOR_UPDATE_FORGER: Int = 2
 
   override val contractAddress: Address = FORGER_STAKE_V2_SMART_CONTRACT_ADDRESS
   override val contractCode: Array[Byte] = Keccak256.hash("ForgerStakeV2SmartContractCode")
@@ -53,7 +54,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
       case RegisterForgerCmd =>
         doRegisterForger(invocation, gasView, context)
       case UpdateForgerCmd =>
-        doUpdateForger(invocation, gasView)
+        doUpdateForger(invocation, gasView, context)
       case DelegateCmd =>
         doDelegateCmd(invocation, gasView, context)
       case WithdrawCmd =>
@@ -185,7 +186,7 @@ object ForgerStakeV2MsgProcessor extends NativeSmartContractWithFork  with Forge
     Array.emptyByteArray
   }
 
-  def doUpdateForger(invocation: Invocation, gasView: BaseAccountStateView): Array[Byte] = {
+  def doUpdateForger(invocation: Invocation, gasView: BaseAccountStateView, context: ExecutionContext): Array[Byte] = {
     requireIsNotPayable(invocation)
     checkForgerStakesV2IsActive(gasView)
 

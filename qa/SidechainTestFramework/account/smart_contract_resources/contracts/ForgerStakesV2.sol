@@ -59,6 +59,7 @@ interface ForgerStakesV2 {
       Updates an existing forger.
       A forger can be updated just once and only if rewardAddress == 0x000..00 and rewardShare == 0.
       See above the registerForger command for the parameters meaning.
+      Note: 2 epochs should be gone by after the activation of the EON 1.4 fork
     */
     function updateForger(bytes32 signPubKey, bytes32 vrf1, bytes1 vrf2, uint32 rewardShare,
         address rewardAddress, bytes32 sign1_1, bytes32 sign1_2,
