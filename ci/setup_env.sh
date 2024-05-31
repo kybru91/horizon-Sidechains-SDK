@@ -161,7 +161,7 @@ if [ -n "${TRAVIS_TAG}" ]; then
         export IS_A_RELEASE="false"
       fi
     elif [[ "${root_pom_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-RC[0-9]+){1}$ ]]; then
-      if [[ "${TRAVIS_TAG}" =~ "${root_pom_version}"[0-9]*$ ]]; then
+      if [[ "${TRAVIS_TAG}" == "${root_pom_version}" ]]; then
         echo "" && echo "=== RC release ===" && echo ""
         export IS_A_RELEASE="true"
       else
