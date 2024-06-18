@@ -1,5 +1,6 @@
 package io.horizen.account.state
 
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import sparkz.util.SparkzLogging
 
 /*
@@ -22,6 +23,7 @@ object EoaMessageProcessor extends MessageProcessor with SparkzLogging {
   override def process(
       invocation: Invocation,
       view: BaseAccountStateView,
+      metadata: MsgProcessorMetadataStorageReader,
       context: ExecutionContext
   ): Array[Byte] = {
     view.subBalance(invocation.caller, invocation.value)

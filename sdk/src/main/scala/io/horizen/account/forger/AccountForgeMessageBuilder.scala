@@ -6,7 +6,7 @@ import io.horizen.account.block.AccountBlock.calculateReceiptRoot
 import io.horizen.account.block.{AccountBlock, AccountBlockHeader}
 import io.horizen.account.chain.AccountFeePaymentsInfo
 import io.horizen.account.companion.SidechainAccountTransactionsCompanion
-import io.horizen.account.fork.{Version1_2_0Fork, GasFeeFork}
+import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork, Version1_4_0Fork}
 import io.horizen.account.history.AccountHistory
 import io.horizen.account.mempool.{AccountMemoryPool, MempoolMap, TransactionsByPriceAndNonceIter}
 import io.horizen.account.proposition.AddressProposition
@@ -16,6 +16,7 @@ import io.horizen.account.state.receipt.EthereumConsensusDataReceipt
 import io.horizen.account.storage.AccountHistoryStorage
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.FeeUtils.calculateBaseFee
+import io.horizen.account.utils.ZenWeiConverter.MAX_MONEY_IN_WEI
 import io.horizen.account.utils._
 import io.horizen.account.wallet.AccountWallet
 import io.horizen.block._
@@ -123,7 +124,7 @@ class AccountForgeMessageBuilder(
         priceAndNonceIter.removeAndSkipAccount()
       } else {
 
-        stateView.applyTransaction(tx, listOfTxsInBlock.size, blockGasPool, blockContext) match {
+        stateView.applyTransaction(tx, listOfTxsInBlock.size, blockGasPool, blockContext, stateView) match {
           case Success(consensusDataReceipt) =>
             val ethTx = tx.asInstanceOf[EthereumTransaction]
 
@@ -248,7 +249,18 @@ class AccountForgeMessageBuilder(
             val currentBlockPayments = resultTuple._3
 
             val consensusEpochNumber: ConsensusEpochNumber = intToConsensusEpochNumber(blockContext.consensusEpochNumber)
-            dummyView.updateForgerBlockCounter(forgerAddress, consensusEpochNumber)
+            val fork_1_4_active = Version1_4_0Fork.get(consensusEpochNumber).active
+            if (fork_1_4_active) {
+              dummyView.updateForgerBlockCounter(
+                new ForgerIdentifier(
+                  forgerAddress,
+                  Some(ForgerPublicKeys(forgingStakeInfo.blockSignPublicKey, forgingStakeInfo.vrfPublicKey))
+                ),
+                consensusEpochNumber
+              )
+            } else {
+              dummyView.updateForgerBlockCounter(new ForgerIdentifier(forgerAddress), consensusEpochNumber)
+            }
 
             val feePayments = if (isWithdrawalEpochLastBlock) {
               // Current block is expected to be the continuation of the current tip, so there are no ommers.
@@ -259,11 +271,19 @@ class AccountForgeMessageBuilder(
               require(ommers.isEmpty, "No Ommers allowed for the last block of the withdrawal epoch.")
 
               val withdrawalEpochNumber: Int = WithdrawalEpochUtils.getWithdrawalEpochInfo(mainchainBlockReferencesData.size, dummyView.getWithdrawalEpochInfo, params).epoch
-
+              val distributionCap = if (fork_1_4_active) {
+                val mcLastBlockHeight = params.mainchainCreationBlockHeight + ((withdrawalEpochNumber + 1) * params.withdrawalEpochLength) - 1
+                AccountFeePaymentsUtils.getMainchainWithdrawalEpochDistributionCap(mcLastBlockHeight, params)
+              } else MAX_MONEY_IN_WEI
+              val blockToAppendFeeInfo = if (fork_1_4_active) {
+                Some(currentBlockPayments.copy(forgerKeys = Some(ForgerPublicKeys(forgingStakeInfo.blockSignPublicKey, forgingStakeInfo.vrfPublicKey))))
+              } else {
+                Some(currentBlockPayments)
+              }
               // get all previous payments for current ending epoch and append the one of the current block
-              val feePayments = dummyView.getFeePaymentsInfo(withdrawalEpochNumber, consensusEpochNumber, Some(currentBlockPayments))
+              val (feePayments, poolBalanceDistributed) = dummyView.getFeePaymentsInfo(withdrawalEpochNumber, consensusEpochNumber, distributionCap, blockToAppendFeeInfo)
 
-              dummyView.resetForgerPoolAndBlockCounters(consensusEpochNumber)
+              dummyView.subtractForgerPoolBalanceAndResetBlockCounters(consensusEpochNumber, poolBalanceDistributed)
 
               // add rewards to forgers balance
               feePayments.foreach(payment => dummyView.addBalance(payment.address.address(), payment.value))
@@ -409,7 +429,7 @@ class AccountForgeMessageBuilder(
     // 2. get from stateDb using root above the collection of all forger stakes (ordered)
     val forgingStakeInfoSeq: Seq[ForgingStakeInfo] = using(state.getStateDbViewFromRoot(stateRoot)) {
       stateViewFromRoot =>
-        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber)
+        stateViewFromRoot.getOrderedForgingStakesInfoSeq(nextConsensusEpochNumber - 2)
     }
 
     // 3. using wallet secrets, filter out the not-mine forging stakes

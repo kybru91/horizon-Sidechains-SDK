@@ -3,14 +3,17 @@ package io.horizen.account.state
 import com.horizen.certnative.BackwardTransfer
 import io.horizen.SidechainTypes
 import io.horizen.account.block.AccountBlock
-import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork}
+import io.horizen.account.fork.{GasFeeFork, Version1_2_0Fork, Version1_4_0Fork}
 import io.horizen.account.history.validation.InvalidTransactionChainIdException
+import io.horizen.account.network.ForgerInfo
 import io.horizen.account.node.NodeAccountState
+import io.horizen.account.state.nativescdata.forgerstakev2.{PagedStakesByDelegatorResponse, PagedStakesByForgerResponse}
 import io.horizen.account.state.receipt.{EthereumConsensusDataLog, EthereumReceipt}
 import io.horizen.account.storage.AccountStateMetadataStorage
 import io.horizen.account.transaction.EthereumTransaction
 import io.horizen.account.utils.Secp256k1.generateContractAddress
-import io.horizen.account.utils.{AccountBlockFeeInfo, AccountFeePaymentsUtils, AccountPayment, FeeUtils}
+import io.horizen.account.utils.ZenWeiConverter.MAX_MONEY_IN_WEI
+import io.horizen.account.utils.{AccountBlockFeeInfo, AccountFeePaymentsUtils, AccountPayment, FeeUtils, ForgerIdentifier}
 import io.horizen.block.WithdrawalEpochCertificate
 import io.horizen.certificatesubmitter.keys.{CertifiersKeys, KeyRotationProof}
 import io.horizen.consensus.{ConsensusEpochInfo, ConsensusEpochNumber, ForgingStakeInfo, intToConsensusEpochNumber}
@@ -19,7 +22,6 @@ import io.horizen.evm._
 import io.horizen.params.NetworkParams
 import io.horizen.state.State
 import io.horizen.utils.{ByteArrayWrapper, BytesUtils, ClosableResourceHandler, MerkleTree, TimeToEpochUtils, WithdrawalEpochInfo, WithdrawalEpochUtils}
-import io.horizen.transaction.exception.TransactionSemanticValidityException
 import sparkz.core._
 import sparkz.core.transaction.state.TransactionValidation
 import sparkz.core.utils.NetworkTimeProvider
@@ -155,7 +157,7 @@ class AccountState(
       )
 
       for ((tx, txIndex) <- mod.sidechainTransactions.zipWithIndex) {
-        stateView.applyTransaction(tx, txIndex, blockGasPool, blockContext) match {
+        stateView.applyTransaction(tx, txIndex, blockGasPool, blockContext, stateView) match {
           case Success(consensusDataReceipt) =>
             val txGasUsed = consensusDataReceipt.cumulativeGasUsed.subtract(cumGasUsed)
             // update cumulative gas used so far
@@ -204,10 +206,27 @@ class AccountState(
       // - base -> forgers pool, weighted by number of blocks forged
       // - tip -> block forger
       // Note: store also entries with zero values, which can arise in sc blocks without any tx
-      stateView.updateFeePaymentInfo(AccountBlockFeeInfo(cumBaseFee, cumForgerTips, mod.header.forgerAddress))
+      if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+        stateView.updateFeePaymentInfo(
+          AccountBlockFeeInfo(
+            cumBaseFee,
+            cumForgerTips,
+            mod.header.forgerAddress,
+            Some(ForgerPublicKeys(mod.header.forgingStakeInfo.blockSignPublicKey, mod.header.forgingStakeInfo.vrfPublicKey))
+          ))
 
-      // update block counters for forger pool fee distribution
-      stateView.updateForgerBlockCounter(mod.forgerPublicKey, consensusEpochNumber)
+        // update block counters for forger pool fee distribution
+        stateView.updateForgerBlockCounter(
+          new ForgerIdentifier(mod.forgerPublicKey,
+            Some(ForgerPublicKeys(mod.header.forgingStakeInfo.blockSignPublicKey, mod.header.forgingStakeInfo.vrfPublicKey))),
+            consensusEpochNumber
+        )
+      } else {
+        stateView.updateFeePaymentInfo(AccountBlockFeeInfo(cumBaseFee, cumForgerTips, mod.header.forgerAddress))
+
+        // update block counters for forger pool fee distribution
+        stateView.updateForgerBlockCounter(new ForgerIdentifier(mod.forgerPublicKey), consensusEpochNumber)
+      }
 
       // If SC block has reached the end of the withdrawal epoch reward the forgers.
       evalForgersReward(mod, modWithdrawalEpochInfo, consensusEpochNumber, stateView)
@@ -252,7 +271,11 @@ class AccountState(
     val isWithdrawalEpochFinished: Boolean = WithdrawalEpochUtils.isEpochLastIndex(modWithdrawalEpochInfo, params)
     if (isWithdrawalEpochFinished) {
       // current block fee info is already in the view therefore we pass None as third param
-      val feePayments = stateView.getFeePaymentsInfo(modWithdrawalEpochInfo.epoch, consensusEpochNumber, None)
+      val distributionCap = if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+        val mcLastBlockHeight = params.mainchainCreationBlockHeight + ((modWithdrawalEpochInfo.epoch + 1) * params.withdrawalEpochLength) - 1
+        AccountFeePaymentsUtils.getMainchainWithdrawalEpochDistributionCap(mcLastBlockHeight, params)
+      } else MAX_MONEY_IN_WEI
+      val (feePayments, poolBalanceDistributed) = stateView.getFeePaymentsInfo(modWithdrawalEpochInfo.epoch, consensusEpochNumber, distributionCap, None)
 
       log.info(s"End of Withdrawal Epoch ${modWithdrawalEpochInfo.epoch} reached, added ${feePayments.length} rewards with block ${mod.header.id}")
 
@@ -266,7 +289,7 @@ class AccountState(
       }
 
       // reset forger pool balance and block counters
-      stateView.resetForgerPoolAndBlockCounters(consensusEpochNumber)
+      stateView.subtractForgerPoolBalanceAndResetBlockCounters(consensusEpochNumber, poolBalanceDistributed)
 
       // add rewards to forgers balance
       feePayments.foreach(
@@ -351,7 +374,10 @@ class AccountState(
 
   // get a view over state db which is built with the given state root
   def getStateDbViewFromRoot(stateRoot: Array[Byte]): StateDbAccountStateView =
-    new StateDbAccountStateView(new StateDB(stateDbStorage, new Hash(stateRoot)), messageProcessors)
+    new StateDbAccountStateView(
+      new StateDB(stateDbStorage, new Hash(stateRoot)),
+      messageProcessors
+    )
 
   // Base getters
   override def getWithdrawalRequests(withdrawalEpoch: Int): Seq[WithdrawalRequest] =
@@ -386,11 +412,26 @@ class AccountState(
 
   override def hasCeased: Boolean = stateMetadataStorage.hasCeased
 
-  override def getFeePaymentsInfo(withdrawalEpoch: Int, consensusEpochNumber: ConsensusEpochNumber, blockToAppendFeeInfo: Option[AccountBlockFeeInfo] = None): Seq[AccountPayment] = {
+  override def getFeePaymentsInfo(
+    withdrawalEpoch: Int,
+    consensusEpochNumber: ConsensusEpochNumber,
+    distributionCap: BigInteger = MAX_MONEY_IN_WEI,
+    blockToAppendFeeInfo: Option[AccountBlockFeeInfo] = None): (Seq[AccountPayment], BigInteger) =
+  {
     val feePaymentInfoSeq = stateMetadataStorage.getFeePayments(withdrawalEpoch)
     val mcForgerPoolRewards = stateMetadataStorage.getMcForgerPoolRewards
+    val poolBalanceDistributed = mcForgerPoolRewards.values.foldLeft(BigInteger.ZERO)((a, b) => a.add(b))
+    if (Version1_4_0Fork.get(consensusEpochNumber).active) {
+      val forgerRewards = AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards)
+      val (feePayments, delegatorPayments) = using(getView)(_.getForgersAndDelegatorsShares(forgerRewards))
+      val allPayments = AccountFeePaymentsUtils.groupAllPaymentsByAddress(feePayments, delegatorPayments)
 
-    AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards)
+      (allPayments, poolBalanceDistributed)
+    } else {
+      val payments = AccountFeePaymentsUtils.getForgersRewards(feePaymentInfoSeq, mcForgerPoolRewards)
+        .map(fp => AccountPayment(fp.identifier.getAddress, fp.value))
+      (payments, poolBalanceDistributed)
+    }
   }
 
   override def getWithdrawalEpochInfo: WithdrawalEpochInfo = stateMetadataStorage.getWithdrawalEpochInfo
@@ -430,9 +471,17 @@ class AccountState(
 
   override def getNonce(address: Address): BigInteger = using(getView)(_.getNonce(address))
 
-  override def getListOfForgersStakes(isForkV1_3Active: Boolean): Seq[AccountForgingStakeInfo] = using(getView)(_.getListOfForgersStakes(isForkV1_3Active))
+  override def getListOfForgersStakes(isForkV1_3Active: Boolean, isForkV1_4Active: Boolean): Seq[AccountForgingStakeInfo] = using(getView)(_.getListOfForgersStakes(isForkV1_3Active, isForkV1_4Active))
 
-  override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) =  using(getView)(_.getPagedListOfForgersStakes(startPos, pageSize))
+  override def getPagedListOfForgersStakes(startPos: Int, pageSize: Int): (Int, Seq[AccountForgingStakeInfo]) = using(getView)(_.getPagedListOfForgersStakes(startPos, pageSize))
+
+  override def getPagedForgersStakesByForger(forger: ForgerPublicKeys, startPos: Int, pageSize: Int): PagedStakesByForgerResponse = using(getView)(_.getPagedForgersStakesByForger(forger, startPos, pageSize))
+ 
+  override def getPagedForgersStakesByDelegator(delegator: Address, startPos: Int, pageSize: Int): PagedStakesByDelegatorResponse = using(getView)(_.getPagedForgersStakesByDelegator(delegator, startPos, pageSize))
+
+  override def getForgerInfo(forger: ForgerPublicKeys): Option[ForgerInfo] = using(getView)(_.getForgerInfo(forger))
+
+  override def isForgerStakeV1SmartContractDisabled(isForkV1_4Active: Boolean): Boolean = using(getView)(_.isForgerStakeV1SmartContractDisabled(isForkV1_4Active))
 
   override def getAllowedForgerList: Seq[Int] = using(getView)(_.getAllowedForgerList)
 
@@ -538,7 +587,7 @@ class AccountState(
     None
   }
 
-
+  override def forgerStakesV2IsActive: Boolean = using(getView)(_.forgerStakesV2IsActive)
 }
 
 object AccountState extends SparkzLogging {

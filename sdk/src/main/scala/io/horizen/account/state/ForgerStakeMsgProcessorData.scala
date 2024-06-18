@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonView
 import io.horizen.account.abi.{ABIDecoder, ABIEncodable, ABIListEncoder, MsgProcessorInputDecoder}
 import io.horizen.account.proof.SignatureSecp256k1
 import io.horizen.account.proposition.{AddressProposition, AddressPropositionSerializer}
+import io.horizen.account.state.nativescdata.forgerstakev2.VRFDecoder
 import io.horizen.account.utils.BigIntegerUInt256.getUnsignedByteArray
 import io.horizen.account.utils.{BigIntegerUInt256, Secp256k1}
 import io.horizen.evm.Address
@@ -21,6 +22,7 @@ import sparkz.util.serialization.{Reader, Writer}
 import java.math.BigInteger
 import java.util
 import scala.collection.JavaConverters
+import scala.jdk.CollectionConverters.collectionAsScalaIterableConverter
 
 @JsonView(Array(classOf[Views.Default]))
 // used as element of the list to return when getting all forger stakes via msg processor
@@ -33,15 +35,21 @@ case class AccountForgingStakeInfo(
 
   override def serializer: SparkzSerializer[AccountForgingStakeInfo] = AccountForgingStakeInfoSerializer
 
-  override def toString: String = "%s(stakeId: %s, forgerStakeData: %s)"
-    .format(this.getClass.toString, BytesUtils.toHexString(stakeId), forgerStakeData)
+  override def toString: String = {
+    val stakeIdStr = if (stakeId != null) BytesUtils.toHexString(stakeId) else "null"
+    "%s(stakeId: %s, forgerStakeData: %s)"
+      .format(this.getClass.toString, stakeIdStr, forgerStakeData)
+  }
 
   private[horizen] def asABIType(): StaticStruct = {
 
     val forgerPublicKeysParams = forgerStakeData.forgerPublicKeys.asABIType().getValue.asInstanceOf[util.Collection[_ <: Type[_]]]
     val listOfParams = new util.ArrayList[Type[_]]()
 
-    listOfParams.add(new Bytes32(stakeId))
+    if (stakeId != null)
+      listOfParams.add(new Bytes32(stakeId))
+    else
+      listOfParams.add(new Bytes32(new Array[Byte](32)))
     listOfParams.add(new Uint256(forgerStakeData.stakedAmount))
     listOfParams.add(new AbiAddress(forgerStakeData.ownerPublicKey.address().toString))
 
@@ -74,6 +82,33 @@ object AccountForgingStakeInfoListEncoder extends ABIListEncoder[AccountForgingS
   override def getAbiClass: Class[StaticStruct] = classOf[StaticStruct]
 }
 
+case class AccountForgingStakeInfoList(listOfStakes: Seq[AccountForgingStakeInfo]){
+  override def toString: String = "%s(listOfStakes: %s)".format(this.getClass.toString, listOfStakes)
+}
+
+
+object AccountForgingStakeInfoListDecoder extends ABIDecoder[AccountForgingStakeInfoList]
+  with MsgProcessorInputDecoder[AccountForgingStakeInfoList] {
+
+  override val getListOfABIParamTypes: util.List[TypeReference[Type[_]]] =
+    org.web3j.abi.Utils.convert(util.Arrays.asList(
+      new TypeReference[DynamicArray[AccountForgingStakeInfoABI]]() {}
+    ))
+
+  override def createType(listOfParams: util.List[Type[_]]): AccountForgingStakeInfoList = {
+    val listOfStaticStruct = listOfParams.get(0).asInstanceOf[DynamicArray[AccountForgingStakeInfoABI]].getValue.asScala
+    val list = listOfStaticStruct.map(x => AccountForgingStakeInfo(x.stakeId,
+      ForgerStakeData(
+        ForgerPublicKeys(new PublicKey25519Proposition(x.pubKey),
+          new VrfPublicKey(x.vrf1 ++ x.vrf2)),
+        new AddressProposition(new Address(x.owner)),
+        x.amount)))
+    AccountForgingStakeInfoList(list.toSeq)
+  }
+}
+
+
+
 object AccountForgingStakeInfoSerializer extends SparkzSerializer[AccountForgingStakeInfo] {
 
   override def serialize(s: AccountForgingStakeInfo, w: Writer): Unit = {
@@ -93,14 +128,9 @@ object AccountForgingStakeInfoSerializer extends SparkzSerializer[AccountForging
 case class ForgerPublicKeys(
                              blockSignPublicKey: PublicKey25519Proposition,
                              vrfPublicKey: VrfPublicKey)
-  extends BytesSerializable with ABIEncodable[StaticStruct] {
+  extends BytesSerializable with ABIEncodable[StaticStruct]
+  with VRFDecoder{
   override type M = ForgerPublicKeys
-
-  private[horizen] def vrfPublicKeyToAbi(vrfPublicKey: Array[Byte]): (Bytes32, Bytes1) = {
-    val vrfPublicKeyFirst32Bytes = new Bytes32(util.Arrays.copyOfRange(vrfPublicKey, 0, 32))
-    val vrfPublicKeyLastByte = new Bytes1(Array[Byte](vrfPublicKey(32)))
-    (vrfPublicKeyFirst32Bytes, vrfPublicKeyLastByte)
-  }
 
   override def asABIType(): StaticStruct = {
 
@@ -113,9 +143,13 @@ case class ForgerPublicKeys(
     )
   }
 
+  override def toString: String = "%s(blockSignPublicKey: %s, vrfPublicKey: %s)"
+    .format(this.getClass.toString, blockSignPublicKey, vrfPublicKey)
+
   override def serializer: SparkzSerializer[ForgerPublicKeys] = ForgerPublicKeysSerializer
 
 }
+
 
 object ForgerPublicKeysSerializer extends SparkzSerializer[ForgerPublicKeys] {
 

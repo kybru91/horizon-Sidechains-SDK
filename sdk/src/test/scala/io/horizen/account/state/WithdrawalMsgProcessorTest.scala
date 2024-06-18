@@ -107,7 +107,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
     val msgWithWrongFunctionCall = getMessage(WithdrawalMsgProcessor.contractAddress, value, data)
     assertThrows[ExecutionRevertedException] {
       withGas(
-        TestContext.process(WithdrawalMsgProcessor, msgWithWrongFunctionCall, mockStateView, defaultBlockContext, _)
+        TestContext.process(WithdrawalMsgProcessor, msgWithWrongFunctionCall, mockStateView, defaultBlockContext, _, mockStateView)
       )
     }
   }
@@ -157,7 +157,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
     val withdrawalAmount = ZenWeiConverter.convertZenniesToWei(50)
     val msg = getMessage(WithdrawalMsgProcessor.contractAddress, withdrawalAmount, Array.emptyByteArray)
     assertThrows[ExecutionRevertedException](
-      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _))
+      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     )
 
     // helper: mock balance call and assert that the withdrawal request throws
@@ -165,7 +165,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
       val msg = addWithdrawalRequestMessage(withdrawalAmount)
       Mockito.when(mockStateView.getBalance(msg.getFrom)).thenReturn(balance)
       assertThrows[ExecutionRevertedException](
-        withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, blockContext, _))
+        withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, blockContext, _, mockStateView))
       )
     }
 
@@ -211,7 +211,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
 
     // Withdrawal request list with invalid data should throw ExecutionRevertedException
     assertThrows[ExecutionRevertedException](
-      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _))
+      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     )
 
     // No withdrawal requests
@@ -223,7 +223,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
       .when(mockStateView.getAccountStorage(WithdrawalMsgProcessor.contractAddress, counterKey))
       .thenReturn(numOfWithdrawalReqs)
 
-    var returnData = withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _))
+    var returnData = withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     val expectedListOfWR = new util.ArrayList[WithdrawalRequest]()
     assertArrayEquals(WithdrawalRequestsListEncoder.encode(expectedListOfWR), returnData)
 
@@ -253,7 +253,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
       })
 
     returnData =
-      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _), 10000000)
+      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView), 10000000)
     assertArrayEquals(WithdrawalRequestsListEncoder.encode(expectedListOfWR), returnData)
   }
 
@@ -266,7 +266,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
     )
 
     assertThrows[ExecutionRevertedException] {
-      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _))
+      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     }
 
     msg = getMessage(
@@ -276,7 +276,7 @@ class WithdrawalMsgProcessorTest extends JUnitSuite with MockitoSugar with Withd
     )
 
     assertThrows[ExecutionRevertedException] {
-      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _))
+      withGas(TestContext.process(WithdrawalMsgProcessor, msg, mockStateView, defaultBlockContext, _, mockStateView))
     }
   }
 }

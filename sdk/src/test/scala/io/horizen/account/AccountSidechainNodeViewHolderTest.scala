@@ -16,6 +16,7 @@ import io.horizen.account.wallet.AccountWallet
 import io.horizen.block.SidechainBlockBase
 import io.horizen.consensus.{ConsensusEpochInfo, FullConsensusEpochInfo, intToConsensusEpochNumber}
 import io.horizen.fixtures._
+import io.horizen.metrics.MetricsManager
 import io.horizen.params.{NetworkParams, RegTestParams}
 import io.horizen.utils.{CountDownLatchController, MerkleTree, WithdrawalEpochInfo}
 import io.horizen.{AccountMempoolSettings, SidechainSettings}
@@ -28,10 +29,12 @@ import org.scalatestplus.junit.JUnitSuite
 import sparkz.core.NodeViewHolder.ReceivableMessages.{LocallyGeneratedModifier, LocallyGeneratedTransaction, ModifiersFromRemote}
 import sparkz.core.consensus.History.ProgressInfo
 import sparkz.core.network.NodeViewSynchronizer.ReceivableMessages.{FailedTransaction, ModifiersProcessingResult, SemanticallySuccessfulModifier}
+import sparkz.core.utils.NetworkTimeProvider
 import sparkz.core.validation.RecoverableModifierError
 import sparkz.core.{VersionTag, idToVersion}
 import sparkz.util.{ModifierId, SparkzEncoding}
 
+import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.util
@@ -74,6 +77,7 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     baseStateReaderProvider = mock[BaseStateReaderProvider]
     mempool = AccountMemoryPool.createEmptyMempool(accountStateReaderProvider, baseStateReaderProvider,
       AccountMempoolSettings(), () => mock[AccountEventNotifier])
+    MetricsManager.init(mock[NetworkTimeProvider])
     mockedNodeViewHolderRef = getMockedAccountSidechainNodeViewHolderRef(history, state, wallet, mempool)
   }
 
@@ -307,8 +311,8 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     Mockito.when(state.isWithdrawalEpochLastIndex).thenReturn(false)
 
     // Mock state fee payments with checks
-    Mockito.when(state.getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), ArgumentMatchers.any[Option[AccountBlockFeeInfo]])).thenAnswer(_ => {
-      Seq()
+    Mockito.when(state.getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), any(),ArgumentMatchers.any[Option[AccountBlockFeeInfo]])).thenAnswer(_ => {
+      (Seq(), BigInteger.valueOf(Long.MaxValue))
     })
 
     // Mock wallet scanPersistent with checks
@@ -332,7 +336,7 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     Thread.sleep(100)
 
     // Verify that all the checks passed
-    Mockito.verify(state, times(0)).getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), ArgumentMatchers.any[Option[AccountBlockFeeInfo]])
+    Mockito.verify(state, times(0)).getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), any(),ArgumentMatchers.any[Option[AccountBlockFeeInfo]])
   }
 
   @Test
@@ -360,10 +364,10 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
 
     // Mock state fee payments with checks
     val expectedFeePayments: Seq[AccountPayment] = Seq(ForgerAccountFixture.getAccountPayment(0L), ForgerAccountFixture.getAccountPayment(1L))
-    Mockito.when(state.getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), ArgumentMatchers.any[Option[AccountBlockFeeInfo]]())).thenAnswer(args => {
+    Mockito.when(state.getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), any(), ArgumentMatchers.any[Option[AccountBlockFeeInfo]]())).thenAnswer(args => {
       val epochNumber: Int = args.getArgument(0)
       assertEquals("Different withdrawal epoch number expected.", withdrawalEpochInfo.epoch, epochNumber)
-      expectedFeePayments
+      (expectedFeePayments, BigInteger.valueOf(Long.MaxValue))
     })
 
     // Mock wallet scanPersistent with checks
@@ -385,7 +389,7 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     Thread.sleep(100)
 
     // Verify that all the checks passed
-    Mockito.verify(state, times(1)).getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), ArgumentMatchers.any[Option[AccountBlockFeeInfo]])
+    Mockito.verify(state, times(1)).getFeePaymentsInfo(ArgumentMatchers.any[Int](), any(), any(), ArgumentMatchers.any[Option[AccountBlockFeeInfo]])
   }
 
   @Test
@@ -457,8 +461,8 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     val block5 = generateNextAccountBlock(block4, sidechainTransactionsCompanion, params)
     val block6 = generateNextAccountBlock(block5, sidechainTransactionsCompanion, params)
 
-    val firstRequestBlocks = Seq(block1, block2, block6)
-    val secondRequestBlocks = Seq(block3, block4, block5)
+    val firstRequestBlocks = Seq(block3, block2, block6)
+    val secondRequestBlocks = Seq(block1, block4, block5)
     val correctSequence = Array(block1, block2, block3, block4, block5, block6)
     var blockIndex = 0
 
@@ -490,13 +494,25 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     actorSystem.eventStream.subscribe(eventListener.ref, classOf[ModifiersProcessingResult[AccountBlock]])
 
     mockedNodeViewHolderRef ! ModifiersFromRemote(firstRequestBlocks)
+    eventListener.fishForMessage(timeout.duration) {
+      case m =>
+        m match {
+          case ModifiersProcessingResult(applied, cleared) => {
+            assertTrue("Applied block sequence should be empty.", applied.isEmpty)
+            assertTrue("Cleared block sequence is not empty.", cleared.isEmpty)
+            true
+          }
+          case _ => false // Log
+        }
+    }
+
     mockedNodeViewHolderRef ! ModifiersFromRemote(secondRequestBlocks)
 
     eventListener.fishForMessage(timeout.duration) {
       case m =>
         m match {
           case ModifiersProcessingResult(applied, cleared) => {
-            assertTrue("Applied block sequence is differ", applied.toSet.equals(correctSequence.toSet))
+            assertEquals("Applied block sequence is differ", correctSequence.toSet, applied.toSet)
             assertTrue("Cleared block sequence is not empty.", cleared.isEmpty)
             true
           }
@@ -665,6 +681,16 @@ class AccountSidechainNodeViewHolderTest extends JUnitSuite
     actorSystem.eventStream.subscribe(eventListener.ref, classOf[ModifiersProcessingResult[AccountBlock]])
 
     mockedNodeViewHolderRef ! ModifiersFromRemote(halfFullCacheBlocks)
+    eventListener.fishForMessage(timeout.duration) {
+      case m =>
+        m match {
+          case ModifiersProcessingResult(applied, cleared) =>
+            assertEquals("Different number of applied blocks", 0, applied.length)
+            assertEquals("Different number of cleared blocks from cached", 0, cleared.length)
+            true
+          case _ => false
+        }
+    }
     mockedNodeViewHolderRef ! ModifiersFromRemote(twoHundredBlocks)
 
     eventListener.fishForMessage(timeout.duration) {

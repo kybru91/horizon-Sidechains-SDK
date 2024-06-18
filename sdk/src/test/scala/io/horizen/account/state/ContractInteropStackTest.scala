@@ -1,5 +1,6 @@
 package io.horizen.account.state
 
+import io.horizen.account.storage.MsgProcessorMetadataStorageReader
 import io.horizen.evm.{Address, TraceOptions, Tracer}
 import io.horizen.utils.BytesUtils
 import org.junit.Assert.assertEquals
@@ -40,6 +41,7 @@ class ContractInteropStackTest extends ContractInteropTestBase {
     override def process(
         invocation: Invocation,
         view: BaseAccountStateView,
+        metadata: MsgProcessorMetadataStorageReader,
         context: ExecutionContext
     ): Array[Byte] = {
       // parse input

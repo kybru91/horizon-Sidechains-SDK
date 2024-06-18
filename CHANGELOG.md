@@ -1,3 +1,14 @@
+**0.12.0**
+1. Sparkz dependency updated to 2.4.0
+    * Updates in EON forger nodes connection policy (see release notes for further info) 
+2. New stake management support (see release notes for further info)
+3. Reward from mainchain - new rules (see release notes for further info)
+4. Added metrics endpoint
+5. Minor fixes:
+    * [eth RPC endpoint]  web3_clientVersion now returns also the EON version
+    * [eth RPC endpoint] Better error handling: in case of error the response status code will be 400 instead of 200
+    * [eth RPC endpoint] In case of batch requests, the response is  now always an array,  even with a batch composed of only one element.
+
 **0.11.0**
 1. Sparkz dependency updated to 2.3.0
 2. Updated third-party dependencies
